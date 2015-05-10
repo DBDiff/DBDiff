@@ -1,0 +1,19 @@
+{
+	"name": "jawbfl/dbdiff",
+	"license": "MIT",
+	"type": "project",
+	"require": {
+        "aura/cli"            : "2.*@dev",
+        "symfony/yaml"        : "2.8.*@dev",
+        "illuminate/database" : "4.*",
+        "illuminate/view"     : "4.*",
+        "illuminate/container": "4.*",
+        "phpunit/phpunit"     : "4.8.*@dev",
+        "diff/diff"           : "2.0.*@dev"
+	},
+	"autoload": {
+        "psr-4": {
+            "DBDiff\\": "src/"
+        }
+	}
+}

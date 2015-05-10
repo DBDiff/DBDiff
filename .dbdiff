@@ -1,0 +1,12 @@
+server1-user: root
+server1-password: xxxx
+server1-port: 3306
+server1-host: localhost
+#server2-user: root
+#server2-password: xxxx
+#server2-port: 3306
+#server2-host: localhost
+template: simple-db-migrate.tmpl
+type: all
+include: all
+nocomments: true
