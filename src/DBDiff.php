@@ -21,19 +21,24 @@ class DBDiff {
             $diffCalculator = new DiffCalculator;
             $diff = $diffCalculator->getDiff($params);
 
-            // SQL
-            $sqlGenerator = new SQLGenerator($diff);
-            $up; $down;
-            if ($params->include !== 'down') {
-                $up = $sqlGenerator->getUp();
-            }
-            if ($params->include !== 'up') {
-                $down = $sqlGenerator->getDown();
-            }
+            // Empty diff
+            if (empty($diff)) {
+                Logger::info("Identical resources");
+            } else {
+                // SQL
+                $sqlGenerator = new SQLGenerator($diff);
+                $up; $down;
+                if ($params->include !== 'down') {
+                    $up = $sqlGenerator->getUp();
+                }
+                if ($params->include !== 'up') {
+                    $down = $sqlGenerator->getDown();
+                }
 
-            // Generate
-            $templater = new Templater($params, $up, $down);
-            $templater->output();
+                // Generate
+                $templater = new Templater($params, $up, $down);
+                $templater->output();
+            }
 
             Logger::success("Completed");
 
