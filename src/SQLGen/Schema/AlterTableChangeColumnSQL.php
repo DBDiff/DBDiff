@@ -13,14 +13,14 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
         $table = $this->obj->table;
         $column = $this->obj->column;
         $schema = $this->obj->diff->getNewValue();
-        return "ALTER TABLE `$table` CHANGE `$column` $schema";
+        return "ALTER TABLE `$table` CHANGE `$column` $schema;";
     }
 
     public function getDown() {
         $table = $this->obj->table;
         $column = $this->obj->column;
         $schema = $this->obj->diff->getOldValue();
-        return "ALTER TABLE `$table` CHANGE `$column` $schema";
+        return "ALTER TABLE `$table` CHANGE `$column` $schema;";
     }
 
 }
