@@ -9,13 +9,13 @@ class ParamsFactory {
         
         $params = new DefaultParams;
 
-        $cli = new CLIGetter;
-        $paramsCLI = $cli->getParams();
-        $params = $this->merge($params, $paramsCLI);
-
         $fs = new FSGetter($params);
         $paramsFS = $fs->getParams();
         $params = $this->merge($params, $paramsFS);
+
+        $cli = new CLIGetter;
+        $paramsCLI = $cli->getParams();
+        $params = $this->merge($params, $paramsCLI);
 
         if (empty($params->server1)) {
             throw new CLIException("A server is required");
