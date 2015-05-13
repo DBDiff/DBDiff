@@ -57,4 +57,20 @@ class DBManager {
         return array_flatten($result);
     }
 
+    public function getColumns($connection, $table) {
+        $result = $this->getDB($connection)->select("show columns from $table");
+        return array_pluck($result, 'Field');
+    }
+
+    public function getKey($connection, $table) {
+        $keys = $this->getDB($connection)->select("show indexes from $table");
+        $ukey = [];
+        foreach ($keys as $key) {
+            if ($key['Key_name'] === 'PRIMARY') {
+                $ukey[] = $key['Column_name'];
+            }
+        }
+        return $ukey;
+    }
+
 }

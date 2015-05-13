@@ -11,7 +11,10 @@ use DBDiff\Templater;
 class DBDiff {
     
     public function run() {
-        
+
+        // Increase memory limit
+        ini_set('memory_limit', '512M');
+
         try {
             // Params
             $paramsFactory = new ParamsFactory;

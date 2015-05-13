@@ -13,47 +13,21 @@ class TableData {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
-    }
-
-    public function getKey($connection, $table) {
-        $keys = $this->{$connection}->select("show indexes from $table");
-        $ukey = [];
-        foreach ($keys as $key) {
-            if ($key['Key_name'] === 'PRIMARY') {
-                $ukey[] = $key['Column_name'];
-            }
-        }
-        return $ukey;
-    }
-
-    public function checkKeys($table, $sourceKey, $targetKey) {
-        if (empty($sourceKey) || empty($targetKey)) {
-            throw new DataException("No primary key found in table `$table`");
-        }
-        if ($sourceKey != $targetKey) {
-            throw new DataException("Unmatched primary keys in table `$table`");
-        }
-        return true;
+        $this->distTableData = new DistTableData($manager);
+        $this->localTableData = new LocalTableData($manager);
     }
 
     public function getIterator($connection, $table) {
         return new TableIterator($this->{$connection}, $table);
     }
 
-    public function getDataDiff($key, $table) {
-        $sourceIterator = $this->getIterator('source', $table);
-        $targetIterator = $this->getIterator('target', $table);
-        $differ = new ArrayDiff($key, $sourceIterator, $targetIterator);
-        return $differ->getDiff();
-    }
-
     public function getNewData($table) {
         Logger::info("Now getting new data from table `$table`");
         $diffSequence = [];
         $iterator = $this->getIterator('source', $table);
-        $key = $this->getKey('source', $table);
+        $key = $this->manager->getKey('source', $table);
         while ($iterator->hasNext()) {
-            $data = $iterator->next(ArrayDiff::SIZE);
+            $data = $iterator->next(ArrayDiff::$size);
             foreach ($data as $entry) {
                 $diffSequence[] = new InsertData($table, [
                     'keys' => array_only($entry, $key),
@@ -68,9 +42,9 @@ class TableData {
         Logger::info("Now getting old data from table `$table`");
         $diffSequence = [];
         $iterator = $this->getIterator('target', $table);
-        $key = $this->getKey('target', $table);
+        $key = $this->manager->getKey('target', $table);
         while ($iterator->hasNext()) {
-            $data = $iterator->next(ArrayDiff::SIZE);
+            $data = $iterator->next(ArrayDiff::$size);
             foreach ($data as $entry) {
                 $diffSequence[] = new DeleteData($table, [
                     'keys' => array_only($entry, $key),
@@ -82,22 +56,27 @@ class TableData {
     }
 
     public function getDiff($table) {
-        Logger::info("Now calculating data diff for table `$table`");
-        $sourceKey  = $this->getKey('source', $table);
-        $targetKey  = $this->getKey('target', $table);
+        $server1 = $this->source->getConfig('host').':'.$this->source->getConfig('port');
+        $server2 = $this->target->getConfig('host').':'.$this->target->getConfig('port');
+        $sourceKey  = $this->manager->getKey('source', $table);
+        $targetKey  = $this->manager->getKey('target', $table);
         $this->checkKeys($table, $sourceKey, $targetKey);
-        $diffs = $this->getDataDiff($sourceKey, $table);
-        $diffSequence = [];
-        foreach ($diffs as $name => $diff) {
-            if ($diff['diff'] instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new DeleteData($table, $diff);
-            } else if (is_array($diff['diff'])) {
-                $diffSequence[] = new UpdateData($table, $diff);
-            } else if ($diff['diff'] instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new InsertData($table, $diff);
-            }
+        
+        if ($server1 == $server2) {
+            return $this->localTableData->getDiff($table, $sourceKey);
+        } else {
+            return $this->distTableData->getDiff($table, $sourceKey);
         }
-        return $diffSequence;
+    }
+
+    private function checkKeys($table, $sourceKey, $targetKey) {
+        if (empty($sourceKey) || empty($targetKey)) {
+            throw new DataException("No primary key found in table `$table`");
+        }
+        if ($sourceKey != $targetKey) {
+            throw new DataException("Unmatched primary keys in table `$table`");
+        }
+        return true;
     }
 
 }

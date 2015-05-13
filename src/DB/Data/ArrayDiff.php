@@ -7,7 +7,7 @@ use Diff\DiffOp\DiffOpRemove;
 
 class ArrayDiff {
 
-    const SIZE = 1;
+    public static $size = 1000;
 
     function __construct($key, $dbiterator1, $dbiterator2) {
         $this->key = $key;
@@ -26,9 +26,9 @@ class ArrayDiff {
     }
 
     public function iterate() {
-        $data1 = $this->dbiterator1->next(ArrayDiff::SIZE);
+        $data1 = $this->dbiterator1->next(ArrayDiff::$size);
         $this->sourceBucket = array_merge($this->sourceBucket, $data1);
-        $data2 = $this->dbiterator2->next(ArrayDiff::SIZE);
+        $data2 = $this->dbiterator2->next(ArrayDiff::$size);
         $this->targetBucket = array_merge($this->targetBucket, $data2);
         $this->tag();
     }
