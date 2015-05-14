@@ -30,15 +30,18 @@ class LocalTableData {
         $keyCols = implode(',', $key);
         $db1 = $this->source->getDatabaseName();
         $db2 = $this->target->getDatabaseName();
-        $result = $this->source->select("SELECT * FROM (
-                SELECT *,'source' AS _connection FROM {$db1}.{$table}
-                UNION ALL
-                SELECT *,'target' AS _connection FROM {$db2}.{$table}
-            ) tbl
-            GROUP BY $keyCols
-            HAVING count(*) = 1;");
+        $this->source->setFetchMode(\PDO::FETCH_NAMED);
+        $result = $this->source->select(
+           "SELECT *,'target' AS _connection FROM {$db1}.{$table} as a
+            LEFT JOIN {$db2}.{$table} as b ON a.id = b.id WHERE b.id IS NULL
+            UNION ALL
+            SELECT *,'source' AS _connection FROM {$db2}.{$table} as b
+            LEFT JOIN {$db1}.{$table} as a ON a.id = b.id WHERE a.id IS NULL
+        ");
+        $this->source->setFetchMode(\PDO::FETCH_ASSOC);
 
         foreach ($result as $row) {
+            foreach ($row as $k => &$v) { if ($k != '_connection') $v = $v[0]; }
             if ($row['_connection'] == 'source') {
                 $diffSequence[] = new InsertData($table, [
                     'keys' => array_only($row, $key),
@@ -63,36 +66,50 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
         
-        $wrap = function($arr) {
-            return array_map(function($el) {
-                return "`$el`";
+        $wrapas = function($arr, $p1, $p2) {
+            return array_map(function($el) use ($p1, $p2) {
+                return "`{$p1}`.`{$el}` as `{$p2}{$el}`";
             }, $arr);
         };
 
-        $columns1 = implode(',', $wrap($columns1));
-        $columns2 = implode(',', $wrap($columns2));
+        $wrap = function($arr, $p) {
+            return array_map(function($el) use ($p) {
+                return "`{$p}`.`{$el}`";
+            }, $arr);
+        };
+
+        $columns1as = implode(',', $wrapas($columns1, 'a', 's_'));
+        $columns1   = implode(',', $wrap($columns1, 'a'));
+        $columns2as = implode(',', $wrapas($columns2, 'b', 't_'));
+        $columns2   = implode(',', $wrap($columns2, 'b'));
         
         $keyCols = implode(' AND ', array_map(function($el) {
-            return "t1.{$el} = t2.{$el}";
+            return "a.{$el} = b.{$el}";
         }, $key));
 
         $this->source->setFetchMode(\PDO::FETCH_NAMED);
-        $result = $this->source->select("SELECT * FROM
-            (SELECT $columns1, MD5(concat($columns1)) AS hash FROM {$db1}.{$table}) t1       
-            INNER JOIN 
-            (SELECT $columns2, MD5(concat($columns2)) AS hash FROM {$db2}.{$table}) t2        
-            ON $keyCols AND t1.hash != t2.hash;");
+        $result = $this->source->select(
+           "SELECT * FROM (
+                SELECT $columns1as, $columns2as, MD5(concat($columns1)) AS hash1,
+                MD5(concat($columns2)) AS hash2 FROM {$db1}.{$table} as a 
+                INNER JOIN {$db2}.{$table} as b  
+                ON $keyCols
+            ) t WHERE hash1 <> hash2");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
         
         foreach ($result as $row) {
-            $diff = [];
-            $keys = [];
-            $row = array_except($row, 'hash');
+            $diff = []; $keys = [];
             foreach ($row as $k => $value) {
-                if (in_array($k, $key)) {
-                    $keys[$k] = $value[1];
+                if (starts_with($k, 's_')) {
+                    $theKey = substr($k, 2);
+                    $targetKey = 't_'.$theKey;
+                    $sourceValue = $value;
+                    $targetValue = $row[$targetKey];
+                    if (in_array($theKey, $key)) $keys[$theKey] = $value;
+                    if ($sourceValue != $targetValue) {
+                        $diff[$theKey] = new \Diff\DiffOp\DiffOpChange($targetValue, $sourceValue);
+                    }
                 }
-                $diff[$k] = new \Diff\DiffOp\DiffOpChange($value[1], $value[0]);
             }
             $diffSequence[] = new UpdateData($table, [
                 'keys' => $keys,
@@ -102,6 +119,5 @@ class LocalTableData {
 
         return $diffSequence;
     }
-
 
 }
