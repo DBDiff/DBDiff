@@ -1,6 +1,7 @@
 /vendor
 composer.phar
 composer.lock
-migration
+migration.sql
+.dbdiff
 .DS_Store
 Thumbs.db

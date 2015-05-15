@@ -31,7 +31,7 @@ class FSGetter implements ParamsGetter {
     protected function getFile() {
         $configFile = false;
 
-        if ($this->params->config) {
+        if (isset($this->params->config)) {
             $configFile = $this->params->config;
             if (!file_exists($configFile)) {
                 throw new FSException("Config file not found");
@@ -56,9 +56,3 @@ class FSGetter implements ParamsGetter {
     }
 
 }
-
-
-
-
-
-
