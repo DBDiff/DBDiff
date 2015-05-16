@@ -17,7 +17,7 @@ class Templater {
         $content .= $this->getContent();
         if (is_null($this->params->output)) {
             Logger::info("Writing migration file to ".getcwd()."/migration.sql");
-            file_put_contents('migration', $content);
+            file_put_contents('migration.sql', $content);
         } else {
             Logger::info("Writing migration file to ".$this->params->output);
             return file_put_contents($this->params->output, $content);

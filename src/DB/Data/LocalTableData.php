@@ -66,22 +66,22 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
         
-        $wrapas = function($arr, $p1, $p2) {
+        $wrapAs = function($arr, $p1, $p2) {
             return array_map(function($el) use ($p1, $p2) {
                 return "`{$p1}`.`{$el}` as `{$p2}{$el}`";
             }, $arr);
         };
 
-        $wrap = function($arr, $p) {
+        $wrapCast = function($arr, $p) {
             return array_map(function($el) use ($p) {
-                return "`{$p}`.`{$el}`";
+                return "CAST(`{$p}`.`{$el}` AS CHAR CHARACTER SET utf8)";
             }, $arr);
         };
 
-        $columns1as = implode(',', $wrapas($columns1, 'a', 's_'));
-        $columns1   = implode(',', $wrap($columns1, 'a'));
-        $columns2as = implode(',', $wrapas($columns2, 'b', 't_'));
-        $columns2   = implode(',', $wrap($columns2, 'b'));
+        $columns1as = implode(',', $wrapAs($columns1, 'a', 's_'));
+        $columns1   = implode(',', $wrapCast($columns1, 'a'));
+        $columns2as = implode(',', $wrapAs($columns2, 'b', 't_'));
+        $columns2   = implode(',', $wrapCast($columns2, 'b'));
         
         $keyCols = implode(' AND ', array_map(function($el) {
             return "a.{$el} = b.{$el}";

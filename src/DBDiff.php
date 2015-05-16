@@ -25,7 +25,7 @@ class DBDiff {
             $diff = $diffCalculator->getDiff($params);
 
             // Empty diff
-            if (empty($diff)) {
+            if (empty($diff['schema']) && empty($diff['data'])) {
                 Logger::info("Identical resources");
             } else {
                 // SQL
