@@ -27,21 +27,43 @@ class LocalTableData {
     public function getOldNewDiff($table, $key) {
         $diffSequence = [];
 
-        $keyCols = implode(',', $key);
         $db1 = $this->source->getDatabaseName();
         $db2 = $this->target->getDatabaseName();
+
+        $columns = $this->manager->getColumns('source', $table);
+        
+        $wrapConvert = function($arr, $p) {
+            return array_map(function($el) use ($p) {
+                return "CONVERT(`{$p}`.`{$el}` USING utf8)";
+            }, $arr);
+        };
+
+        $columnsAUtf = implode(',', $wrapConvert($columns, 'a'));
+        $columnsBUtf = implode(',', $wrapConvert($columns, 'b'));
+
+        $keyCols = implode(' AND ', array_map(function($el) {
+            return "`a`.`{$el}` = `b`.`{$el}`";
+        }, $key));
+
+        $keyNull = function($arr, $p) {
+            return array_map(function($el) use ($p) {
+                return "`{$p}`.`{$el}` IS NULL";
+            }, $arr);
+        };
+        $keyNulls1 = implode(' AND ', $keyNull($key, 'a'));
+        $keyNulls2 = implode(' AND ', $keyNull($key, 'b'));
+
         $this->source->setFetchMode(\PDO::FETCH_NAMED);
         $result = $this->source->select(
-           "SELECT *,'target' AS _connection FROM {$db1}.{$table} as a
-            LEFT JOIN {$db2}.{$table} as b ON a.id = b.id WHERE b.id IS NULL
+           "SELECT $columnsAUtf,'source' AS _connection FROM {$db1}.{$table} as a
+            LEFT JOIN {$db2}.{$table} as b ON $keyCols WHERE $keyNulls2
             UNION ALL
-            SELECT *,'source' AS _connection FROM {$db2}.{$table} as b
-            LEFT JOIN {$db1}.{$table} as a ON a.id = b.id WHERE a.id IS NULL
+            SELECT $columnsBUtf,'target' AS _connection FROM {$db2}.{$table} as b
+            LEFT JOIN {$db1}.{$table} as a ON $keyCols WHERE $keyNulls1
         ");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
 
         foreach ($result as $row) {
-            foreach ($row as $k => &$v) { if ($k != '_connection') $v = $v[0]; }
             if ($row['_connection'] == 'source') {
                 $diffSequence[] = new InsertData($table, [
                     'keys' => array_only($row, $key),
@@ -63,8 +85,7 @@ class LocalTableData {
         $db1 = $this->source->getDatabaseName();
         $db2 = $this->target->getDatabaseName();
 
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns = $this->manager->getColumns('source', $table);
         
         $wrapAs = function($arr, $p1, $p2) {
             return array_map(function($el) use ($p1, $p2) {
@@ -78,10 +99,10 @@ class LocalTableData {
             }, $arr);
         };
 
-        $columns1as = implode(',', $wrapAs($columns1, 'a', 's_'));
-        $columns1   = implode(',', $wrapCast($columns1, 'a'));
-        $columns2as = implode(',', $wrapAs($columns2, 'b', 't_'));
-        $columns2   = implode(',', $wrapCast($columns2, 'b'));
+        $columnsAas = implode(',', $wrapAs($columns, 'a', 's_'));
+        $columnsA   = implode(',', $wrapCast($columns, 'a'));
+        $columnsBas = implode(',', $wrapAs($columns, 'b', 't_'));
+        $columnsB   = implode(',', $wrapCast($columns, 'b'));
         
         $keyCols = implode(' AND ', array_map(function($el) {
             return "a.{$el} = b.{$el}";
@@ -90,8 +111,8 @@ class LocalTableData {
         $this->source->setFetchMode(\PDO::FETCH_NAMED);
         $result = $this->source->select(
            "SELECT * FROM (
-                SELECT $columns1as, $columns2as, MD5(concat($columns1)) AS hash1,
-                MD5(concat($columns2)) AS hash2 FROM {$db1}.{$table} as a 
+                SELECT $columnsAas, $columnsBas, MD5(concat($columnsA)) AS hash1,
+                MD5(concat($columnsB)) AS hash2 FROM {$db1}.{$table} as a 
                 INNER JOIN {$db2}.{$table} as b  
                 ON $keyCols
             ) t WHERE hash1 <> hash2");
