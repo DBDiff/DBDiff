@@ -13,7 +13,7 @@ class InsertDataSQL implements SQLGenInterface {
         $table = $this->obj->table;
         $values = $this->obj->diff['diff']->getNewValue();
         $values = array_map(function ($el) {
-            return "'".addslashes($el)."'";
+            return "'".mysql_real_escape_string($el)."'";
         }, $values);
         return "INSERT INTO `$table` VALUES(".implode(',', $values).");";
     }
@@ -22,7 +22,7 @@ class InsertDataSQL implements SQLGenInterface {
         $table = $this->obj->table;
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".addslashes($value)."'";
+            $value = '`'.$column."` = '".mysql_real_escape_string($value)."'";
         });
         $condition = implode(' AND ', $keys);
         return "DELETE FROM `$table` WHERE $condition;";
