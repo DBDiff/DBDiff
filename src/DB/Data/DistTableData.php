@@ -28,7 +28,6 @@ class DistTableData {
 
     public function getDiff($table, $key) {
         Logger::info("Now calculating data diff for table `$table`");
-        $starTime = time();
         $diffs = $this->getDataDiff($table, $key);
         $diffSequence = [];
         foreach ($diffs as $name => $diff) {
@@ -40,9 +39,6 @@ class DistTableData {
                 $diffSequence[] = new InsertData($table, $diff);
             }
         }
-        $endTime = time();
-        $time = $endTime - $starTime;
-        Logger::info("Time {$time}s");
 
         return $diffSequence;
     }
