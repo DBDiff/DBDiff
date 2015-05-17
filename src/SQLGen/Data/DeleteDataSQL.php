@@ -13,7 +13,7 @@ class DeleteDataSQL implements SQLGenInterface {
         $table = $this->obj->table;
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '$value'";
+            $value = '`'.$column."` = '".addslashes($value)."'";
         });
         $condition = implode(' AND ', $keys);
         return "DELETE FROM `$table` WHERE $condition;";
@@ -23,7 +23,7 @@ class DeleteDataSQL implements SQLGenInterface {
         $table = $this->obj->table;
         $values = $this->obj->diff['diff']->getOldValue();
         $values = array_map(function ($el) {
-            return "'".$el."'";
+            return "'".addslashes($el)."'";
         }, $values);
         return "INSERT INTO `$table` VALUES(".implode(',', $values).");";
     }
