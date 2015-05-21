@@ -1,9 +1,9 @@
-<?php namespace DBDiff\SQLGen\Schema;
+<?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
 
 
-class AlterTableDropColumnSQL implements SQLGenInterface {
+class AlterTableDropConstraintSQL implements SQLGenInterface {
 
     function __construct($obj) {
         $this->obj = $obj;
@@ -11,8 +11,8 @@ class AlterTableDropColumnSQL implements SQLGenInterface {
     
     public function getUp() {
         $table = $this->obj->table;
-        $column = $this->obj->column;
-        return "ALTER TABLE `$table` DROP `$column`;";
+        $name = $this->obj->name;
+        return "ALTER TABLE `$table` DROP CONSTRAINT `$name`;";
     }
 
     public function getDown() {

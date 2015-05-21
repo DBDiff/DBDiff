@@ -1,4 +1,4 @@
-<?php namespace DBDiff\SQLGen\Data;
+<?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
 

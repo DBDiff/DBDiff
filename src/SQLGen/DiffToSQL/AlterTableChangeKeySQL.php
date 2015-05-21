@@ -1,9 +1,9 @@
-<?php namespace DBDiff\SQLGen\Schema;
+<?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
 
 
-class AlterTableChangeColumnSQL implements SQLGenInterface {
+class AlterTableChangeKeySQL implements SQLGenInterface {
 
     function __construct($obj) {
         $this->obj = $obj;
@@ -11,16 +11,16 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
     
     public function getUp() {
         $table = $this->obj->table;
-        $column = $this->obj->column;
+        $key = $this->obj->key;
         $schema = $this->obj->diff->getNewValue();
-        return "ALTER TABLE `$table` CHANGE `$column` $schema;";
+        return "ALTER TABLE `$table` DROP INDEX `$key`;\nALTER TABLE `$table` ADD $schema;";
     }
 
     public function getDown() {
         $table = $this->obj->table;
-        $column = $this->obj->column;
+        $key = $this->obj->key;
         $schema = $this->obj->diff->getOldValue();
-        return "ALTER TABLE `$table` CHANGE `$column` $schema;";
+        return "ALTER TABLE `$table` DROP INDEX `$key`;\nALTER TABLE `$table` ADD $schema;";
     }
 
 }

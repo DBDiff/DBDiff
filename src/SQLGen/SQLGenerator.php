@@ -1,31 +1,26 @@
 <?php namespace DBDiff\SQLGen;
 
 use DBDiff\SQLGen\Schema\SchemaSQLGen;
-use DBDiff\SQLGen\Schema\SchemaDiffSorter;
+use DBDiff\SQLGen\DiffSorter;
 use DBDiff\Logger;
 
 
 class SQLGenerator implements SQLGenInterface {
 
     function __construct($diff) {
-        $diffSorter = new SchemaDiffSorter;
-        $this->schemaDiff = $diffSorter->sort($diff['schema']);
-        $this->dataDiff   = $diff['data'];
+        $this->diffSorter = new DiffSorter;
+        $this->diff = array_merge($diff['schema'], $diff['data']);
     }
     
     public function getUp() {
         Logger::info("Now generating UP migration");
-        $up = "";
-        $up .= MigrationGenerator::generate($this->schemaDiff, 'getUp', 'schema');
-        $up .= MigrationGenerator::generate($this->dataDiff, 'getUp', 'data');
-        return $up;
+        $diff = $this->diffSorter->sort($this->diff, 'up');
+        return MigrationGenerator::generate($diff, 'getUp');
     }
 
     public function getDown() {
         Logger::info("Now generating DOWN migration");
-        $down = "";
-        $down .= MigrationGenerator::generate($this->schemaDiff, 'getDown', 'schema');
-        $down .= MigrationGenerator::generate($this->dataDiff, 'getDown', 'data');
-        return $down;
+        $diff = $this->diffSorter->sort($this->diff, 'down');
+        return MigrationGenerator::generate($diff, 'getDown');
     }
 }
