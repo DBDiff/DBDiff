@@ -14,13 +14,13 @@ class UpdateDataSQL implements SQLGenInterface {
         
         $values = $this->obj->diff['diff'];
         array_walk($values, function(&$diff, $column) {
-            $diff = '`'.$column."` = '".mysql_real_escape_string($diff->getNewValue())."'";
+            $diff = '`'.$column."` = '".addslashes($diff->getNewValue())."'";
         });
         $values = implode(', ', $values);
 
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".mysql_real_escape_string($value)."'";
+            $value = '`'.$column."` = '".addslashes($value)."'";
         });
         $condition = implode(' AND ', $keys);
         
@@ -32,13 +32,13 @@ class UpdateDataSQL implements SQLGenInterface {
         
         $values = $this->obj->diff['diff'];
         array_walk($values, function(&$diff, $column) {
-            $diff = '`'.$column."` = '".mysql_real_escape_string($diff->getOldValue())."'";
+            $diff = '`'.$column."` = '".addslashes($diff->getOldValue())."'";
         });
         $values = implode(', ', $values);
 
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".mysql_real_escape_string($value)."'";
+            $value = '`'.$column."` = '".addslashes($value)."'";
         });
         $condition = implode(' AND ', $keys);
         
