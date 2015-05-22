@@ -30,7 +30,7 @@ class DBDiff {
             } else {
                 // SQL
                 $sqlGenerator = new SQLGenerator($diff);
-                $up; $down;
+                $up =''; $down = '';
                 if ($params->include !== 'down') {
                     $up = $sqlGenerator->getUp();
                 }
