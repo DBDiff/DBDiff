@@ -17,7 +17,7 @@ class CLIGetter implements ParamsGetter {
         $getopt = $context->getopt([
             'server1::', 'server2::', 'format::',
             'template::', 'type::', 'include::',
-            'nocomments::', 'config::', 'output::'
+            'nocomments::', 'config::', 'output::', 'debug::'
         ]);
     
         $input = $getopt->get(1);
@@ -43,6 +43,8 @@ class CLIGetter implements ParamsGetter {
             $params->config = $getopt->get('--config');
         if ($getopt->get('--output'))
             $params->output = $getopt->get('--output');
+        if ($getopt->get('--debug'))
+            $params->debug = $getopt->get('--debug');
 
         return $params;
     }

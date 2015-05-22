@@ -12,6 +12,11 @@ class ParamsFactory {
         $cli = new CLIGetter;
         $paramsCLI = $cli->getParams();
 
+        if (isset($paramsCLI->debug)) {
+            if ($paramsCLI->debug)
+                error_reporting(E_ERROR);
+        }
+
         $fs = new FSGetter($paramsCLI);
         $paramsFS = $fs->getParams();
         $params = $this->merge($params, $paramsFS);
