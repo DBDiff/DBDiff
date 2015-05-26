@@ -33,15 +33,15 @@ This is what DBDiff is.
 
 ###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
 
--   --server1=user:password@host1:port - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
--   --server2=user:password@host2:port - Specify the target db connection details (if it’s different to server1)
--   --template=templates/simple-db-migrate.tmpl - Specifies the output template, if any. By default will be plain SQL
--   --type=schema or data or all - Specifies the type of diff to do either on the schema, data or both. schema is the default
--   --include=up or down or all - Specified whether to include the up, down or both data in the output. up is the default
--   --no-comments=true - By default automated comments starting with the hash (\#) character are included in the output file, which can be removed with this parameter
--   --config=config.yaml - By default, DBDiff will look for a `.dbdiff` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, no-comments. Please note: a command-line parameter will always override any config file.
--   server1.db1.table1:server2.db2.table3 or server1.db1:server2.db2 - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
--   --output=./output-dir/today-up-schema.sql - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
+-   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
+-   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)
+-   **--template=templates/simple-db-migrate.tmpl** - Specifies the output template, if any. By default will be plain SQL
+-   **--type=schema** or **data** or **all** - Specifies the type of diff to do either on the schema, data or both. schema is the default
+-   **--include=up** or **down** or **all** - Specified whether to include the up, down or both data in the output. up is the default
+-   **--no-comments=true** - By default automated comments starting with the hash (\#) character are included in the output file, which can be removed with this parameter
+-   **--config=config.yaml** - By default, DBDiff will look for a `.dbdiff` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, no-comments. Please note: a command-line parameter will always override any config file.
+-   **server1.db1.table1:server2.db2.table3** or **server1.db1:server2.db2** - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
+-   **--output=./output-dir/today-up-schema.sql** - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
 
 # Usage Examples
 
@@ -64,27 +64,27 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 
 ## .dbdiff
 
-		server1-user: user
-		server1-password: password
-		server1-port: port # for MySQL this is 3306
-		server1-host: host1 # usually localhost or 127.0.0.1
-		server2-user: user
-		server2-password: password
-		server2-port: port # for MySQL this is 3306
-		server2-host: host1 # usually localhost or 127.0.0.1
-		template: templates/simple-db-migrate.tmpl
-		type: all
-		include: all
-		no-comments: true
+	server1-user: user
+	server1-password: password
+	server1-port: port # for MySQL this is 3306
+	server1-host: host1 # usually localhost or 127.0.0.1
+	server2-user: user
+	server2-password: password
+	server2-port: port # for MySQL this is 3306
+	server2-host: host1 # usually localhost or 127.0.0.1
+	template: templates/simple-db-migrate.tmpl
+	type: all
+	include: all
+	no-comments: true
 
 ## simple-db-migrate.tmpl
 
-		SQL_UP = u"""
-		{{ $up }}
-		"""
-		SQL_DOWN = u"""
-		{{ $down }}
-		"""
+	SQL_UP = u"""
+	{{ $up }}
+	"""
+	SQL_DOWN = u"""
+	{{ $down }}
+	"""
 
 # How Does the Diff Actually Work?
 
