@@ -29,6 +29,48 @@ This is what DBDiff is.
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
 -   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue!)
 
+# Pre-requisites
+1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`)
+2. You will need to have git installed: http://git-scm.com/downloads
+3. You will need to have PHP installed (version 5.4.x): http://php.net/manual/en/install.php
+4. You will need to have Composer installed which is a Dependency Manager for PHP: https://getcomposer.org
+
+_Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
+
+# Installation
+On the command-line, use `git` to clone the ssh version:
+
+    git clone git@github.com:DBDiff/DBDiff.git
+
+**Or** use `git` to clone the https version:
+
+	git clone https://github.com/DBDiff/DBDiff.git
+
+**Or** download the .zip archive and unzip it to a folder of your choosing e.g. dbdiff:
+
+	https://github.com/DBDiff/DBDiff/archive/master.zip
+
+# Setup
+
+_Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder_
+
+_We are going to assume that `composer.phar` is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path_
+
+1. Install the dependencies of the project with: `php composer.phar install`
+2. Make a `.dbdiff` file by following the [File Examples][] and place it in the root of your "dbdiff" directory
+3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API][] for more details on which commands you can run.
+
+You should see something like...
+
+	ℹ Now calculating schema diff for table `foo`
+	ℹ Now calculating data diff for table `foo`
+	ℹ Now generating UP migration
+	ℹ Now generating DOWN migration
+	ℹ Writing migration file to /path/to/dbdiff/migration.sql
+	✔ Completed
+
+Congratulations you have installed and ran DBDiff!
+
 # Command-Line API
 
 ###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
