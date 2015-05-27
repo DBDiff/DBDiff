@@ -57,8 +57,8 @@ _Make sure you are in the root of your application for all the following steps, 
 _We are going to assume that `composer.phar` is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path_
 
 1. Install the dependencies of the project with: `php composer.phar install`
-2. Make a `.dbdiff` file by following the [File Examples][] and place it in the root of your "dbdiff" directory
-3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API][] for more details on which commands you can run.
+2. Make a `.dbdiff` file by following the [File Examples](#file-examples) and place it in the root of your "dbdiff" directory
+3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API](#command-line-api) for more details on which commands you can run.
 
 You should see something like...
 
