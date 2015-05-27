@@ -62,6 +62,65 @@
 </ul>
 
 <h1>
+<a id="pre-requisites" class="anchor" href="#pre-requisites" aria-hidden="true"><span class="octicon octicon-link"></span></a>Pre-requisites</h1>
+
+<ol>
+<li>You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (<code>cmd</code>)</li>
+<li>You will need to have git installed: <a href="http://git-scm.com/downloads">http://git-scm.com/downloads</a>
+</li>
+<li>You will need to have PHP installed (version 5.4.x): <a href="http://php.net/manual/en/install.php">http://php.net/manual/en/install.php</a>
+</li>
+<li>You will need to have Composer installed which is a Dependency Manager for PHP: <a href="https://getcomposer.org">https://getcomposer.org</a>
+</li>
+</ol>
+
+<p><em>Note: Make a note of where <code>composer.phar</code> is installed as we will need it later on during Setup</em></p>
+
+<h1>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Installation</h1>
+
+<p>On the command-line, use <code>git</code> to clone the ssh version:</p>
+
+<pre><code>git clone git@github.com:DBDiff/DBDiff.git
+</code></pre>
+
+<p><strong>Or</strong> use <code>git</code> to clone the https version:</p>
+
+<pre><code>git clone https://github.com/DBDiff/DBDiff.git
+</code></pre>
+
+<p><strong>Or</strong> download the .zip archive and unzip it to a folder of your choosing e.g. dbdiff:</p>
+
+<pre><code>https://github.com/DBDiff/DBDiff/archive/master.zip
+</code></pre>
+
+<h1>
+<a id="setup" class="anchor" href="#setup" aria-hidden="true"><span class="octicon octicon-link"></span></a>Setup</h1>
+
+<p><em>Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder</em></p>
+
+<p><em>We are going to assume that <code>composer.phar</code> is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path</em></p>
+
+<ol>
+<li>Install the dependencies of the project with: <code>php composer.phar install</code>
+</li>
+<li>Make a <code>.dbdiff</code> file by following the [File Examples][] and place it in the root of your "dbdiff" directory</li>
+<li>Type <code>./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}</code> to start the app! See [Command-Line API][] for more details on which commands you can run.</li>
+</ol>
+
+<p>You should see something like...</p>
+
+<pre><code>ℹ Now calculating schema diff for table `foo`
+ℹ Now calculating data diff for table `foo`
+ℹ Now generating UP migration
+ℹ Now generating DOWN migration
+ℹ Writing migration file to /path/to/dbdiff/migration.sql
+✔ Completed
+</code></pre>
+
+<p>Congratulations you have installed and ran DBDiff!</p>
+
+<h1>
 <a id="command-line-api" class="anchor" href="#command-line-api" aria-hidden="true"><span class="octicon octicon-link"></span></a>Command-Line API</h1>
 
 <h6>
