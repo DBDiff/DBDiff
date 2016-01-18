@@ -49,6 +49,10 @@ On the command-line, use `git` to clone the ssh version:
 **Or** download the .zip archive and unzip it to a folder of your choosing e.g. dbdiff:
 
 	https://github.com/DBDiff/DBDiff/archive/master.zip
+	
+**Or** use `composer` to include `DBDiff` as a project dependency
+
+	php composer.phar require jawbfl/dbdiff
 
 # Setup
 
@@ -56,7 +60,7 @@ _Make sure you are in the root of your application for all the following steps, 
 
 _We are going to assume that `composer.phar` is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path_
 
-1. Install the dependencies of the project with: `php composer.phar install`
+1. If you didn't install `DBDiff` with `composer`, install the dependencies of the project with: `php composer.phar install`
 2. Make a `.dbdiff` file by following the [File Examples](#file-examples) and place it in the root of your "dbdiff" directory
 3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API](#command-line-api) for more details on which commands you can run.
 
