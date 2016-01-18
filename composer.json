@@ -2,6 +2,7 @@
     "name": "jawbfl/dbdiff",
     "type": "project",
     "license": "MIT",
+    "bin": ["./dbdiff"],
     "autoload": {
         "psr-4": {
             "DBDiff\\": "src/"
