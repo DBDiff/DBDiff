@@ -1,5 +1,5 @@
 {
-    "name": "jawbfl/dbdiff",
+    "name": "dbdiff/dbdiff",
     "type": "project",
     "license": "MIT",
     "bin": ["./dbdiff"],
