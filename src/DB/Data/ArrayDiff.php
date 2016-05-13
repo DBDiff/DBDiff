@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\Params\ParamsFactory;
 use Diff\Differ\MapDiffer;
 use Diff\DiffOp\DiffOpAdd;
 use Diff\DiffOp\DiffOpRemove;
@@ -18,18 +19,34 @@ class ArrayDiff {
         $this->diffBucket = [];
     }
 
-    public function getDiff() {
+    public function getDiff($table) {
         while ($this->dbiterator1->hasNext() || $this->dbiterator2->hasNext()) {
-            $this->iterate();
+            $this->iterate($table);
         }
         return $this->getResults();
     }
 
-    public function iterate() {
+    public function iterate($table) {
         $data1 = $this->dbiterator1->next(ArrayDiff::$size);
         $this->sourceBucket = array_merge($this->sourceBucket, $data1);
         $data2 = $this->dbiterator2->next(ArrayDiff::$size);
         $this->targetBucket = array_merge($this->targetBucket, $data2);
+
+        // unset the fields to ignore
+        $params = ParamsFactory::get();
+        if (isset($params->fieldsToIgnore[$table])) {
+            foreach ($this->sourceBucket as &$entry1) {
+                foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
+                    unset($entry1[$fieldToIgnore]);
+                }
+            }
+            foreach ($this->targetBucket as &$entry2) {
+                foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
+                    unset($entry2[$fieldToIgnore]);
+                }
+            }
+        }
+
         $this->tag();
     }
 

@@ -16,9 +16,7 @@ class DBDiff {
         ini_set('memory_limit', '512M');
 
         try {
-            // Params
-            $paramsFactory = new ParamsFactory;
-            $params = $paramsFactory->get();
+            $params = ParamsFactory::get();
 
             // Diff
             $diffCalculator = new DiffCalculator;

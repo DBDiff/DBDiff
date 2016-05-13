@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\Params\ParamsFactory;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
@@ -82,6 +83,8 @@ class LocalTableData {
     }
 
     public function getChangeDiff($table, $key) {
+        $params = ParamsFactory::get();
+
         $diffSequence = [];
 
         $db1 = $this->source->getDatabaseName();
@@ -89,6 +92,11 @@ class LocalTableData {
 
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
+
+        if (isset($params->fieldsToIgnore[$table])) {
+            $columns1 = array_diff($columns1, $params->fieldsToIgnore[$table]);
+            $columns2 = array_diff($columns2, $params->fieldsToIgnore[$table]);
+        }
         
         $wrapAs = function($arr, $p1, $p2) {
             return array_map(function($el) use ($p1, $p2) {

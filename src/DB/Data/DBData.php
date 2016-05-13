@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\Params\ParamsFactory;
 use DBDiff\Diff\SetDBCollation;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
@@ -12,7 +13,8 @@ class DBData {
     }
     
     function getDiff() {
-    
+        $params = ParamsFactory::get();
+
         $diffSequence = [];
 
         // Tables
@@ -20,6 +22,11 @@ class DBData {
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
+
+        if (isset($params->tablesToIgnore)) {
+            $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
+            $targetTables = array_diff($targetTables, $params->tablesToIgnore);
+        }
 
         $commonTables = array_intersect($sourceTables, $targetTables);
         foreach ($commonTables as $table) {
