@@ -11,7 +11,7 @@ class DBData {
         $this->manager = $manager;
     }
     
-    function getDiff() {
+    function getDiff($params) {
     
         $diffSequence = [];
 
@@ -20,6 +20,11 @@ class DBData {
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
+
+        if (isset($params->tablesToExclude)) {
+            $sourceTables = array_diff($sourceTables, $params->tablesToExclude);
+            $targetTables = array_diff($targetTables, $params->tablesToExclude);
+        }
 
         $commonTables = array_intersect($sourceTables, $targetTables);
         foreach ($commonTables as $table) {

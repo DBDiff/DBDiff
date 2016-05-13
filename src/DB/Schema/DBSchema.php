@@ -16,7 +16,7 @@ class DBSchema {
         $this->manager = $manager;
     }
     
-    function getDiff() {
+    function getDiff($params) {
     
         $diffs = [];
 
@@ -40,6 +40,11 @@ class DBSchema {
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
+
+        if (isset($params->tablesToExclude)) {
+            $sourceTables = array_diff($sourceTables, $params->tablesToExclude);
+            $targetTables = array_diff($targetTables, $params->tablesToExclude);
+        }
 
         $addedTables = array_diff($sourceTables, $targetTables);
         foreach ($addedTables as $table) {
