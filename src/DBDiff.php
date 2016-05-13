@@ -49,7 +49,7 @@ class DBDiff {
             if ($e instanceof BaseException) {
                 Logger::error($e->getMessage(), true);
             } else {
-                Logger::error("Unexpected error: ");
+                Logger::error("Unexpected error: " . $e->getMessage());
                 throw $e;
             }
         }
