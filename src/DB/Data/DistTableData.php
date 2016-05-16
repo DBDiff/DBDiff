@@ -23,7 +23,7 @@ class DistTableData {
         $sourceIterator = $this->getIterator('source', $table);
         $targetIterator = $this->getIterator('target', $table);
         $differ = new ArrayDiff($key, $sourceIterator, $targetIterator);
-        return $differ->getDiff();
+        return $differ->getDiff($table);
     }
 
     public function getDiff($table, $key) {

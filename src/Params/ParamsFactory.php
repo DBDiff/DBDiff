@@ -5,7 +5,7 @@ use DBDiff\Exceptions\CLIException;
 
 class ParamsFactory {
     
-    public function get() {
+    public static function get() {
         
         $params = new DefaultParams;
 
@@ -18,9 +18,9 @@ class ParamsFactory {
 
         $fs = new FSGetter($paramsCLI);
         $paramsFS = $fs->getParams();
-        $params = $this->merge($params, $paramsFS);
+        $params = self::merge($params, $paramsFS);
 
-        $params = $this->merge($params, $paramsCLI);
+        $params = self::merge($params, $paramsCLI);
         
         if (empty($params->server1)) {
             throw new CLIException("A server is required");

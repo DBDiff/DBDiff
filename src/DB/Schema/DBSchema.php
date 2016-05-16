@@ -2,6 +2,7 @@
 
 use Diff\Differ\ListDiffer;
 
+use DBDiff\Params\ParamsFactory;
 use DBDiff\Diff\SetDBCollation;
 use DBDiff\Diff\SetDBCharset;
 use DBDiff\Diff\DropTable;
@@ -17,7 +18,8 @@ class DBSchema {
     }
     
     function getDiff() {
-    
+        $params = ParamsFactory::get();
+
         $diffs = [];
 
         // Collation
@@ -40,6 +42,11 @@ class DBSchema {
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
+
+        if (isset($params->tablesToIgnore)) {
+            $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
+            $targetTables = array_diff($targetTables, $params->tablesToIgnore);
+        }
 
         $addedTables = array_diff($sourceTables, $targetTables);
         foreach ($addedTables as $table) {
