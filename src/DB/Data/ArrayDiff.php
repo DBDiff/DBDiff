@@ -32,22 +32,7 @@ class ArrayDiff {
         $data2 = $this->dbiterator2->next(ArrayDiff::$size);
         $this->targetBucket = array_merge($this->targetBucket, $data2);
 
-        // unset the fields to ignore
-        $params = ParamsFactory::get();
-        if (isset($params->fieldsToIgnore[$table])) {
-            foreach ($this->sourceBucket as &$entry1) {
-                foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
-                    unset($entry1[$fieldToIgnore]);
-                }
-            }
-            foreach ($this->targetBucket as &$entry2) {
-                foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
-                    unset($entry2[$fieldToIgnore]);
-                }
-            }
-        }
-
-        $this->tag();
+        $this->tag($table);
     }
 
     public function isKeyEqual($entry1, $entry2) {
@@ -57,12 +42,22 @@ class ArrayDiff {
         return true;
     }
 
-    public function tag() {
+    public function tag($table) {
         foreach ($this->sourceBucket as &$entry1) {
             if (is_null($entry1)) continue;
             foreach ($this->targetBucket as &$entry2) {
                 if (is_null($entry2)) continue;
                 if ($this->isKeyEqual($entry1, $entry2)) {
+
+                    // unset the fields to ignore
+                    $params = ParamsFactory::get();
+                    if (isset($params->fieldsToIgnore[$table])) {
+                        foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
+                            unset($entry1[$fieldToIgnore]);
+                            unset($entry2[$fieldToIgnore]);
+                        }
+                    }
+
                     $differ = new MapDiffer();
                     $diff = $differ->doDiff($entry2, $entry1);
                     if (!empty($diff)) {
