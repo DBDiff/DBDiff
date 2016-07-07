@@ -8,12 +8,17 @@ class InsertDataSQL implements SQLGenInterface {
     function __construct($obj) {
         $this->obj = $obj;
     }
-    
+
     public function getUp() {
         $table = $this->obj->table;
         $values = $this->obj->diff['diff']->getNewValue();
         $values = array_map(function ($el) {
-            return "'".addslashes($el)."'";
+            if(!is_null($el)) {
+                return "'" . addslashes($el) . "'";
+            }
+            else {
+                return 'NULL';
+            }
         }, $values);
         return "INSERT INTO `$table` VALUES(".implode(',', $values).");";
     }
