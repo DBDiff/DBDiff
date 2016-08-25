@@ -53,7 +53,7 @@ On the command-line, use `git` to clone the ssh version:
 
 **Or** use `composer` to include `DBDiff` as a project dependency
 
-	php composer.phar require dbdiff/dbdiff
+	php composer.phar require "dbdiff/dbdiff:@dev"
 
 # Setup
 
