@@ -132,8 +132,8 @@
 <li>  <strong>--template=templates/simple-db-migrate.tmpl</strong> - Specifies the output template, if any. By default will be plain SQL</li>
 <li>  <strong>--type=schema</strong> or <strong>data</strong> or <strong>all</strong> - Specifies the type of diff to do either on the schema, data or both. schema is the default</li>
 <li>  <strong>--include=up</strong> or <strong>down</strong> or <strong>all</strong> - Specified whether to include the up, down or both data in the output. up is the default</li>
-<li>  <strong>--no-comments=true</strong> - By default automated comments starting with the hash (#) character are included in the output file, which can be removed with this parameter</li>
-<li>  <strong>--config=config.yaml</strong> - By default, DBDiff will look for a <code>.dbdiff</code> file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, no-comments. Please note: a command-line parameter will always override any config file.</li>
+<li>  <strong>--nocomments=true</strong> - By default automated comments starting with the hash (#) character are included in the output file, which can be removed with this parameter</li>
+<li>  <strong>--config=config.yaml</strong> - By default, DBDiff will look for a <code>.dbdiff</code> file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, nocomments. Please note: a command-line parameter will always override any config file.</li>
 <li>  <strong>server1.db1.table1:server2.db2.table3</strong> or <strong>server1.db1:server2.db2</strong> - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database</li>
 <li>  <strong>--output=./output-dir/today-up-schema.sql</strong> - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory</li>
 </ul>
@@ -151,7 +151,7 @@
 <h2>
 <a id="example-2" class="anchor" href="#example-2" aria-hidden="true"><span class="octicon octicon-link"></span></a>Example 2</h2>
 
-<p><code>$ ./dbdiff server1.development.table1:server2.production.table1 --no-comments=true --type=data</code></p>
+<p><code>$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data</code></p>
 
 <p>This would by default look for the <code>.dbdiff</code> config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the data of the specified table1 inside each database and output a .sql file which has no comments inside the current directory which includes only the up SQL as per default</p>
 
@@ -179,7 +179,7 @@ server2-host: host1 # usually localhost or 127.0.0.1
 template: templates/simple-db-migrate.tmpl
 type: all
 include: all
-no-comments: true
+nocomments: true
 </code></pre>
 
 <h2>
