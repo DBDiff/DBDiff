@@ -5,7 +5,7 @@
     <title>DBDiff by DBDiff</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
-    <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
     <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
   </head>
@@ -20,10 +20,10 @@
 
     <section class="main-content">
       <h1>
-<a id="dbdiff-cli---database-diff-command-line-interface" class="anchor" href="#dbdiff-cli---database-diff-command-line-interface" aria-hidden="true"><span class="octicon octicon-link"></span></a>DBDiff CLI - Database Diff Command Line Interface</h1>
+<a id="dbdiff-cli---database-diff-command-line-interface" class="anchor" href="#dbdiff-cli---database-diff-command-line-interface" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>DBDiff CLI - Database Diff Command Line Interface</h1>
 
 <h1>
-<a id="the-problem" class="anchor" href="#the-problem" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Problem</h1>
+<a id="the-problem" class="anchor" href="#the-problem" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>The Problem</h1>
 
 <p>I've found a few solid​ ​migrat​ion tools like <a href="https://github.com/flyway/flyway">Flyway</a> and <a href="https://github.com/guilhermechapiewski/simple-db-migrate">Simple DB Migrate</a>​, the latter being my preference for it's simplicity​ but the former having a lot more commits and contributors.​ However,​ these are just migrators and do not help produce the actual diff/migration to be versioned​, which I would not like to do manually if it can be automated.​</p>
 
@@ -40,19 +40,20 @@
 </ol>
 
 <h1>
-<a id="the-solution" class="anchor" href="#the-solution" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Solution</h1>
+<a id="the-solution" class="anchor" href="#the-solution" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>The Solution</h1>
 
 <p>I think a solid migration tool mixed with an automated schema and data diff tool would be a great contribution to the open source community.</p>
 
 <p>This is what DBDiff is.</p>
 
 <h1>
-<a id="features-of-dbdiff" class="anchor" href="#features-of-dbdiff" aria-hidden="true"><span class="octicon octicon-link"></span></a>Features of DBDiff</h1>
+<a id="features-of-dbdiff" class="anchor" href="#features-of-dbdiff" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Features of DBDiff</h1>
 
 <ul>
 <li>  Works on Windows, Linux &amp; Mac command-line/Terminal because it has been developed in PHP</li>
 <li>  Connects to a source and target database to do the comparison diff, locally and remotely</li>
 <li>  Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source</li>
+<li>  Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples below)</li>
 <li>  Diffs are SUPER fast and this tool has been tested with databases of multiple tables of millions of rows</li>
 <li>  Since this diff tool is being used for migrations, it provides up and down SQL in the same file</li>
 <li>  Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats, for example, Simple DB Migrate may work with simple-db-migrate.tmpl which includes: <code>SQL_UP = u""" {{ $up }} """ SQL_DOWN = u""" {{ $down }} """</code>
@@ -62,7 +63,7 @@
 </ul>
 
 <h1>
-<a id="pre-requisites" class="anchor" href="#pre-requisites" aria-hidden="true"><span class="octicon octicon-link"></span></a>Pre-requisites</h1>
+<a id="pre-requisites" class="anchor" href="#pre-requisites" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Pre-requisites</h1>
 
 <ol>
 <li>You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (<code>cmd</code>)</li>
@@ -77,7 +78,7 @@
 <p><em>Note: Make a note of where <code>composer.phar</code> is installed as we will need it later on during Setup</em></p>
 
 <h1>
-<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Installation</h1>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Installation</h1>
 
 <p>On the command-line, use <code>git</code> to clone the ssh version:</p>
 
@@ -94,15 +95,20 @@
 <pre><code>https://github.com/DBDiff/DBDiff/archive/master.zip
 </code></pre>
 
+<p><strong>Or</strong> use <code>composer</code> to include <code>DBDiff</code> as a project dependency</p>
+
+<pre><code>php composer.phar require "dbdiff/dbdiff:@dev"
+</code></pre>
+
 <h1>
-<a id="setup" class="anchor" href="#setup" aria-hidden="true"><span class="octicon octicon-link"></span></a>Setup</h1>
+<a id="setup" class="anchor" href="#setup" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Setup</h1>
 
 <p><em>Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder</em></p>
 
 <p><em>We are going to assume that <code>composer.phar</code> is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path</em></p>
 
 <ol>
-<li>Install the dependencies of the project with: <code>php composer.phar install</code>
+<li>If you didn't install <code>DBDiff</code> with <code>composer</code>, install the dependencies of the project with: <code>php composer.phar install</code>
 </li>
 <li>Make a <code>.dbdiff</code> file by following the <a href="#file-examples">File Examples</a> and place it in the root of your "dbdiff" directory</li>
 <li>Type <code>./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}</code> to start the app! See <a href="#command-line-api">Command-Line API</a> for more details on which commands you can run.</li>
@@ -121,10 +127,10 @@
 <p>Congratulations you have installed and ran DBDiff!</p>
 
 <h1>
-<a id="command-line-api" class="anchor" href="#command-line-api" aria-hidden="true"><span class="octicon octicon-link"></span></a>Command-Line API</h1>
+<a id="command-line-api" class="anchor" href="#command-line-api" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Command-Line API</h1>
 
 <h6>
-<a id="note-the-command-line-parameters-will-always-override-the-settings-in-the-dbdiff-config-file" class="anchor" href="#note-the-command-line-parameters-will-always-override-the-settings-in-the-dbdiff-config-file" aria-hidden="true"><span class="octicon octicon-link"></span></a>Note: The command-line parameters will always override the settings in the <code>.dbdiff</code> config file</h6>
+<a id="note-the-command-line-parameters-will-always-override-the-settings-in-the-dbdiff-config-file" class="anchor" href="#note-the-command-line-parameters-will-always-override-the-settings-in-the-dbdiff-config-file" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Note: The command-line parameters will always override the settings in the <code>.dbdiff</code> config file</h6>
 
 <ul>
 <li>  <strong>--server1=user:password@host1:port</strong> - Specify the source db connection details. If there is only one server the --server1 flag can be omitted</li>
@@ -139,34 +145,34 @@
 </ul>
 
 <h1>
-<a id="usage-examples" class="anchor" href="#usage-examples" aria-hidden="true"><span class="octicon octicon-link"></span></a>Usage Examples</h1>
+<a id="usage-examples" class="anchor" href="#usage-examples" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Usage Examples</h1>
 
 <h2>
-<a id="example-1" class="anchor" href="#example-1" aria-hidden="true"><span class="octicon octicon-link"></span></a>Example 1</h2>
+<a id="example-1" class="anchor" href="#example-1" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Example 1</h2>
 
 <p><code>$ ./dbdiff server1.db1:server2.db2</code></p>
 
 <p>This would by default look for the <code>.dbdiff</code> config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the schema and output a commented migration.sql file inside the current directory which includes only the up SQL as per default</p>
 
 <h2>
-<a id="example-2" class="anchor" href="#example-2" aria-hidden="true"><span class="octicon octicon-link"></span></a>Example 2</h2>
+<a id="example-2" class="anchor" href="#example-2" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Example 2</h2>
 
 <p><code>$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data</code></p>
 
 <p>This would by default look for the <code>.dbdiff</code> config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the data of the specified table1 inside each database and output a .sql file which has no comments inside the current directory which includes only the up SQL as per default</p>
 
 <h2>
-<a id="example-3" class="anchor" href="#example-3" aria-hidden="true"><span class="octicon octicon-link"></span></a>Example 3</h2>
+<a id="example-3" class="anchor" href="#example-3" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Example 3</h2>
 
 <p><code>$ ./dbdiff --config=config.conf --template=templates/simple-db-migrate.tmpl --include=all server1.db1:server2.db2 --output=./sql/simple-schema.sql</code></p>
 
 <p>Instead of looking for <code>.dbdiff</code>, this would look for <code>config.conf</code> (which should be valid YAML) for the settings, and then override any of those settings from <code>config.conf</code> for the --template and --include parameters given in the command-line parameters - thus comparing the source with the target database and outputting an SQL file called simple-schema.sql to the ./sql folder, which should already exist otherwise the program will throw an error, and which includes only the schema as an up and down SQL diff in the simple-db-migrate format (as specified by the template). This example would work perfectly alongside the simple-db-migrate tool</p>
 
 <h1>
-<a id="file-examples" class="anchor" href="#file-examples" aria-hidden="true"><span class="octicon octicon-link"></span></a>File Examples</h1>
+<a id="file-examples" class="anchor" href="#file-examples" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>File Examples</h1>
 
 <h2>
-<a id="dbdiff" class="anchor" href="#dbdiff" aria-hidden="true"><span class="octicon octicon-link"></span></a>.dbdiff</h2>
+<a id="dbdiff" class="anchor" href="#dbdiff" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>.dbdiff</h2>
 
 <pre><code>server1-user: user
 server1-password: password
@@ -180,10 +186,22 @@ template: templates/simple-db-migrate.tmpl
 type: all
 include: all
 nocomments: true
+tablesToIgnore:
+- table1
+- table2
+- table3
+fieldsToIgnore:
+    table1:
+        - field1
+        - field2
+        - field3
+    table4:
+        - field1
+        - field4
 </code></pre>
 
 <h2>
-<a id="simple-db-migratetmpl" class="anchor" href="#simple-db-migratetmpl" aria-hidden="true"><span class="octicon octicon-link"></span></a>simple-db-migrate.tmpl</h2>
+<a id="simple-db-migratetmpl" class="anchor" href="#simple-db-migratetmpl" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>simple-db-migrate.tmpl</h2>
 
 <pre><code>SQL_UP = u"""
 {{ $up }}
@@ -194,7 +212,7 @@ SQL_DOWN = u"""
 </code></pre>
 
 <h1>
-<a id="how-does-the-diff-actually-work" class="anchor" href="#how-does-the-diff-actually-work" aria-hidden="true"><span class="octicon octicon-link"></span></a>How Does the Diff Actually Work?</h1>
+<a id="how-does-the-diff-actually-work" class="anchor" href="#how-does-the-diff-actually-work" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How Does the Diff Actually Work?</h1>
 
 <p>The following comparisons run in exactly the following order:</p>
 
@@ -204,7 +222,7 @@ SQL_DOWN = u"""
 </ul>
 
 <h2>
-<a id="overall-comparison" class="anchor" href="#overall-comparison" aria-hidden="true"><span class="octicon octicon-link"></span></a>Overall Comparison</h2>
+<a id="overall-comparison" class="anchor" href="#overall-comparison" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Overall Comparison</h2>
 
 <ul>
 <li>  Check both databases exist and are accessible, if not, throw an error</li>
@@ -212,7 +230,7 @@ SQL_DOWN = u"""
 </ul>
 
 <h2>
-<a id="schema-comparison" class="anchor" href="#schema-comparison" aria-hidden="true"><span class="octicon octicon-link"></span></a>Schema Comparison</h2>
+<a id="schema-comparison" class="anchor" href="#schema-comparison" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Schema Comparison</h2>
 
 <ul>
 <li>  Looks to see if there are any differences in column numbers, name, type, collation or attributes</li>
@@ -220,7 +238,7 @@ SQL_DOWN = u"""
 </ul>
 
 <h2>
-<a id="data-comparison" class="anchor" href="#data-comparison" aria-hidden="true"><span class="octicon octicon-link"></span></a>Data Comparison</h2>
+<a id="data-comparison" class="anchor" href="#data-comparison" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Data Comparison</h2>
 
 <ul>
 <li>  And then for each table, the table storage type (e.g. MyISAM, CSV), the collation (e.g. utf8_general_ci), and number of rows are compared, in that order. If there are any differences they are noted before moving onto the next test</li>
@@ -238,4 +256,3 @@ SQL_DOWN = u"""
   
   </body>
 </html>
-
