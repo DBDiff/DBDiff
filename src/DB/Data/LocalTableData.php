@@ -66,13 +66,33 @@ class LocalTableData {
         ");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
 
+        $params = ParamsFactory::get();
+
         foreach ($result1 as $row) {
+            if (isset($params->dataToIgnore[$table])) {
+                $isIgnore = false;
+                foreach($params->dataToIgnore[$table] as $ignores) {
+                    $isIgnore = $isIgnore || (!empty($row[$ignores['column']]) && preg_match("/^{$ignores['data']}$/i", $row[$ignores['column']]));
+                }
+                if($isIgnore) {
+                    continue;
+                }
+            }
             $diffSequence[] = new InsertData($table, [
                 'keys' => array_only($row, $key),
                 'diff' => new \Diff\DiffOp\DiffOpAdd(array_except($row, '_connection'))
             ]);
         }
         foreach ($result2 as $row) {
+            if (isset($params->dataToIgnore[$table])) {
+                $isIgnore = false;
+                foreach($params->dataToIgnore[$table] as $ignores) {
+                    $isIgnore = $isIgnore || (!empty($row[$ignores['column']]) && preg_match("/^{$ignores['data']}$/i", $row[$ignores['column']]));
+                }
+                if($isIgnore) {
+                    continue;
+                }
+            }
             $diffSequence[] = new DeleteData($table, [
                 'keys' => array_only($row, $key),
                 'diff' => new \Diff\DiffOp\DiffOpRemove(array_except($row, '_connection'))
@@ -130,6 +150,15 @@ class LocalTableData {
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
         
         foreach ($result as $row) {
+            if (isset($params->dataToIgnore[$table])) {
+                $isIgnore = false;
+                foreach($params->dataToIgnore[$table] as $ignores) {
+                    $isIgnore = $isIgnore || (!empty($row['s_'.$ignores['column']]) && preg_match("/^{$ignores['data']}$/i", $row['s_'.$ignores['column']]));
+                }
+                if($isIgnore) {
+                    continue;
+                }
+            }
             $diff = []; $keys = [];
             foreach ($row as $k => $value) {
                 if (starts_with($k, 's_')) {
