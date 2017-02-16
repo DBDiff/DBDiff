@@ -41,7 +41,7 @@ _Note: Make a note of where `composer.phar` is installed as we will need it late
 # Installation
 On the command-line, use `git` to clone the ssh version:
 
-    git clone git@github.com:DBDiff/DBDiff.git
+	git clone git@github.com:DBDiff/DBDiff.git
 
 **Or** use `git` to clone the https version:
 
@@ -111,30 +111,32 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 
 ## .dbdiff
 
-	server1-user: user
-	server1-password: password
-	server1-port: port # for MySQL this is 3306
-	server1-host: host1 # usually localhost or 127.0.0.1
-	server2-user: user
-	server2-password: password
-	server2-port: port # for MySQL this is 3306
-	server2-host: host1 # usually localhost or 127.0.0.1
+	server1:
+		user: user
+		password: password
+		port: port # for MySQL this is 3306
+		host: host1 # usually localhost or 127.0.0.1
+	server2:
+		user: user
+		password: password
+		port: port # for MySQL this is 3306
+		host: host1 # usually localhost or 127.0.0.1
 	template: templates/simple-db-migrate.tmpl
 	type: all
 	include: all
 	nocomments: true
 	tablesToIgnore:
-    - table1
-    - table2
-    - table3
-    fieldsToIgnore:
-        table1:
-            - field1
-            - field2
-            - field3
-        table4:
-            - field1
-            - field4
+	- table1
+	- table2
+	- table3
+	fieldsToIgnore:
+		table1:
+			- field1
+			- field2
+			- field3
+		table4:
+			- field1
+			- field4
 
 
 ## simple-db-migrate.tmpl

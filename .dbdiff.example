@@ -1,0 +1,26 @@
+server1:
+    user: user
+    password: password
+    port: port # for MySQL this is 3306
+    host: host1 # usually localhost or 127.0.0.1
+server2:
+    user: user
+    password: password
+    port: port # for MySQL this is 3306
+    host: host1 # usually localhost or 127.0.0.1
+template: templates/simple-db-migrate.tmpl
+type: all
+include: all
+nocomments: true
+tablesToIgnore:
+- table1
+- table2
+- table3
+fieldsToIgnore:
+    table1:
+        - field1
+        - field2
+        - field3
+    table4:
+        - field1
+        - field4
