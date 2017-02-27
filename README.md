@@ -50,6 +50,10 @@ On the command-line, use `git` to clone the ssh version:
 **Or** download the .zip archive and unzip it to a folder of your choosing e.g. dbdiff:
 
 	https://github.com/DBDiff/DBDiff/archive/master.zip
+	
+**Or** use `composer` to include `DBDiff` as a project dependency
+
+	php composer.phar require jawbfl/dbdiff
 
 **Or** use `composer` to include `DBDiff` as a project dependency
 
