@@ -1,6 +1,6 @@
 # DBDiff CLI - Database Diff Command Line Interface
 
-#The Problem
+# The Problem
 
 I've found a few solid​ ​migrat​ion tools like [Flyway](https://github.com/flyway/flyway) and [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)​, the latter being my preference for it's simplicity​ but the former having a lot more commits and contributors.​ However,​ these are just migrators and do not help produce the actual diff/migration to be versioned​, which I would not like to do manually if it can be automated.​
 
@@ -14,12 +14,12 @@ I must say though everything the mysqldbcompare tool offers is great, doing the 
 2. Are just too complex to get working or
 3. Just don't produce valid SQL
 
-#The Solution
+# The Solution
 I think a solid migration tool mixed with an automated schema and data diff tool would be a great contribution to the open source community.
 
 This is what DBDiff is.
 
-#Features of DBDiff
+# Features of DBDiff
 -   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
 -   Connects to a source and target database to do the comparison diff, locally and remotely
 -   Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source
