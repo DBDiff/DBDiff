@@ -17,6 +17,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         $db2  = "diff2";
 
         // db migration
+        $migration_actual = 'migration_actual';
+        $migration_expected = 'migration_expected';
         $dbh = new PDO("mysql:host=$host", $user, $pass);
         $dbh->exec("DROP DATABASE `$db1`;");
         $dbh->exec("CREATE DATABASE $db1;");
@@ -31,9 +33,9 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         $GLOBALS['argv'] = [
             "",
             "--server1=$user:$pass@$host:$port",
-            "--template=simple-db-migrate.tmpl",
+            "--template=templates/simple-db-migrate.tmpl",
             "--nocomments",
-            "--output=./tests/end2end/migration",
+            "--output=./tests/end2end/$migration_actual",
             "server1.$db1:server1.$db2"
         ];
 
@@ -42,11 +44,11 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         $dbdiff->run();
         ob_end_clean();
 
-        $migration = file_get_contents("./tests/end2end/migration");
-        $rmigration = file_get_contents("./tests/end2end/result_migration");
+        $migration_actual_file = file_get_contents("./tests/end2end/$migration_actual");
+        $migration_expected_file = file_get_contents("./tests/end2end/$migration_expected");
         //unlink("./tests/end2end/migration");
 
-        $this->assertEquals($migration, $rmigration);
+        $this->assertEquals($migration_actual_file, $migration_expected_file);
     }
 }
 ?>
