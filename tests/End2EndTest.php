@@ -48,7 +48,11 @@ class End2EndTest extends PHPUnit\Framework\TestCase
 
         $migration_actual_file = file_get_contents("./tests/end2end/$migration_actual");
         $migration_expected_file = file_get_contents("./tests/end2end/$migration_expected");
-        //unlink("./tests/end2end/migration");
+        // unlink("./tests/end2end/$migration_actual");
+
+        // TODO: Apply the migration_actual UP to the target database and expect there to be no differences on the command-line anymore
+        // TODO: Apply the migration actual DOWN to the target database and expect there to be the same expected differences again
+        // TODO: Ensure the database is emptied/reset after each test
 
         $this->assertEquals($migration_actual_file, $migration_expected_file);
     }
