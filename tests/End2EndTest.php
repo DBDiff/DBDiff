@@ -34,6 +34,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
             "",
             "--server1=$user:$pass@$host:$port",
             "--template=templates/simple-db-migrate.tmpl",
+            "--type=all",
+            "--include=all",
             "--nocomments",
             "--output=./tests/end2end/$migration_actual",
             "server1.$db1:server1.$db2"
