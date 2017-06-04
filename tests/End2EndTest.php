@@ -4,33 +4,32 @@ require 'vendor/autoload.php';
 
 use Illuminate\Database\Capsule\Manager as Capsule;
 
-
-class End2EndTest extends PHPUnit_Framework_TestCase
+class End2EndTest extends PHPUnit\Framework\TestCase
 {
     public function testAll()
     {
         // db config
         $host = "localhost";
         $port = 3306;
-        $user = "root";
-        $pass = "xxxx";
+        $user = "dbdiff";
+        $pass = "dbdiff";
         $db1  = "diff1";
         $db2  = "diff2";
 
         // db migration
         $dbh = new PDO("mysql:host=$host", $user, $pass);
-        $dbh->exec("DROP DATABASE `$db1`;"); 
-        $dbh->exec("CREATE DATABASE $db1;"); 
+        $dbh->exec("DROP DATABASE `$db1`;");
+        $dbh->exec("CREATE DATABASE $db1;");
         $dbh->exec("DROP DATABASE `$db2`;");
         $dbh->exec("CREATE DATABASE $db2;");
 
-        $db1h = new PDO("mysql:host=$host:$port;dbname=$db1;", $user, $pass);
+        $db1h = new PDO("mysql:host=$host;dbname=$db1;", $user, $pass);
         $db1h->exec(file_get_contents('tests/end2end/db1-up.sql'));
-        $db2h = new PDO("mysql:host=$host:$port;dbname=$db2;", $user, $pass);
+        $db2h = new PDO("mysql:host=$host;dbname=$db2;", $user, $pass);
         $db2h->exec(file_get_contents('tests/end2end/db2-up.sql'));
 
         $GLOBALS['argv'] = [
-            "", 
+            "",
             "--server1=$user:$pass@$host:$port",
             "--template=simple-db-migrate.tmpl",
             "--nocomments",
@@ -45,7 +44,7 @@ class End2EndTest extends PHPUnit_Framework_TestCase
 
         $migration = file_get_contents("./tests/end2end/migration");
         $rmigration = file_get_contents("./tests/end2end/result_migration");
-        unlink("./tests/end2end/migration");
+        //unlink("./tests/end2end/migration");
 
         $this->assertEquals($migration, $rmigration);
     }
