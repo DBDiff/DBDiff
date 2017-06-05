@@ -3,38 +3,42 @@ CREATE TABLE `cc` (
   `id` int(11) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'x';
+DELETE FROM `asas` WHERE `id` = '7' AND `firstname` = 'e';
+DELETE FROM `asas` WHERE `id` = '6' AND `firstname` = 't';
+DELETE FROM `zz` WHERE `id` = '1' AND `name` = 'name';
 DROP TABLE `zz`;
 ALTER TABLE `aa` ENGINE = InnoDB;
 ALTER TABLE `bb` DEFAULT COLLATE latin1_swedish_ci;
-ALTER TABLE `asas` DEFAULT COLLATE latin1_spanish_ci;
 ALTER TABLE `aa` DEFAULT COLLATE latin1_swedish_ci;
+ALTER TABLE `asas` DEFAULT COLLATE latin1_spanish_ci;
 ALTER TABLE `aa` ADD `qw` int(11) NOT NULL;
 ALTER TABLE `bb` ADD `jj` int(11) NOT NULL;
 ALTER TABLE `aa` ADD `as` int(11) NOT NULL;
-ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) COLLATE latin1_spanish_ci NOT NULL
-ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) COLLATE latin1_spanish_ci NOT NULL
-ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) DEFAULT NULL
-ALTER TABLE `aa` CHANGE `name` `name` varchar(255) NOT NULL
+ALTER TABLE `aa` CHANGE `name` `name` varchar(255) NOT NULL;
+ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) DEFAULT NULL;
+ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) COLLATE latin1_spanish_ci NOT NULL;
+ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) COLLATE latin1_spanish_ci NOT NULL;
 ALTER TABLE `aa` DROP `zx`;
 ALTER TABLE `aa` ADD KEY `as` (`as`);
-ALTER TABLE `aa` ADD UNIQUE KEY `name` (`name`);
 ALTER TABLE `bb` ADD PRIMARY KEY (`id`);
+ALTER TABLE `aa` ADD UNIQUE KEY `name` (`name`);
 ALTER TABLE `aa` DROP INDEX `id`;
 ALTER TABLE `aa` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` DROP INDEX `namekey`;
 ALTER TABLE `aa` DROP INDEX `pass`;
 ALTER TABLE `aa` ADD CONSTRAINT `as` FOREIGN KEY (`as`) REFERENCES `bb` (`id`);
-UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
 INSERT INTO `asas` VALUES('2','c','d');
 INSERT INTO `asas` VALUES('3','x','y');
 INSERT INTO `asas` VALUES('4','v','w');
-DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'x';
-DELETE FROM `asas` WHERE `id` = '6' AND `firstname` = 't';
-DELETE FROM `asas` WHERE `id` = '7' AND `firstname` = 'e';
 INSERT INTO `cc` VALUES('11');
-DELETE FROM `zz` WHERE `id` = '1' AND `name` = 'name';
+UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
 """
 SQL_DOWN = u"""
+DELETE FROM `cc` WHERE `id` = '11';
+DELETE FROM `asas` WHERE `id` = '4' AND `firstname` = 'v';
+DELETE FROM `asas` WHERE `id` = '3' AND `firstname` = 'x';
+DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'c';
 DROP TABLE `cc`;
 CREATE TABLE `zz` (
   `id` int(11) NOT NULL,
@@ -46,16 +50,16 @@ CREATE TABLE `zz` (
   KEY `time` (`time`,`bool`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 ALTER TABLE `aa` ENGINE = MyISAM;
-ALTER TABLE `bb` DEFAULT COLLATE latin1_bin;
 ALTER TABLE `asas` DEFAULT COLLATE latin1_bin;
 ALTER TABLE `aa` DEFAULT COLLATE latin1_spanish_ci;
+ALTER TABLE `bb` DEFAULT COLLATE latin1_bin;
+ALTER TABLE `aa` DROP `as`;
 ALTER TABLE `aa` DROP `qw`;
 ALTER TABLE `bb` DROP `jj`;
-ALTER TABLE `aa` DROP `as`;
-ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) COLLATE latin1_bin NOT NULL
-ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) COLLATE latin1_bin NOT NULL
-ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) CHARACTER SET latin1 NOT NULL
-ALTER TABLE `aa` CHANGE `name` `name` varchar(255) CHARACTER SET latin1 NOT NULL DEFAULT 'aa'
+ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) COLLATE latin1_bin NOT NULL;
+ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) COLLATE latin1_bin NOT NULL;
+ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) CHARACTER SET latin1 NOT NULL;
+ALTER TABLE `aa` CHANGE `name` `name` varchar(255) CHARACTER SET latin1 NOT NULL DEFAULT 'aa';
 ALTER TABLE `aa` ADD `zx` int(11) NOT NULL;
 ALTER TABLE `aa` DROP INDEX `as`;
 ALTER TABLE `aa` DROP INDEX `name`;
@@ -65,13 +69,9 @@ ALTER TABLE `aa` ADD PRIMARY KEY (`id`,`name`);
 ALTER TABLE `aa` ADD UNIQUE KEY `namekey` (`name`,`pass`,`zx`);
 ALTER TABLE `aa` ADD UNIQUE KEY `pass` (`pass`);
 ALTER TABLE `aa` DROP CONSTRAINT `as`;
-UPDATE `asas` SET `lastname` = 'b' WHERE `id` = '1' AND `firstname` = 'a';
-DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'c';
-DELETE FROM `asas` WHERE `id` = '3' AND `firstname` = 'x';
-DELETE FROM `asas` WHERE `id` = '4' AND `firstname` = 'v';
 INSERT INTO `asas` VALUES('2','x','d');
 INSERT INTO `asas` VALUES('6','t','y');
 INSERT INTO `asas` VALUES('7','e','r');
-DELETE FROM `cc` WHERE `id` = '11';
 INSERT INTO `zz` VALUES('1','name','2015-05-10 17:54:05','1');
+UPDATE `asas` SET `lastname` = 'b' WHERE `id` = '1' AND `firstname` = 'a';
 """
