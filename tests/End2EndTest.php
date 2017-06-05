@@ -11,8 +11,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         // db config
         $host = "localhost";
         $port = 3306;
-        $user = "dbdiff";
-        $pass = "dbdiff";
+        $user = "travis";
+        $pass = "";
         $db1  = "diff1";
         $db2  = "diff2";
 

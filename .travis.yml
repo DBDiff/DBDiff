@@ -10,3 +10,5 @@ php:
   - nightly
 install:
   composer install
+services:
+  - mysql
