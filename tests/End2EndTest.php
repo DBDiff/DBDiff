@@ -9,7 +9,7 @@ class End2EndTest extends PHPUnit\Framework\TestCase
     public function testAll()
     {
         // db config
-        $host = "%";
+        $host = "127.0.0.1";
         $port = 3306;
         $user = "travis";
         $pass = "";
