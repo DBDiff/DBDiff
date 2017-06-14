@@ -56,8 +56,8 @@ class CLIGetter implements ParamsGetter {
         return [
             'user'     => $creds[0],
             'password' => $creds[1],
-            'host'     => $dns[0],
-            'port'     => $dns[1]
+            'host'     => array_shift($dns),
+            'port'     => array_shift($dns)
         ];
     }
 
