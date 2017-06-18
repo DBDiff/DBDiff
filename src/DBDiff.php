@@ -9,7 +9,8 @@ use DBDiff\Templater;
 
 
 class DBDiff {
-    
+    private $diff;
+
     public function run() {
 
         // Increase memory limit
@@ -20,14 +21,14 @@ class DBDiff {
 
             // Diff
             $diffCalculator = new DiffCalculator;
-            $diff = $diffCalculator->getDiff($params);
+            $this->diff = $diffCalculator->getDiff($params);
 
             // Empty diff
-            if (empty($diff['schema']) && empty($diff['data'])) {
+            if (empty($this->diff['schema']) && empty($this->diff['data'])) {
                 Logger::info("Identical resources");
             } else {
                 // SQL
-                $sqlGenerator = new SQLGenerator($diff);
+                $sqlGenerator = new SQLGenerator($this->diff);
                 $up =''; $down = '';
                 if ($params->include !== 'down') {
                     $up = $sqlGenerator->getUp();
@@ -52,5 +53,9 @@ class DBDiff {
             }
         }
 
+    }
+
+    public function getDiff() {
+      return $this->diff;
     }
 }
