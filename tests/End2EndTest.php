@@ -27,7 +27,7 @@ class End2EndTest extends PHPUnit\Framework\TestCase
       parent::__construct();
 
       // Initialise variables
-      $this->isContinuousIntegrationServer = getenv('ci');
+      $this->isContinuousIntegrationServer = getenv('CI');
       $this->host = $this->isContinuousIntegrationServer ? "127.0.0.1" : "localhost";
       $this->user = $this->isContinuousIntegrationServer ? "root" : "dbdiff";
       $this->pass = $this->isContinuousIntegrationServer ? "" : "dbdiff";
