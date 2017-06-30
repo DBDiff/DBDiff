@@ -3,7 +3,7 @@
 
 class DiffSorter {
 
-    private $up_order = [
+    private $up_order = array(
         "SetDBCharset",
         "SetDBCollation",
 
@@ -29,9 +29,9 @@ class DiffSorter {
 
         "InsertData",
         "UpdateData"
-    ];
+    );
 
-    private $down_order = [
+    private $down_order = array(
         "SetDBCharset",
         "SetDBCollation",
 
@@ -57,7 +57,7 @@ class DiffSorter {
 
         "DeleteData",
         "UpdateData"
-    ];
+    );
 
     public function sort($diff, $type) {
         usort($diff, [$this, 'compare'.ucfirst($type)]);
@@ -81,8 +81,8 @@ class DiffSorter {
         $indexA = $order[$sqlGenClassA];
         $indexB = $order[$sqlGenClassB];
 
-        if ($indexA === $indexB) return 0;
-        else if ($indexA > $indexB) return 1;
-        return -1;
+        if ($indexA > $indexB) return 1;
+        if ($indexA < $indexB) return -1;
+        return 0;
     }
 }
