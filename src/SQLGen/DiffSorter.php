@@ -83,6 +83,8 @@ class DiffSorter {
 
         if ($indexA > $indexB) return 1;
         if ($indexA < $indexB) return -1;
+        if ($a > $b) return 1;
+        if ($a < $b) return -1;
         return 0;
     }
 }
