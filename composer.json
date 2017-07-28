@@ -6,7 +6,10 @@
     "autoload": {
         "psr-4": {
             "DBDiff\\": "src/"
-        }
+        },
+        "files": [
+            "src/Library/helper.php"
+        ]
     },
     "require": {
         "aura/cli": "2.*@dev",
