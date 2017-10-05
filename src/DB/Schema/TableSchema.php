@@ -54,7 +54,7 @@ class TableSchema {
             } else if (starts_with($line, 'CONSTRAINT')) { // constraint
                 $constraints[$name] = $line;
             } else { // keys
-                $keys[$name] = $line;
+                $keys[$name] = $this->normalizeKey($line);
             }
         }
 
@@ -135,5 +135,9 @@ class TableSchema {
 
         return $diffSequence;
     }
-
+    
+    private function normalizeKey($key) {
+		if (!preg_match('/ USING [A-Za-z0-9]+$/', $key)) $key = $key . ' USING BTREE';
+		return $key;
+    }
 }
