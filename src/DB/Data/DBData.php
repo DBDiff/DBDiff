@@ -23,6 +23,31 @@ class DBData {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
+	    //Only get tables that start with a certain prefix, useful on shared DB
+	    if (isset($params->prefix)) {
+
+	    	$prefix = $params->prefix.'_';
+
+		    $sourceTables  = preg_grep('/^'.$prefix.'.*/i', $sourceTables);
+		    $targetTables  = preg_grep('/^'.$prefix.'.*/i', $targetTables);
+
+		    $tables = array();
+
+		    foreach($params->tablesToIgnore as $table) {
+
+		    	$tables[] = $prefix.$table;
+		    }
+
+		    $params->tablesToIgnore = array_merge($params->tablesToIgnore, $tables);
+	    }
+
+	    //Only certain Data Tables
+	    if (isset($params->tablesDataToIgnore)) {
+
+		    $sourceTables = $this->ignoreDataTables($sourceTables, $params->tablesDataToIgnore);
+		    $targetTables = $this->ignoreDataTables($targetTables, $params->tablesDataToIgnore);
+	    }
+
         if (isset($params->tablesToIgnore)) {
             $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
             $targetTables = array_diff($targetTables, $params->tablesToIgnore);
@@ -51,6 +76,27 @@ class DBData {
         }
 
         return $diffSequence;
+    }
+
+    function ignoreDataTables($tables_array, $exclude_array) {
+
+	    $tables = array();
+
+	    $pattern = implode('|', $exclude_array);
+
+	    foreach($tables_array as $table) {
+
+		    if(preg_match('/.*'.$pattern.'.*/', $table)) {
+
+			    //skip
+
+		    } else {
+
+			    $tables[] = $table;
+		    }
+	    }
+
+	    return $tables;
     }
 
 }

@@ -89,6 +89,7 @@ Congratulations you have installed and ran DBDiff!
 -   **--config=config.yaml** - By default, DBDiff will look for a `.dbdiff` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, nocomments. Please note: a command-line parameter will always override any config file.
 -   **server1.db1.table1:server2.db2.table3** or **server1.db1:server2.db2** - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
 -   **--output=./output-dir/today-up-schema.sql** - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
+-   **--prefix=default** - Specifies the table prefix to use, will also add to tablesToIgnore e.g. default_table1
 
 # Usage Examples
 
@@ -129,6 +130,8 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 	- table1
 	- table2
 	- table3
+	tablesDataToIgnore:
+    - table1
 	fieldsToIgnore:
 		table1:
 			- field1
