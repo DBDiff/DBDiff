@@ -1,5 +1,5 @@
 {
-    "name": "dbdiff/dbdiff",
+    "name": "mbsauce/dbdiff",
     "type": "project",
     "license": "MIT",
     "bin": ["./dbdiff"],
@@ -10,10 +10,6 @@
     },
     "require": {
         "aura/cli": "2.*@dev",
-        "symfony/yaml": "2.8.*@dev",
-        "illuminate/database": "4.*",
-        "illuminate/view": "4.*",
-        "illuminate/container": "4.*",
         "diff/diff": "2.0.*@dev"
     },
     "require-dev": {
