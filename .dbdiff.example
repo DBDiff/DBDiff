@@ -12,6 +12,10 @@ template: templates/simple-db-migrate.tmpl
 type: all
 include: all
 nocomments: true
+tablesToDiff:
+- table1
+- table2
+- table3
 tablesToIgnore:
 - table1
 - table2
