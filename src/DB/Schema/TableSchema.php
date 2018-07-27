@@ -33,30 +33,30 @@ class TableSchema {
 
     public function getSchema($connection, $table) {
         // collation & engine
-        $status = $this->{$connection}->select("show table status like '$table'");
-        $engine = $status[0]['Engine'];
-        $collation = $status[0]['Collation'];
-        
-        $schema = $this->{$connection}->select("SHOW CREATE TABLE `$table`")[0]['Create Table'];
-        $lines = array_map(function($el) { return trim($el);}, explode("\n", $schema));
-        $lines = array_slice($lines, 1, -1);
-        
-        $columns = [];
-        $keys = [];
+         $status = $this->{$connection}->select("show table status like '$table'");
+         $engine = $status[0]['Engine'];
+         $collation = $status[0]['Collation'];
+
+        /**
+         * @var \Doctrine\DBAL\Schema\Table $tableDetails
+         */
+        $tableDetails = $this->{$connection}->getDoctrineSchemaManager()->listTableDetails( $table );
+
+        $columns 	 = [];
+        $keys 		 = [];
         $constraints = [];
-        
-        foreach ($lines as $line) {
-            preg_match("/`([^`]+)`/", $line, $matches);
-            $name = $matches[1];
-            $line = trim($line, ',');
-            if (starts_with($line, '`')) { // column
-                $columns[$name] = $line;
-            } else if (starts_with($line, 'CONSTRAINT')) { // constraint
-                $constraints[$name] = $line;
-            } else { // keys
-                $keys[$name] = $line;
-            }
-        }
+
+        foreach( $tableDetails->getColumns() as $column )
+            $columns[] = $column->getName();
+
+        foreach( $tableDetails->getForeignKeys() as $fk )
+            $constraints[] = $fk->getName();
+
+        foreach( $tableDetails->getPrimaryKey() as $fk )
+            $keys[] = $fk->getName();
+
+        foreach( $tableDetails->getIndexes()  as $fk )
+            $keys[] = $fk->getName();
 
         return [
             'engine'      => $engine,
@@ -69,7 +69,7 @@ class TableSchema {
 
     public function getDiff($table) {
         Logger::info("Now calculating schema diff for table `$table`");
-        
+
         $diffSequence = [];
         $sourceSchema = $this->getSchema('source', $table);
         $targetSchema = $this->getSchema('target', $table);

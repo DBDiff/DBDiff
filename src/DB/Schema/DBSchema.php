@@ -16,7 +16,7 @@ class DBSchema {
     function __construct($manager) {
         $this->manager = $manager;
     }
-    
+
     function getDiff() {
         $params = ParamsFactory::get();
 
@@ -24,19 +24,19 @@ class DBSchema {
 
         // Collation
         $dbName = $this->manager->getDB('target')->getDatabaseName();
-        $sourceCollation = $this->getDBVariable('source', 'collation_database');
-        $targetCollation = $this->getDBVariable('target', 'collation_database');
+        $sourceCollation = $this->getDBCollation('source');
+        $targetCollation = $this->getDBCollation('target');
         if ($sourceCollation !== $targetCollation) {
             $diffs[] = new SetDBCollation($dbName, $sourceCollation, $targetCollation);
         }
 
         // Charset
-        $sourceCharset = $this->getDBVariable('source', 'character_set_database');
-        $targetCharset = $this->getDBVariable('target', 'character_set_database');
+        $sourceCharset = $this->getDBCharacterSet('source');
+        $targetCharset = $this->getDBCharacterSet('target');
         if ($sourceCharset !== $targetCharset) {
             $diffs[] = new SetDBCharset($dbName, $sourceCharset, $targetCharset);
         }
-        
+
         // Tables
         $tableSchema = new TableSchema($this->manager);
 
@@ -67,7 +67,16 @@ class DBSchema {
         return $diffs;
     }
 
+    protected function getDBCollation($connection) {
+        return $this->getDBVariable($connection, 'collation_database');
+    }
+
+    protected function getDBCharacterSet($connection) {
+        return $this->getDBVariable($connection, 'character_set_database');
+    }
+
     protected function getDBVariable($connection, $var) {
+        return '';
         $result = $this->manager->getDB($connection)->select("show variables like '$var'");
         return $result[0]['Value'];
     }
