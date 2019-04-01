@@ -11,22 +11,31 @@ class UpdateDataSQL implements SQLGenInterface {
     
     public function getUp() {
         $table = $this->obj->table;
-        
-        $values = $this->obj->diff['diff'];
-        array_walk($values, function(&$diff, $column) {
-            if(!is_null($diff->getNewValue())) {
-                $diff = '`' . $column . "` = '" . addslashes($diff->getNewValue()) . "'";
-            }
-            else {
-                $diff = '`' . $column . "` = NULL";
-            }
-        });
-        $values = implode(', ', $values);
+        //print_r($this->obj->diff);
 
-        $keys = $this->obj->diff['keys'];
+        $diffs = $this->obj->diff['diff'];
+        $keys  = $this->obj->diff['keys'];
+        foreach ($diffs as $k=>$v) {
+            if (strpos(get_class($v), 'DiffOpRemove') !== false) {
+                unset($diffs[$k]);
+            } else {
+                if (!is_null($v->getNewValue())) {
+                    $diffs[$k] = '`' . $k . "` = '" . addslashes($v->getNewValue()) . "'";
+                } else {
+                    $diffs[$k] = '`' . $k . "` = NULL";
+                }
+            }
+        }
+
+        if (!$diffs) {
+            return '';
+        }
+
         array_walk($keys, function(&$value, $column) {
             $value = '`'.$column."` = '".addslashes($value)."'";
         });
+
+        $values    = implode(', ', $diffs);
         $condition = implode(' AND ', $keys);
         
         return "UPDATE `$table` SET $values WHERE $condition;";
