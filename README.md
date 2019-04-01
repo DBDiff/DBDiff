@@ -62,7 +62,7 @@ _Make sure you are in the root of your application for all the following steps, 
 _We are going to assume that `composer.phar` is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path_
 
 1. If you didn't install `DBDiff` with `composer`, install the dependencies of the project with: `php composer.phar install`
-2. Make a `.dbdiff` file by following the [File Examples](#file-examples) and place it in the root of your "dbdiff" directory
+2. Make a `dbdiff.yml` file by following the [File Examples](#file-examples) and place it in the root of your "dbdiff" directory
 3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API](#command-line-api) for more details on which commands you can run.
 
 You should see something like...
@@ -78,7 +78,7 @@ Congratulations you have installed and ran DBDiff!
 
 # Command-Line API
 
-###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
+###### Note: The command-line parameters will always override the settings in the `dbdiff.yml` config file
 
 -   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
 -   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)
@@ -86,7 +86,7 @@ Congratulations you have installed and ran DBDiff!
 -   **--type=schema** or **data** or **all** - Specifies the type of diff to do either on the schema, data or both. schema is the default
 -   **--include=up** or **down** or **all** - Specified whether to include the up, down or both data in the output. up is the default
 -   **--nocomments=true** - By default automated comments starting with the hash (\#) character are included in the output file, which can be removed with this parameter
--   **--config=config.yaml** - By default, DBDiff will look for a `.dbdiff` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, nocomments. Please note: a command-line parameter will always override any config file.
+-   **--config=config.yaml** - By default, DBDiff will look for a `dbdiff.yml` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, nocomments. Please note: a command-line parameter will always override any config file.
 -   **server1.db1.table1:server2.db2.table3** or **server1.db1:server2.db2** - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
 -   **--output=./output-dir/today-up-schema.sql** - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
 
@@ -95,7 +95,7 @@ Congratulations you have installed and ran DBDiff!
 ## Example 1
 `$ ./dbdiff server1.db1:server2.db2`
 
-This would by default look for the `.dbdiff` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the schema and output a commented migration.sql file inside the current directory which includes only the up SQL as per default
+This would by default look for the `dbdiff.yml` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the schema and output a commented migration.sql file inside the current directory which includes only the up SQL as per default
 
 ## Example 2
 `$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data`
@@ -105,11 +105,11 @@ This would by default look for the `.dbdiff` config file for the DB connection d
 ## Example 3
 `$ ./dbdiff --config=config.conf --template=templates/simple-db-migrate.tmpl --include=all server1.db1:server2.db2 --output=./sql/simple-schema.sql`
 
-Instead of looking for `.dbdiff`, this would look for `config.conf` (which should be valid YAML) for the settings, and then override any of those settings from `config.conf` for the --template and --include parameters given in the command-line parameters - thus comparing the source with the target database and outputting an SQL file called simple-schema.sql to the ./sql folder, which should already exist otherwise the program will throw an error, and which includes only the schema as an up and down SQL diff in the simple-db-migrate format (as specified by the template). This example would work perfectly alongside the simple-db-migrate tool
+Instead of looking for `dbdiff.yml`, this would look for `config.conf` (which should be valid YAML) for the settings, and then override any of those settings from `config.conf` for the --template and --include parameters given in the command-line parameters - thus comparing the source with the target database and outputting an SQL file called simple-schema.sql to the ./sql folder, which should already exist otherwise the program will throw an error, and which includes only the schema as an up and down SQL diff in the simple-db-migrate format (as specified by the template). This example would work perfectly alongside the simple-db-migrate tool
 
 # File Examples
 
-## .dbdiff
+## dbdiff.yml
 
 	server1:
 		user: user
