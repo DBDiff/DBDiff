@@ -43,7 +43,10 @@ class DBSchema {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
-        if (isset($params->tablesToIgnore)) {
+        if (isset($params->tablesToDiff)) {
+            $sourceTables = array_intersect($sourceTables, $params->tablesToDiff);
+            $targetTables = array_intersect($targetTables, $params->tablesToDiff);
+        } elseif (isset($params->tablesToIgnore)) {
             $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
             $targetTables = array_diff($targetTables, $params->tablesToIgnore);
         }
