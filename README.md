@@ -9,8 +9,10 @@
 </p>
 
 <p align="center">
-	<strong>DBDiff</strong> is an automated database schema and data diff tool. It compares two databases, local or remote, and produces a migration file of the differences automatically.<br/><br/>
+	<strong>DBDiff</strong> is an automated database schema and data diff tool. It compares two databases, local or remote, and produces a migration file of the differences automatically.
+</p>
 
+<p align="center">
 	When used alongside a [compatible database migration tool](#compatible-migration-tools), it can help enable database version control within your team or enterprise.
 </p>
 
