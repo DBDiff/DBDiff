@@ -1,36 +1,39 @@
-# DBDiff CLI - Database Diff Command Line Interface
+<p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="100" src="https://avatars3.githubusercontent.com/u/12562465?s=200&v=4" alt="DBDiff logo"></a></p>
 
-# The Problem
+<p align="center">
+  <a href=""><img src="https://img.shields.io/travis/DBDiff/DBDiff/better-ci-coverage.svg" alt="Build Status"></a>
+	[![Total Downloads](https://poser.pugx.org/dbdiff/dbdiff/downloads)](https://packagist.org/packages/dbdiff/dbdiff)
+	[![Monthly Downloads](https://poser.pugx.org/dbdiff/dbdiff/d/monthly)](https://packagist.org/packages/dbdiff/dbdiff)
+	<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
+	[![License](https://poser.pugx.org/dbdiff/dbdiff/license)](https://packagist.org/packages/dbdiff/dbdiff)
+</p>
 
-I've found a few solid​ ​migrat​ion tools like [Flyway](https://github.com/flyway/flyway) and [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)​, the latter being my preference for it's simplicity​ but the former having a lot more commits and contributors.​ However,​ these are just migrators and do not help produce the actual diff/migration to be versioned​, which I would not like to do manually if it can be automated.​
+<p align="center">
+	<strong>DBDiff</strong> is an automated database schema and data diff tool. It compares two databases, local or remote, and produces a migration file of the differences automatically.<br/><br/>
 
-I found a diff tool by MySQL called [mysqldbcompare](http://dev.mysql.com/doc/mysql-utilities/1.6/en/mysqldbcompare.html), which outputs SQL​ for (some) schema and data changes​ but it​ shockingly doesn't​ ​produce valid SQL!!!
+	When used alongside a [compatible database migration tool](#compatible-migration-tools), it can help enable database version control within your team or enterprise.
+</p>
 
-I must say though everything the mysqldbcompare tool offers is great, doing the diff by connecting directly to a source and target database (can be locally or on another server) and doing a series of tests/checks (all of which can be skipped if need be), then checking both the schema and the data - but we just need it to produce valid SQL output and I think it also had trouble in validating the schema fully.
+<h2 align="center">Supporting DBDiff</h2>
 
-​​I actually looked through A LOT of ​different ​schema and data diff tools (took me a whole weekend) and they all either:
+DBDiff is an MIT-licensed open source project with its ongoing development made possible entirely by the support of backers. For getting a mention in return, please consider:
 
-1. Only do schema diffs
-2. Are just too complex to get working or
-3. Just don't produce valid SQL
+- [Become a backer or sponsor on Patreon](https://www.patreon.com/dbdiff).
+- [One-time donation via PayPal](https://www.paypal.me/dbdiff)
+- If you are an individual, company or organisation interested in commercial support packages for DBDiff then please [get in touch](https://akalsoftware.com/contact-us/)
 
-# The Solution
-I think a solid migration tool mixed with an automated schema and data diff tool would be a great contribution to the open source community.
-
-This is what DBDiff is.
-
-# Features of DBDiff
+## Features
 -   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
 -   Connects to a source and target database to do the comparison diff, locally and remotely
 -   Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source
--   Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples below)
+-   Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples)
 -   Diffs are SUPER fast and this tool has been tested with databases of multiple tables of millions of rows
 -   Since this diff tool is being used for migrations, it provides up and down SQL in the same file
 -   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats, for example, Simple DB Migrate may work with simple-db-migrate.tmpl which includes: `SQL_UP = u""" {{ $up }} """ SQL_DOWN = u""" {{ $down }} """`
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
--   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue!)
+-   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
 
-# Pre-requisites
+## Pre-requisites
 1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`)
 2. You will need to have git installed: http://git-scm.com/downloads
 3. You will need to have PHP installed (version 5.4.x): http://php.net/manual/en/install.php
@@ -38,7 +41,7 @@ This is what DBDiff is.
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
 
-# Installation
+## Installation
 On the command-line, use `git` to clone the ssh version:
 
 	git clone git@github.com:DBDiff/DBDiff.git
@@ -55,7 +58,7 @@ On the command-line, use `git` to clone the ssh version:
 
 	php composer.phar require "dbdiff/dbdiff:@dev"
 
-# Setup
+## Setup
 
 _Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder_
 
@@ -76,7 +79,7 @@ You should see something like...
 
 Congratulations you have installed and ran DBDiff!
 
-# Command-Line API
+## Command-Line API
 
 ###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
 
@@ -90,26 +93,26 @@ Congratulations you have installed and ran DBDiff!
 -   **server1.db1.table1:server2.db2.table3** or **server1.db1:server2.db2** - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
 -   **--output=./output-dir/today-up-schema.sql** - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
 
-# Usage Examples
+## Usage Examples
 
-## Example 1
+### Example 1
 `$ ./dbdiff server1.db1:server2.db2`
 
 This would by default look for the `.dbdiff` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the schema and output a commented migration.sql file inside the current directory which includes only the up SQL as per default
 
-## Example 2
+### Example 2
 `$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data`
 
 This would by default look for the `.dbdiff` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the data of the specified table1 inside each database and output a .sql file which has no comments inside the current directory which includes only the up SQL as per default
 
-## Example 3
+### Example 3
 `$ ./dbdiff --config=config.conf --template=templates/simple-db-migrate.tmpl --include=all server1.db1:server2.db2 --output=./sql/simple-schema.sql`
 
 Instead of looking for `.dbdiff`, this would look for `config.conf` (which should be valid YAML) for the settings, and then override any of those settings from `config.conf` for the --template and --include parameters given in the command-line parameters - thus comparing the source with the target database and outputting an SQL file called simple-schema.sql to the ./sql folder, which should already exist otherwise the program will throw an error, and which includes only the schema as an up and down SQL diff in the simple-db-migrate format (as specified by the template). This example would work perfectly alongside the simple-db-migrate tool
 
-# File Examples
+## File Examples
 
-## .dbdiff
+### .dbdiff
 
 	server1:
 		user: user
@@ -139,7 +142,7 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 			- field4
 
 
-## simple-db-migrate.tmpl
+### simple-db-migrate.tmpl
 
 	SQL_UP = u"""
 	{{ $up }}
@@ -148,21 +151,66 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 	{{ $down }}
 	"""
 
-# How Does the Diff Actually Work?
+## How Does the Diff Actually Work?
 
 The following comparisons run in exactly the following order:
 
 -   When comparing multiple tables: all comparisons should be run
 -   When comparing just one table with another: only run the schema and data comparisons
 
-## Overall Comparison
+### Overall Comparison
 -   Check both databases exist and are accessible, if not, throw an error
 -   The database collation is then compared between the source and the target and any differences noted for the output
 
-## Schema Comparison
+### Schema Comparison
 -   Looks to see if there are any differences in column numbers, name, type, collation or attributes
 -   Any new columns in the source, which are not found in the target, are added
 
-## Data Comparison
+### Data Comparison
 -   And then for each table, the table storage type (e.g. MyISAM, CSV), the collation (e.g. utf8\_general\_ci), and number of rows are compared, in that order. If there are any differences they are noted before moving onto the next test
 -   Next, both changed rows as well as missing rows from each table are recorded
+
+## Compatible Migration Tools
+
+| Project | Language / Package Manager | Description |
+|---------|--------|-------------|
+| [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)          | Python / PIP | Generic database migration tool inpired on Rails migrations |
+	| [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
+	
+Please do [let us know](https://akalsoftware.com/contact-us/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
+
+## Questions & Support :thought_balloon:
+
+* Create a new [issue](https://github.com/dbdiff/dbdiff/issues/new/choose) if you can't find yours [being addressed](https://github.com/dbdiff/dbdiff/issues)
+* Watch this space, as we're in the process of creating a [discourse forum](https://github.com/discourse/discourse) for all the DBDiff community
+- The documentation so far is what you see on this page, however this will slowly be expanded onto it's own website
+* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/contact-us/)
+
+## Backers :two_hearts:
+
+Be the first to [back DBDiff on Patreon](https://www.patreon.com/dbdiff) and have your name or logo displayed prominently here!
+
+## Contributions :revolving_hearts:
+
+Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/dev/.github/CONTRIBUTING.md) before making a pull request.
+
+Thank you to all the people who already contributed to DBDiff!
+
+<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
+
+## Feedback :speech_balloon:
+
+If you've made it down here, you're probably a fan :wink:
+
+Could you please kindly spare 2 minutes to give us your feedback on DBDiff:
+
+https://forms.gle/gjdJxZxdVsz7BRxg7
+
+We read each and every suggestion that comes through.
+
+## License
+
+[MIT](http://opensource.org/licenses/MIT)
+
+<p style="display:flex; justify-content:center; align-items: center; align-content: center">Made with &nbsp;:heart:&nbsp; by&nbsp;&nbsp; 
+<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="100" valign="center" src="https://d33wubrfki0l68.cloudfront.net/235d6386bc34b2e633b93640a616161b85ee7ba6/1bd9c/assets/images/akalsoftware.svg" alt="Akal Software logo"></a></p>
