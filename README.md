@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-	When used alongside a [compatible database migration tool](#compatible-migration-tools), it can help enable database version control within your team or enterprise.
+	When used alongside a <a href="#compatible-migration-tools">compatible database migration tool</a>, it can help enable database version control within your team or enterprise.
 </p>
 
 <h2 align="center">Supporting DBDiff</h2>
@@ -115,7 +115,6 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 ## File Examples
 
 ### .dbdiff
-
 	server1:
 		user: user
 		password: password
@@ -142,7 +141,6 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 		table4:
 			- field1
 			- field4
-
 
 ### simple-db-migrate.tmpl
 
@@ -177,7 +175,7 @@ The following comparisons run in exactly the following order:
 | Project | Language / Package Manager | Description |
 |---------|--------|-------------|
 | [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)          | Python / PIP | Generic database migration tool inpired on Rails migrations |
-	| [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
+| [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
 	
 Please do [let us know](https://akalsoftware.com/contact-us/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
 
