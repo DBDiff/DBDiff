@@ -1,11 +1,11 @@
 <p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="100" src="https://avatars3.githubusercontent.com/u/12562465?s=200&v=4" alt="DBDiff logo"></a></p>
 
 <p align="center">
-  <a href=""><img src="https://img.shields.io/travis/DBDiff/DBDiff/better-ci-coverage.svg" alt="Build Status"></a>
-	[![Total Downloads](https://poser.pugx.org/dbdiff/dbdiff/downloads)](https://packagist.org/packages/dbdiff/dbdiff)
-	[![Monthly Downloads](https://poser.pugx.org/dbdiff/dbdiff/d/monthly)](https://packagist.org/packages/dbdiff/dbdiff)
+	<a href="https://travis-ci.org/DBDiff/DBDiff"><img src="https://img.shields.io/travis/DBDiff/DBDiff/better-ci-coverage.svg" alt="Build Status"></a>
+	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/downloads" alt="Total Downloads"></a>
+	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/d/monthly" alt="Monthly Downloads"></a>
 	<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
-	[![License](https://poser.pugx.org/dbdiff/dbdiff/license)](https://packagist.org/packages/dbdiff/dbdiff)
+	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/license" alt="License"></a>
 </p>
 
 <p align="center">
