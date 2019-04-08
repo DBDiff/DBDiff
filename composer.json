@@ -18,5 +18,9 @@
     },
     "require-dev": {
         "phpunit/phpunit": "4.8.*@dev"
+    },
+    "scripts": {
+      "post-install-cmd": "scripts/post-install.sh",
+      "post-update-cmd": "scripts/post-install.sh"
     }
 }

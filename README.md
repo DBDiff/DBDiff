@@ -18,7 +18,7 @@
 
 <h2 align="center">Supporting DBDiff</h2>
 
-DBDiff is an MIT-licensed open source project with its ongoing development made possible entirely by the support of backers. For getting a mention in return, please consider:
+DBDiff is a MIT-licensed open source project with its ongoing development made possible entirely by the support of backers. For getting a mention in return, please consider:
 
 - [Become a backer or sponsor on Patreon](https://www.patreon.com/dbdiff).
 - [One-time donation via PayPal](https://www.paypal.me/dbdiff)
@@ -192,7 +192,7 @@ Be the first to [back DBDiff on Patreon](https://www.patreon.com/dbdiff) and hav
 
 ## Contributions :revolving_hearts:
 
-Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/dev/.github/CONTRIBUTING.md) before making a pull request.
+Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/master/.github/CONTRIBUTING.md) before making a pull request.
 
 Thank you to all the people who already contributed to DBDiff!
 
