@@ -8,6 +8,7 @@ use DBDiff\Diff\SetDBCharset;
 use DBDiff\Diff\DropTable;
 use DBDiff\Diff\AddTable;
 use DBDiff\Diff\AlterTable;
+use DBDiff\Logger;
 
 
 
@@ -21,6 +22,7 @@ class DBSchema {
         $params = ParamsFactory::get();
 
         $diffs = [];
+        Logger::info("Analyzing schema");
 
         // Collation
         $dbName = $this->manager->getDB('target')->getDatabaseName();
@@ -49,17 +51,29 @@ class DBSchema {
         }
 
         $addedTables = array_diff($sourceTables, $targetTables);
+        $count = count($addedTables);
+        if ($count) {
+            Logger::info("    Found $count added tables");
+        }
         foreach ($addedTables as $table) {
             $diffs[] = new AddTable($table, $this->manager->getDB('source'));
         }
 
         $commonTables = array_intersect($sourceTables, $targetTables);
+        $count = count($commonTables);
+        if ($count) {
+            Logger::info("    Found $count common tables");
+        }
         foreach ($commonTables as $table) {
             $tableDiff = $tableSchema->getDiff($table);
             $diffs = array_merge($diffs, $tableDiff);
         }
 
         $deletedTables = array_diff($targetTables, $sourceTables);
+        $count = count($deletedTables);
+        if ($count) {
+            Logger::info("    Found $count deleted tables");
+        }
         foreach ($deletedTables as $table) {
             $diffs[] = new DropTable($table, $this->manager->getDB('target'));
         }

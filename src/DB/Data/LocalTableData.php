@@ -17,7 +17,14 @@ class LocalTableData {
     }
 
     public function getDiff($table, $key) {
-        Logger::info("Now calculating data diff for table `$table`");
+        $db1 = $this->source->getDatabaseName();
+        $count1 = $this->source->select("SELECT count(*) AS c FROM {$db1}.{$table}")[0]['c'];
+
+        $db2 = $this->target->getDatabaseName();
+        $count2 = $this->source->select("SELECT count(*) AS c FROM {$db2}.{$table}")[0]['c'];
+
+        Logger::info("Now calculating data diff for table `$table` --> $count1 vs $count2 rows");
+
         $diffSequence1 = $this->getOldNewDiff($table, $key);
         $diffSequence2 = $this->getChangeDiff($table, $key);
         $diffSequence = array_merge($diffSequence1, $diffSequence2);
@@ -66,11 +73,20 @@ class LocalTableData {
         ");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
 
+        $count = count ($result1);
+        if ($count) {
+            Logger::info("    Found $count new rows");
+        }
         foreach ($result1 as $row) {
             $diffSequence[] = new InsertData($table, [
                 'keys' => array_only($row, $key),
                 'diff' => new \Diff\DiffOp\DiffOpAdd(array_except($row, '_connection'))
             ]);
+        }
+
+        $count = count ($result2);
+        if ($count) {
+            Logger::info("    Found $count removed rows");
         }
         foreach ($result2 as $row) {
             $diffSequence[] = new DeleteData($table, [
@@ -128,7 +144,11 @@ class LocalTableData {
                 ON $keyCols
             ) t WHERE hash1 <> hash2");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
-        
+
+        $count = count($result);
+        if ($count) {
+            Logger::info("    Found $count altered rows");
+        }
         foreach ($result as $row) {
             $diff = []; $keys = [];
             foreach ($row as $k => $value) {

@@ -20,9 +20,9 @@ class ParamsFactory {
         $paramsFS = $fs->getParams();
         $params = self::merge($params, $paramsFS);
 
-        $params = self::merge($params, $paramsCLI);
-        
-        if (empty($params->server1)) {
+	$params = self::merge($params, $paramsCLI);
+
+	if (empty($params->server1)) {
             throw new CLIException("A server is required");
         }
         return $params;
