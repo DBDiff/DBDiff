@@ -188,7 +188,9 @@ Please do [let us know](https://akalsoftware.com/contact-us/) if you're using an
 
 ## Backers :two_hearts:
 
-Be the first to [back DBDiff on Patreon](https://www.patreon.com/dbdiff) and have your name or logo displayed prominently here!
+Sean McNamara
+
+[Back DBDiff on Patreon](https://www.patreon.com/dbdiff) and have your name or logo displayed prominently here!
 
 ## Contributions :revolving_hearts:
 
