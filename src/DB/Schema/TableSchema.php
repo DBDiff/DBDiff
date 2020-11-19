@@ -21,6 +21,7 @@ use DBDiff\Diff\AlterTableDropConstraint;
 use DBDiff\SQLGen\Schema\SQL;
 
 use DBDiff\Logger;
+use Illuminate\Support\Str;
 
 
 class TableSchema {
@@ -49,9 +50,9 @@ class TableSchema {
             preg_match("/`([^`]+)`/", $line, $matches);
             $name = $matches[1];
             $line = trim($line, ',');
-            if (starts_with($line, '`')) { // column
+            if (Str::startsWith($line, '`')) { // column
                 $columns[$name] = $line;
-            } else if (starts_with($line, 'CONSTRAINT')) { // constraint
+            } else if (Str::startsWith($line, 'CONSTRAINT')) { // constraint
                 $constraints[$name] = $line;
             } else { // keys
                 $keys[$name] = $line;
