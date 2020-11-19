@@ -4,3 +4,5 @@ migration.sql
 .dbdiff
 .DS_Store
 Thumbs.db
+.idea
+.phpunit.result.cache
