@@ -4,6 +4,7 @@ use DBDiff\Params\ParamsFactory;
 use Diff\Differ\MapDiffer;
 use Diff\DiffOp\DiffOpAdd;
 use Diff\DiffOp\DiffOpRemove;
+use Illuminate\Support\Arr;
 
 
 class ArrayDiff {
@@ -62,7 +63,7 @@ class ArrayDiff {
                     $diff = $differ->doDiff($entry2, $entry1);
                     if (!empty($diff)) {
                         $this->diffBucket[] = [
-                            'keys' => array_only($entry1, $this->key),
+                            'keys' => Arr::only($entry1, $this->key),
                             'diff' => $diff
                         ];
                     }
@@ -78,7 +79,7 @@ class ArrayDiff {
         foreach ($this->sourceBucket as $entry) {
             if (is_null($entry)) continue;
             $this->diffBucket[] = [
-                'keys' => array_only($entry, $this->key),
+                'keys' => Arr::only($entry, $this->key),
                 'diff' => new DiffOpAdd($entry)
             ];
         }
@@ -87,7 +88,7 @@ class ArrayDiff {
         foreach ($this->targetBucket as $entry) {
             if (is_null($entry)) continue;
             $this->diffBucket[] = [
-                'keys' => array_only($entry, $this->key),
+                'keys' => Arr::only($entry, $this->key),
                 'diff' => new DiffOpRemove($entry)
             ];
         }

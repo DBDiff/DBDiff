@@ -5,3 +5,5 @@ migration.sql
 .DS_Store
 Thumbs.db
 dist
+.idea
+.phpunit.result.cache
