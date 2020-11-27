@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  cli:
+    command: 'phpunit'
+
+  db:
+    image: mysql:5.7

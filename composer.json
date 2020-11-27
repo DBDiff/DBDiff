@@ -1,6 +1,11 @@
 {
     "name": "dbdiff/dbdiff",
     "type": "project",
+    "authors": [
+        {
+            "name": "Jasdeep Khalsa"
+        }
+    ],
     "license": "MIT",
     "bin": ["./dbdiff"],
     "autoload": {
@@ -8,7 +13,9 @@
             "DBDiff\\": "src/"
         }
     },
+    "prefer-stable": true,
     "require": {
+        "php" : ">=7.3",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
         "symfony/yaml": "^5.1",
@@ -18,10 +25,20 @@
         "diff/diff": "2.0.*@dev"
     },
     "require-dev": {
-        "phpunit/phpunit": "^9.3.3"
+        "ext-PDO": "*",
+        "phpunit/phpunit": "^9.4.3"
     },
     "scripts": {
       "post-install-cmd": "scripts/post-install.sh",
       "post-update-cmd": "scripts/post-install.sh"
-    }
+    },
+    "support": {
+        "email": "hello@akalsoftware.com"
+    },
+    "funding": [
+        {
+            "type": "patreon",
+            "url": "https://www.patreon.com/dbdiff"
+        }
+    ]
 }

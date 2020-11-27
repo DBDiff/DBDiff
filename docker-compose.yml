@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  cli:
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+
+  db:
+    image: mysql:latest
+    restart: always
+    ports:
+      - '3306'
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: diff1
+      MYSQL_USER: dbdiff
+      MYSQL_PASSWORD: dbdiff
+
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin:latest
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: rootpass

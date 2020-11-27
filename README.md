@@ -36,12 +36,25 @@ DBDiff is a MIT-licensed open source project with its ongoing development made p
 -   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
 
 ## Pre-requisites
-1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`)
+1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`) or PowerShell
 2. You will need to have git installed: http://git-scm.com/downloads
-3. You will need to have PHP installed (version 5.4.x): http://php.net/manual/en/install.php
+3. You will need to have PHP installed (version 7.3.x): http://php.net/manual/en/install.php
 4. You will need to have Composer installed which is a Dependency Manager for PHP: https://getcomposer.org
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
+
+## Supported PHP Versions
+
+_Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
+
+* PHP 7.3.x
+
+## Supported MySQL Database Versions
+
+_Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
+
+* MySQL 5.7.x
+* MySQL 8.0.x
 
 ## Installation
 On the command-line, use `git` to clone the ssh version:
@@ -89,6 +102,52 @@ Feel free to rename `dbdiff.phar` to `dbdiff` and move it to `/usr/local/bin` or
 
 You can also add it to your system's path if you wish to make it globally available on your system as a utility.
 
+## Docker
+
+You may now use `docker` and `docker-compose` to create a local environment for DBDiff (for testing or production), including a PHP server with a database and the DBDiff CLI available as a service.
+
+Please ensure you have `docker` and/or `docker-compose` installed locally, as well as a download of the git repository, before continuing.
+
+_Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
+
+### Docker Standalone DBDiff CLI with PHP 7.3
+
+```bash
+# Build DBDiff CLI Image
+docker build --tag "dbdiff:latest" --file "docker/Dockerfile" .
+```
+
+```bash
+# Run DBDiff CLI Image as a Container
+docker run -i -t --ipc=host --shm-size="1g" "dbdiff:latest" <command>
+```
+
+```bash
+# Remove DBDiff CLI Image
+docker image rm dbdiff:latest
+```
+
+### Docker Compose DBDiff Environment with PHP 7.3, phpMyAdmin & MySQL 5.7
+
+```bash
+docker-compose -f docker-compose.yml -f docker/docker-compose.mysql-5.7.yml up --build
+# Access phpMyAdmin at localhost:8080 with Username: root, Password: rootpass
+```
+
+### Docker Compose DBDiff Environment with PHP 7.3, phpMyAdmin & MySQL 8.0
+
+
+```bash
+docker-compose -f docker-compose.yml -f docker/docker-compose.mysql-8.0.yml up --build
+# Access phpMyAdmin at localhost:8080 with Username: root, Password: rootpass
+```
+
+### Removing Docker Compose DBDiff Environment
+
+```bash
+docker-compose down
+```
+
 ## Setup
 
 _Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder_
@@ -112,7 +171,7 @@ Congratulations you have installed and ran DBDiff!
 
 ## Command-Line API
 
-###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
+_Note: The command-line parameters will always override the settings in the `.dbdiff` config file_
 
 -   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
 -   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)
@@ -244,4 +303,4 @@ We read each and every suggestion that comes through.
 [MIT](http://opensource.org/licenses/MIT)
 
 <p style="display:flex; justify-content:center; align-items: center; align-content: center">Made with &nbsp;:heart:&nbsp; by&nbsp;&nbsp; 
-<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="100" valign="center" src="https://d33wubrfki0l68.cloudfront.net/235d6386bc34b2e633b93640a616161b85ee7ba6/1bd9c/assets/images/akalsoftware.svg" alt="Akal Software logo"></a></p>
+<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="100" valign="center" src="https://d33wubrfki0l68.cloudfront.net/03c6103a8e7ddc526761f7562ca1a66bfe8436d5/17098/assets/images/akal-logo.svg" alt="Akal Software logo"></a></p>
