@@ -17,7 +17,7 @@ $stub = $phar->createDefaultStub('dbdiff.php');
 $stub = "#!/usr/bin/env php \n" . $stub;
 $phar->setStub($stub);
 
-$phar->compressFiles(Phar::GZ);
+$phar->compress(Phar::GZ);
 $phar->stopBuffering();
 
 chmod($file, 0755);

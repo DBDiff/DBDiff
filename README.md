@@ -51,9 +51,38 @@ On the command-line, use `git` to clone the ssh version:
 
 	https://github.com/DBDiff/DBDiff/archive/master.zip
 
-**Or** use `composer` to include `DBDiff` as a project dependency
+**Or** use `composer` to include `DBDiff` as a project dependency:
 
 	php composer.phar require "dbdiff/dbdiff:@dev"
+
+**Or** use `composer` to install `DBDiff` globally:
+
+	composer global require "dbdiff/dbdiff:@dev"
+
+# Create a PHAR build
+
+Please first ensure in your `php.ini` file the `phar.readonly` setting is set to `false` , for example:
+
+```ini
+[Phar]
+; http://php.net/phar.readonly
+phar.readonly = false
+```
+
+Then in the root of the dbdiff repository to produce a Phar build simply run:
+
+```
+$ ./build
+```
+
+A `dist` folder should be created containing the following files:
+
+* dbdiff.phar
+* dbdiff.phar.gz
+
+Feel free to rename `dbdiff.phar` to `dbdiff` and move it to `/usr/local/bin` or another directory of your choice.
+
+You can also add it to your system's path if you wish to make it globally available on your system as a utility.
 
 # Setup
 

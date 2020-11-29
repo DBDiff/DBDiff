@@ -5,3 +5,4 @@ migration.sql
 .dbdiff
 .DS_Store
 Thumbs.db
+dist
