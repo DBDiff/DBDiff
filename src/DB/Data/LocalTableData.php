@@ -106,14 +106,22 @@ class LocalTableData {
 
         $wrapCast = function($arr, $p) {
             return array_map(function($el) use ($p) {
-                return "CAST(`{$p}`.`{$el}` AS CHAR CHARACTER SET utf8)";
+                return "CAST(IFNULL(`{$p}`.`{$el}`,'') AS CHAR CHARACTER SET utf8)";
             }, $arr);
+        };
+
+        $wrapNullCheck = function($arr, $p) {
+          return array_map(function($el) use ($p) {
+            return "IF(`{$p}`.`{$el}` IS NULL,'NULL','-')";
+          }, $arr);
         };
 
         $columnsAas = implode(',', $wrapAs($columns1, 'a', 's_'));
         $columnsA   = implode(',', $wrapCast($columns1, 'a'));
+        $columnsA0  = implode(',', $wrapNullCheck($columns1, 'a'));
         $columnsBas = implode(',', $wrapAs($columns2, 'b', 't_'));
         $columnsB   = implode(',', $wrapCast($columns2, 'b'));
+        $columnsB0  = implode(',', $wrapNullCheck($columns2, 'b'));
         
         $keyCols = implode(' AND ', array_map(function($el) {
             return "a.{$el} = b.{$el}";
@@ -123,10 +131,12 @@ class LocalTableData {
         $result = $this->source->select(
            "SELECT * FROM (
                 SELECT $columnsAas, $columnsBas, MD5(concat($columnsA)) AS hash1,
-                MD5(concat($columnsB)) AS hash2 FROM {$db1}.{$table} as a 
-                INNER JOIN {$db2}.{$table} as b  
+                MD5(concat($columnsB)) AS hash2,
+                CONCAT($columnsA0) AS nullvalues1, CONCAT($columnsB0) AS nullvalues2
+                FROM {$db1}.{$table} as a
+                INNER JOIN {$db2}.{$table} as b
                 ON $keyCols
-            ) t WHERE hash1 <> hash2");
+            ) t WHERE hash1 <> hash2 || nullvalues1 <> nullvalues2");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
         
         foreach ($result as $row) {
