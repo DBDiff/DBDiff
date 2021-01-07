@@ -29,7 +29,7 @@ class ParamsFactory {
 
     }
 
-    protected function merge($obj1, $obj2) {
+    static protected function merge($obj1, $obj2) {
         return (object) array_merge((array) $obj1, (array) $obj2);
     }
 }
