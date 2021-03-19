@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DiffFilter;
 use Diff\Differ\ListDiffer;
 
 use DBDiff\Params\ParamsFactory;
@@ -26,14 +27,14 @@ class DBSchema {
         $dbName = $this->manager->getDB('target')->getDatabaseName();
         $sourceCollation = $this->getDBVariable('source', 'collation_database');
         $targetCollation = $this->getDBVariable('target', 'collation_database');
-        if ($sourceCollation !== $targetCollation) {
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_CHARSET) && $sourceCollation !== $targetCollation) {
             $diffs[] = new SetDBCollation($dbName, $sourceCollation, $targetCollation);
         }
 
         // Charset
         $sourceCharset = $this->getDBVariable('source', 'character_set_database');
         $targetCharset = $this->getDBVariable('target', 'character_set_database');
-        if ($sourceCharset !== $targetCharset) {
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_CHARSET) && $sourceCharset !== $targetCharset) {
             $diffs[] = new SetDBCharset($dbName, $sourceCharset, $targetCharset);
         }
         
@@ -50,7 +51,9 @@ class DBSchema {
 
         $addedTables = array_diff($sourceTables, $targetTables);
         foreach ($addedTables as $table) {
-            $diffs[] = new AddTable($table, $this->manager->getDB('source'));
+            if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_TABLES)) {
+                $diffs[] = new AddTable($table, $this->manager->getDB('source'));
+            }
         }
 
         $commonTables = array_intersect($sourceTables, $targetTables);
@@ -61,7 +64,9 @@ class DBSchema {
 
         $deletedTables = array_diff($targetTables, $sourceTables);
         foreach ($deletedTables as $table) {
-            $diffs[] = new DropTable($table, $this->manager->getDB('target'));
+            if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_TABLES)) {
+                $diffs[] = new DropTable($table, $this->manager->getDB('target'));
+            }
         }
 
         return $diffs;

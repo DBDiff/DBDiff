@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DiffFilter;
 use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
 
@@ -77,14 +78,14 @@ class TableSchema {
         // Engine
         $sourceEngine = $sourceSchema['engine'];
         $targetEngine = $targetSchema['engine'];
-        if ($sourceEngine != $targetEngine) {
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_TABLES) && $sourceEngine != $targetEngine) {
             $diffSequence[] = new AlterTableEngine($table, $sourceEngine, $targetEngine);
         }
 
         // Collation
         $sourceCollation = $sourceSchema['collation'];
         $targetCollation = $targetSchema['collation'];
-        if ($sourceCollation != $targetCollation) {
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_CHARSET) && $sourceCollation != $targetCollation) {
             $diffSequence[] = new AlterTableCollation($table, $sourceCollation, $targetCollation);
         }
 
@@ -94,42 +95,51 @@ class TableSchema {
         $differ = new MapDiffer();
         $diffs = $differ->doDiff($targetColumns, $sourceColumns);
         foreach ($diffs as $column => $diff) {
-            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
+            // If we have a column change check if its related to charset/collation
+            if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
+                if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_CHARSET) && preg_match('/character set|collate /i', $diff->getNewValue())) {
+                    $diffSequence[] = new AlterTableChangeColumn($table, $column, $diff);
+                } else if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_COLUMNS)) {
+                    $diffSequence[] = new AlterTableChangeColumn($table, $column, $diff);
+                }
+            }
+
+            if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_COLUMNS) && ($diff instanceof \Diff\DiffOp\DiffOpRemove)) {
                 $diffSequence[] = new AlterTableDropColumn($table, $column, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeColumn($table, $column, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
+            } else if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_COLUMNS) && ($diff instanceof \Diff\DiffOp\DiffOpAdd)) {
                 $diffSequence[] = new AlterTableAddColumn($table, $column, $diff);
             }
         }
 
-        // Keys
-        $sourceKeys = $sourceSchema['keys'];
-        $targetKeys = $targetSchema['keys'];
-        $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetKeys, $sourceKeys);
-        foreach ($diffs as $key => $diff) {
-            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropKey($table, $key, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeKey($table, $key, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddKey($table, $key, $diff);
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_TABLES)) {
+            // Keys
+            $sourceKeys = $sourceSchema['keys'];
+            $targetKeys = $targetSchema['keys'];
+            $differ = new MapDiffer();
+            $diffs = $differ->doDiff($targetKeys, $sourceKeys);
+            foreach ($diffs as $key => $diff) {
+                if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
+                    $diffSequence[] = new AlterTableDropKey($table, $key, $diff);
+                } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
+                    $diffSequence[] = new AlterTableChangeKey($table, $key, $diff);
+                } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
+                    $diffSequence[] = new AlterTableAddKey($table, $key, $diff);
+                }
             }
-        }
 
-        // Constraints
-        $sourceConstraints = $sourceSchema['constraints'];
-        $targetConstraints = $targetSchema['constraints'];
-        $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetConstraints, $sourceConstraints);
-        foreach ($diffs as $name => $diff) {
-            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropConstraint($table, $name, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeConstraint($table, $name, $diff);
-            } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddConstraint($table, $name, $diff);
+            // Constraints
+            $sourceConstraints = $sourceSchema['constraints'];
+            $targetConstraints = $targetSchema['constraints'];
+            $differ = new MapDiffer();
+            $diffs = $differ->doDiff($targetConstraints, $sourceConstraints);
+            foreach ($diffs as $name => $diff) {
+                if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
+                    $diffSequence[] = new AlterTableDropConstraint($table, $name, $diff);
+                } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
+                    $diffSequence[] = new AlterTableChangeConstraint($table, $name, $diff);
+                } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
+                    $diffSequence[] = new AlterTableAddConstraint($table, $name, $diff);
+                }
             }
         }
 
