@@ -111,7 +111,7 @@ class TableSchema {
             }
         }
 
-        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_TABLES)) {
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_INDEXES)) {
             // Keys
             $sourceKeys = $sourceSchema['keys'];
             $targetKeys = $targetSchema['keys'];
@@ -126,7 +126,9 @@ class TableSchema {
                     $diffSequence[] = new AlterTableAddKey($table, $key, $diff);
                 }
             }
+        }
 
+        if (!DiffFilter::isFilteredOut(DiffFilter::TYPE_CONSTRAINTS)) {
             // Constraints
             $sourceConstraints = $sourceSchema['constraints'];
             $targetConstraints = $targetSchema['constraints'];
