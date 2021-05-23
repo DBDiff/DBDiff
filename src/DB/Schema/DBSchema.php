@@ -36,16 +36,21 @@ class DBSchema {
         if ($sourceCharset !== $targetCharset) {
             $diffs[] = new SetDBCharset($dbName, $sourceCharset, $targetCharset);
         }
-        
+
         // Tables
         $tableSchema = new TableSchema($this->manager);
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
+        if (isset($params->tablesToInclude)) {
+            $sourceTables = array_value_includes($sourceTables, $params->tablesToInclude;
+            $targetTables = array_value_includes($targetTables, $params->tablesToInclude;
+        }
+
         if (isset($params->tablesToIgnore)) {
-            $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
-            $targetTables = array_diff($targetTables, $params->tablesToIgnore);
+            $sourceTables = array_value_excludes($sourceTables, $params->tablesToIgnore);
+            $targetTables = array_value_excludes($targetTables, $params->tablesToIgnore);
         }
 
         $addedTables = array_diff($sourceTables, $targetTables);

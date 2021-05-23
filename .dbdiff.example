@@ -12,10 +12,14 @@ template: templates/simple-db-migrate.tmpl
 type: all
 include: all
 nocomments: true
+tablesToInclude:
+- table*
+- catalog*
 tablesToIgnore:
 - table1
 - table2
 - table3
+- catalog_category
 fieldsToIgnore:
     table1:
         - field1
