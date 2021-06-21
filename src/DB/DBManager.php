@@ -16,7 +16,7 @@ class DBManager {
             $server = $params->{$input['server']};
             $db = $input['db'];
             $this->capsule->addConnection([
-                'driver'    => 'mysql',
+                'driver'    => $server['driver'] ?? 'mysql',
                 'host'      => $server['host'],
                 'port'      => $server['port'],
                 'database'  => $db,
@@ -53,11 +53,11 @@ class DBManager {
     }
 
     public function getTables($connection) {
-        $result = $this->getDB($connection)->select("show tables");
-        return array_flatten($result);
+        return $this->getDB($connection)->getDoctrineSchemaManager()->listTableNames();
     }
 
     public function getColumns($connection, $table) {
+//         listTableColumns('user');
         $result = $this->getDB($connection)->select("show columns from `$table`");
         return array_pluck($result, 'Field');
     }

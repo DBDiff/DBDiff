@@ -9,7 +9,7 @@ use DBDiff\Templater;
 
 
 class DBDiff {
-    
+
     public function run() {
 
         // Increase memory limit
