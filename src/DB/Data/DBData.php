@@ -8,12 +8,17 @@ use DBDiff\Logger;
 
 class DBData {
 
-    function __construct($manager) {
+    function __construct($manager, $params = null) {
         $this->manager = $manager;
+        $this->params = $params;
     }
-    
+
     function getDiff() {
-        $params = ParamsFactory::get();
+        if ($this->params) {
+            $params = $this->params;
+        } else {
+            $params = ParamsFactory::get();
+        }
 
         $diffSequence = [];
 
