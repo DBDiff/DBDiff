@@ -22,7 +22,7 @@ class DiffCalculator {
         $schemaDiff = [];
         if ($params->type !== 'data') {
             if ($params->input['kind'] === 'db') {
-                $dbSchema = new DBSchema($this->manager);
+                $dbSchema = new DBSchema($this->manager, $params);
                 $schemaDiff = $dbSchema->getDiff();
             } else {
                 $tableSchema = new TableSchema($this->manager);
