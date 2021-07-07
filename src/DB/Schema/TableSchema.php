@@ -36,15 +36,19 @@ class TableSchema {
         $status = $this->{$connection}->select("show table status like '$table'");
         $engine = $status[0]['Engine'];
         $collation = $status[0]['Collation'];
-        
-        $schema = $this->{$connection}->select("SHOW CREATE TABLE `$table`")[0]['Create Table'];
+
+        $createDef = $this->{$connection}->select("SHOW CREATE TABLE `$table`")[0];
+        if (!isset($createDef['Create Table'])) {
+            return false;
+        }
+        $schema = $createDef['Create Table'];
         $lines = array_map(function($el) { return trim($el);}, explode("\n", $schema));
         $lines = array_slice($lines, 1, -1);
-        
+
         $columns = [];
         $keys = [];
         $constraints = [];
-        
+
         foreach ($lines as $line) {
             preg_match("/`([^`]+)`/", $line, $matches);
             $name = $matches[1];
@@ -69,10 +73,14 @@ class TableSchema {
 
     public function getDiff($table) {
         Logger::info("Now calculating schema diff for table `$table`");
-        
+
         $diffSequence = [];
         $sourceSchema = $this->getSchema('source', $table);
         $targetSchema = $this->getSchema('target', $table);
+
+        if (!$sourceSchema || !$targetSchema) {
+            return [];
+        }
 
         // Engine
         $sourceEngine = $sourceSchema['engine'];
