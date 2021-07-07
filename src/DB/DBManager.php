@@ -18,7 +18,7 @@ class DBManager {
             $this->capsule->addConnection([
                 'driver'    => 'mysql',
                 'host'      => $server['host'],
-                'port'      => $server['port'],
+                'port'      => $server['port'] ?? 3306,
                 'database'  => $db,
                 'username'  => $server['user'],
                 'password'  => $server['password'],
