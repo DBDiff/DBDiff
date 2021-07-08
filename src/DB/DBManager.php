@@ -28,6 +28,12 @@ class DBManager {
         }
     }
 
+    public function disconnect()
+    {
+        $this->capsule->getConnection('source')->disconnect();
+        $this->capsule->getConnection('target')->disconnect();
+    }
+
     public function testResources($params) {
         $this->testResource($params->input['source'], 'source');
         $this->testResource($params->input['target'], 'target');
