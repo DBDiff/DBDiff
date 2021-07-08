@@ -73,6 +73,7 @@ class ArrayDiff {
                     }
                     $entry1 = null;
                     $entry2 = null;
+                    break;
                 }
             }
         }
