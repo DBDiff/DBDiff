@@ -43,13 +43,13 @@ class DBManager {
         try {
             $this->capsule->getConnection($res);
         } catch(\Exception $e) {
-            throw new DBException("Can't connect to target database");
+            throw new DBException("Can't connect to $res database");
         }
         if (!empty($input['table'])) {
             try {
                 $this->capsule->getConnection($res)->table($input['table'])->first();
             } catch(\Exception $e) {
-                throw new DBException("Can't access target table");
+                throw new DBException("Can't access $res table");
             }
         }
     }
