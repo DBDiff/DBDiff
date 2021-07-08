@@ -9,10 +9,11 @@ use DBDiff\Logger;
 
 class DistTableData {
 
-    function __construct($manager) {
+    function __construct($manager, $params = null) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
+        $this->params = $params;
     }
 
     public function getIterator($connection, $table) {
@@ -22,7 +23,7 @@ class DistTableData {
     public function getDataDiff($table, $key) {
         $sourceIterator = $this->getIterator('source', $table);
         $targetIterator = $this->getIterator('target', $table);
-        $differ = new ArrayDiff($key, $sourceIterator, $targetIterator);
+        $differ = new ArrayDiff($key, $sourceIterator, $targetIterator, $this->params);
         return $differ->getDiff($table);
     }
 

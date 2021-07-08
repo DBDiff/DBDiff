@@ -10,10 +10,11 @@ use DBDiff\Logger;
 
 class LocalTableData {
 
-    function __construct($manager) {
+    function __construct($manager, $params = null) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
+        $this->params = $params;
     }
 
     public function getDiff($table, $key) {
@@ -83,7 +84,11 @@ class LocalTableData {
     }
 
     public function getChangeDiff($table, $key) {
-        $params = ParamsFactory::get();
+        if ($this->params) {
+            $params = $this->params;
+        } else {
+            $params = ParamsFactory::get();
+        }
 
         $diffSequence = [];
 
@@ -97,7 +102,7 @@ class LocalTableData {
             $columns1 = array_diff($columns1, $params->fieldsToIgnore[$table]);
             $columns2 = array_diff($columns2, $params->fieldsToIgnore[$table]);
         }
-        
+
         $wrapAs = function($arr, $p1, $p2) {
             return array_map(function($el) use ($p1, $p2) {
                 return "`{$p1}`.`{$el}` as `{$p2}{$el}`";
@@ -114,7 +119,7 @@ class LocalTableData {
         $columnsA   = implode(',', $wrapCast($columns1, 'a'));
         $columnsBas = implode(',', $wrapAs($columns2, 'b', 't_'));
         $columnsB   = implode(',', $wrapCast($columns2, 'b'));
-        
+
         $keyCols = implode(' AND ', array_map(function($el) {
             return "a.{$el} = b.{$el}";
         }, $key));
@@ -123,12 +128,12 @@ class LocalTableData {
         $result = $this->source->select(
            "SELECT * FROM (
                 SELECT $columnsAas, $columnsBas, MD5(concat($columnsA)) AS hash1,
-                MD5(concat($columnsB)) AS hash2 FROM {$db1}.{$table} as a 
-                INNER JOIN {$db2}.{$table} as b  
+                MD5(concat($columnsB)) AS hash2 FROM {$db1}.{$table} as a
+                INNER JOIN {$db2}.{$table} as b
                 ON $keyCols
             ) t WHERE hash1 <> hash2");
         $this->source->setFetchMode(\PDO::FETCH_ASSOC);
-        
+
         foreach ($result as $row) {
             $diff = []; $keys = [];
             foreach ($row as $k => $value) {
@@ -136,9 +141,9 @@ class LocalTableData {
                     $theKey = substr($k, 2);
                     $targetKey = 't_'.$theKey;
                     $sourceValue = $value;
-                    
+
                     if (in_array($theKey, $key)) $keys[$theKey] = $value;
-                    
+
                     if (isset($row[$targetKey])) {
                         $targetValue = $row[$targetKey];
                         if ($sourceValue != $targetValue) {

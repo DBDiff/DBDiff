@@ -37,7 +37,7 @@ class DiffCalculator {
                 $dbData = new DBData($this->manager, $params);
                 $dataDiff = $dbData->getDiff();
             } else {
-                $tableData = new TableData($this->manager);
+                $tableData = new TableData($this->manager, $params);
                 $dataDiff = $tableData->getDiff($params->input['source']['table']);
             }
         }

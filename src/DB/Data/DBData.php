@@ -23,7 +23,7 @@ class DBData {
         $diffSequence = [];
 
         // Tables
-        $tableData = new TableData($this->manager);
+        $tableData = new TableData($this->manager, $params);
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
