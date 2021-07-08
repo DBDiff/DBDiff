@@ -49,9 +49,9 @@ class ArrayDiff {
         } else {
             $params = ParamsFactory::get();
         }
-        foreach ($this->sourceBucket as &$entry1) {
+        foreach ($this->sourceBucket as $k1 => $entry1) {
             if (is_null($entry1)) continue;
-            foreach ($this->targetBucket as &$entry2) {
+            foreach ($this->targetBucket as $k2 => $entry2) {
                 if (is_null($entry2)) continue;
                 if ($this->isKeyEqual($entry1, $entry2)) {
 
@@ -71,8 +71,8 @@ class ArrayDiff {
                             'diff' => $diff
                         ];
                     }
-                    $entry1 = null;
-                    $entry2 = null;
+                    unset($this->sourceBucket[$k1]);
+                    unset($this->targetBucket[$k2]);
                     break;
                 }
             }
