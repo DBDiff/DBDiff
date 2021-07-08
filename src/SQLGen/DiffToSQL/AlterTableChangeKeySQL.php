@@ -18,7 +18,7 @@ class AlterTableChangeKeySQL implements SQLGenInterface {
         } else {
             $key = "INDEX `$key`";
         }
-        return "ALTER TABLE `$table` DROP $key;\nALTER TABLE `$table` ADD $schema;";
+        return "ALTER TABLE `$table` DROP $key, ADD $schema;";
     }
 
     public function getDown() {
@@ -30,7 +30,7 @@ class AlterTableChangeKeySQL implements SQLGenInterface {
         } else {
             $key = "INDEX `$key`";
         }
-        return "ALTER TABLE `$table` DROP $key;\nALTER TABLE `$table` ADD $schema;";
+        return "ALTER TABLE `$table` DROP $key, ADD $schema;";
     }
 
 }
