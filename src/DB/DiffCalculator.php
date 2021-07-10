@@ -11,9 +11,9 @@ class DiffCalculator {
     function __construct() {
         $this->manager = new DBManager;
     }
-    
+
     public function getDiff($params) {
-        
+
         // Connect and test accessibility
         $this->manager->connect($params);
         $this->manager->testResources($params);
@@ -22,7 +22,7 @@ class DiffCalculator {
         $schemaDiff = [];
         if ($params->type !== 'data') {
             if ($params->input['kind'] === 'db') {
-                $dbSchema = new DBSchema($this->manager);
+                $dbSchema = new DBSchema($this->manager, $params);
                 $schemaDiff = $dbSchema->getDiff();
             } else {
                 $tableSchema = new TableSchema($this->manager);
@@ -34,10 +34,10 @@ class DiffCalculator {
         $dataDiff = [];
         if ($params->type !== 'schema') {
             if ($params->input['kind'] === 'db') {
-                $dbData = new DBData($this->manager);
+                $dbData = new DBData($this->manager, $params);
                 $dataDiff = $dbData->getDiff();
             } else {
-                $tableData = new TableData($this->manager);
+                $tableData = new TableData($this->manager, $params);
                 $dataDiff = $tableData->getDiff($params->input['source']['table']);
             }
         }

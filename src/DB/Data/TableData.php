@@ -9,12 +9,12 @@ use DBDiff\Logger;
 
 class TableData {
 
-    function __construct($manager) {
+    function __construct($manager, $params = null) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
-        $this->distTableData = new DistTableData($manager);
-        $this->localTableData = new LocalTableData($manager);
+        $this->distTableData = new DistTableData($manager, $params);
+        $this->localTableData = new LocalTableData($manager, $params);
     }
 
     public function getIterator($connection, $table) {
@@ -61,7 +61,7 @@ class TableData {
         $sourceKey  = $this->manager->getKey('source', $table);
         $targetKey  = $this->manager->getKey('target', $table);
         $this->checkKeys($table, $sourceKey, $targetKey);
-        
+
         if ($server1 == $server2) {
             return $this->localTableData->getDiff($table, $sourceKey);
         } else {

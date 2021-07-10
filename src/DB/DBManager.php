@@ -18,7 +18,7 @@ class DBManager {
             $this->capsule->addConnection([
                 'driver'    => 'mysql',
                 'host'      => $server['host'],
-                'port'      => $server['port'],
+                'port'      => $server['port'] ?? 3306,
                 'database'  => $db,
                 'username'  => $server['user'],
                 'password'  => $server['password'],
@@ -26,6 +26,12 @@ class DBManager {
                 'collation' => 'utf8_unicode_ci'
             ], $key);
         }
+    }
+
+    public function disconnect()
+    {
+        $this->capsule->getConnection('source')->disconnect();
+        $this->capsule->getConnection('target')->disconnect();
     }
 
     public function testResources($params) {
@@ -37,13 +43,13 @@ class DBManager {
         try {
             $this->capsule->getConnection($res);
         } catch(\Exception $e) {
-            throw new DBException("Can't connect to target database");
+            throw new DBException("Can't connect to $res database");
         }
         if (!empty($input['table'])) {
             try {
                 $this->capsule->getConnection($res)->table($input['table'])->first();
             } catch(\Exception $e) {
-                throw new DBException("Can't access target table");
+                throw new DBException("Can't access $res table");
             }
         }
     }
