@@ -19,9 +19,9 @@ class DiffSorter {
         "AlterTableChangeColumn",
         "AlterTableDropColumn",
 
-        "AlterTableDropKey",
         "AlterTableAddKey",
         "AlterTableChangeKey",
+        "AlterTableDropKey",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
@@ -47,9 +47,9 @@ class DiffSorter {
         "AlterTableChangeColumn",
         "AlterTableDropColumn",
 
-        "AlterTableDropKey",
         "AlterTableAddKey",
         "AlterTableChangeKey",
+        "AlterTableDropKey",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
@@ -63,7 +63,7 @@ class DiffSorter {
         usort($diff, [$this, 'compare'.ucfirst($type)]);
         return $diff;
     }
-
+    
     private function compareUp($a, $b) {
         return $this->compare($this->up_order, $a, $b);
     }
@@ -80,7 +80,7 @@ class DiffSorter {
         $sqlGenClassB = $reflectionB->getShortName();
         $indexA = $order[$sqlGenClassA];
         $indexB = $order[$sqlGenClassB];
-
+        
         if ($indexA === $indexB) return 0;
         else if ($indexA > $indexB) return 1;
         return -1;
