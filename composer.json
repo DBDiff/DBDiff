@@ -1,5 +1,5 @@
 {
-    "name": "zorn-v/dbdiff",
+    "name": "dbdiff/dbdiff",
     "type": "project",
     "license": "MIT",
     "bin": ["./dbdiff"],
