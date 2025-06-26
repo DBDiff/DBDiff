@@ -22,7 +22,7 @@
         "illuminate/database": "^8|^9|^10|^11",
         "illuminate/view": "^8|^9|^10|^11",
         "illuminate/container": "^8|^9|^10|^11",
-        "diff/diff": "2.0.*@dev"
+        "diff/diff": "~3.0"
     },
     "require-dev": {
         "ext-PDO": "*",
