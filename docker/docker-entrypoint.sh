@@ -2,7 +2,9 @@
 
 function waitForMySQL {
   # Wait for the docker MySQL db host & port to become available
-  ./scripts/wait-for-it.sh db:3306 --timeout=300
+  # Use DB_HOST environment variable if set, otherwise default to 'db'
+  DB_HOST_NAME=${DB_HOST:-db}
+  ./scripts/wait-for-it.sh $DB_HOST_NAME:3306 --timeout=300
 }
 
 # Defaults to running the DBDiff command with any arguments that were passed in

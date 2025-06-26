@@ -1,4 +1,5 @@
-FROM php:7.3-cli
+ARG PHP_VERSION=8.3
+FROM php:${PHP_VERSION}-cli
 
 WORKDIR /usr/src/dbdiff
 
@@ -14,6 +15,6 @@ RUN chmod +x /usr/local/bin/composer
 # Copy all the root files into the container
 COPY . ./
 # Install dependencies with Composer
-RUN composer install
+RUN composer update --optimize-autoloader
 
 ENTRYPOINT ["./docker/docker-entrypoint.sh"]

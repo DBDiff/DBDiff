@@ -18,15 +18,15 @@
         "php" : ">=7.3",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
-        "symfony/yaml": "^5.1",
-        "illuminate/database": "^8",
-        "illuminate/view": "^8",
-        "illuminate/container": "^8",
+        "symfony/yaml": "^5.1|^6.0|^7.0",
+        "illuminate/database": "^8|^9|^10|^11",
+        "illuminate/view": "^8|^9|^10|^11",
+        "illuminate/container": "^8|^9|^10|^11",
         "diff/diff": "2.0.*@dev"
     },
     "require-dev": {
         "ext-PDO": "*",
-        "phpunit/phpunit": "^9.4.3"
+        "phpunit/phpunit": "^9.4.3|^10.0|^11.0"
     },
     "scripts": {
       "post-install-cmd": "scripts/post-install.sh",
