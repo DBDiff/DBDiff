@@ -7,12 +7,22 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 class End2EndTest extends PHPUnit\Framework\TestCase
 {
     // db config
-    private $host = "db";
+    private $host;
     private $port = 3306;
     private $user = "root";
     private $pass = "rootpass";
     private $db1  = "diff1";
     private $db2  = "diff2";
+    
+    public function __construct()
+    {
+        parent::__construct();
+        // Use environment variable for database host, fallback to 'db'
+        $this->host = $_ENV['DB_HOST'] ?? 'db';
+        echo "\nDEBUG: DB_HOST environment variable: " . ($_ENV['DB_HOST'] ?? 'NOT_SET');
+        echo "\nDEBUG: Using database host: " . $this->host;
+        echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
+    }
     // migration output expectations
     private $migration_actual = 'migration_actual';
     private $migration_expected = 'migration_expected';
@@ -21,12 +31,24 @@ class End2EndTest extends PHPUnit\Framework\TestCase
 
     protected function setUp(): void
     {
-        try {
-            $this->db = new PDO("mysql:host=$this->host:$this->port", $this->user, $this->pass);
-        } catch (PDOException $e) {
-            echo 'Connection failed: ' . $e->getMessage();
-            // Exit with a non-zero status code to fail CI/CD pipeline
-            exit(1);
+        // Retry connection up to 3 times with 2 second delays
+        $maxRetries = 3;
+        $retryDelay = 2;
+        
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $this->db = new PDO("mysql:host=$this->host;port=$this->port", $this->user, $this->pass);
+                echo "\nSuccessfully connected to database on attempt $attempt\n";
+                break;
+            } catch (PDOException $e) {
+                echo "\nConnection attempt $attempt failed: " . $e->getMessage();
+                if ($attempt === $maxRetries) {
+                    echo "\nFailed to connect after $maxRetries attempts\n";
+                    exit(1);
+                }
+                echo "\nRetrying in $retryDelay seconds...\n";
+                sleep($retryDelay);
+            }
         }
 
         // Get MySQL server version to decide expectation output
@@ -43,8 +65,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         }
 
         // Drop old databases, create new ones
-        $this->db->exec("DROP DATABASE `$this->db1`;");
-        $this->db->exec("DROP DATABASE `$this->db2`;");
+        $this->db->exec("DROP DATABASE IF EXISTS `$this->db1`;");
+        $this->db->exec("DROP DATABASE IF EXISTS `$this->db2`;");
         $this->db->exec("CREATE DATABASE `$this->db1`;");
         $this->db->exec("CREATE DATABASE `$this->db2`;");
 
@@ -85,8 +107,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
     protected function tearDown(): void
     {
         // Ensure the database is emptied/reset after each test irrespective of assert result
-        $this->db->exec("DROP DATABASE `$this->db1`;");
-        $this->db->exec("DROP DATABASE `$this->db2`;");
+        $this->db->exec("DROP DATABASE IF EXISTS `$this->db1`;");
+        $this->db->exec("DROP DATABASE IF EXISTS `$this->db2`;");
         // Remove output migration file
         unlink("./tests/end2end/$this->migration_actual");
     }
