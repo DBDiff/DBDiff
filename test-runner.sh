@@ -31,7 +31,6 @@ cleanup_on_interrupt() {
     echo "🛑 Interrupted! Force cleaning up..."
     
     stop_watchdog
-    force_kill_all_processes
     cleanup_docker
     echo "Cleanup completed. Exiting..."
     exit 130
@@ -42,7 +41,7 @@ MYSQL_VERSIONS=("mysql80" "mysql84" "mysql93")
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 [php_version] [mysql_version]"
+    echo "Usage: $0 [php_version] [mysql_version] [--watch]"
     echo ""
     echo "Available PHP versions: ${PHP_VERSIONS[@]}"
     echo "Available MySQL versions: ${MYSQL_VERSIONS[@]}"
@@ -50,7 +49,12 @@ show_usage() {
     echo "Examples:"
     echo "  $0 8.3 mysql80          # Test specific combination"
     echo "  $0 all all              # Test all combinations"
+    echo "  $0 8.3 mysql80 --watch  # Watch mode - run tests repeatedly"
     echo "  $0                      # Interactive mode"
+    echo ""
+    echo "Watch mode:"
+    echo "  In watch mode, tests run continuously until you press Ctrl+C"
+    echo "  Containers are kept running between tests for faster execution"
     echo ""
 }
 
@@ -112,107 +116,45 @@ is_docker_available() {
 
 # Function to cleanup docker resources
 cleanup_docker() {
-    echo "=== Cleaning up Docker resources (sequential) ==="
+    echo "=== Cleaning up Docker resources ==="
     
     # Check if Docker is available before attempting cleanup
     if ! is_docker_available; then
-        echo "⚠️  Docker daemon or socket is not available - skipping Docker cleanup operations"
-        echo "🔪 Killing any remaining processes..."
-        pkill -9 -f "docker-compose" 2>/dev/null || true
-        pkill -9 -f "docker.*build" 2>/dev/null || true
-        pkill -9 -f "docker.*run" 2>/dev/null || true
-        echo "✅ Process cleanup completed (Docker unavailable)"
+        echo "⚠️  Docker daemon not available - skipping cleanup"
         return 0
     fi
     
-    # Step 1: Stop and remove containers FIRST
-    echo "Step 1: Stopping containers..."
+    # Stop and remove containers
+    echo "Stopping containers..."
     if docker-compose down --remove-orphans --volumes 2>/dev/null; then
-        echo "✅ Docker-compose containers stopped"
+        echo "✅ Containers stopped"
     else
-        echo "⚠️  Docker-compose down failed, trying manual cleanup"
+        echo "⚠️  Failed to stop containers"
     fi
     
-    echo "Step 2: Removing project containers..."
+    # Remove project containers
     local containers=$(docker container ls -a --filter "name=dbdiff" --format "{{.ID}}" 2>/dev/null)
     if [ -n "$containers" ]; then
-        echo "$containers" | xargs -r docker rm -f 2>/dev/null && echo "✅ Project containers removed" || echo "⚠️  Some containers couldn't be removed"
-    else
-        echo "✅ No project containers to remove"
+        echo "Removing project containers..."
+        echo "$containers" | xargs -r docker rm -f 2>/dev/null && echo "✅ Project containers removed"
     fi
     
-    echo "Step 3: Removing all unused containers..."
-    if docker container prune -f 2>/dev/null; then
-        echo "✅ Unused containers removed"
-    else
-        echo "⚠️  Container pruning failed"
-    fi
-    
-    # Step 2: Remove images
-    echo "Step 4: Removing project images..."
+    # Remove project images
     local images=$(docker images --filter "reference=dbdiff*" --format "{{.ID}}" 2>/dev/null)
     if [ -n "$images" ]; then
-        echo "$images" | xargs -r docker rmi -f 2>/dev/null && echo "✅ Project images removed" || echo "⚠️  Some images couldn't be removed"
-    else
-        echo "✅ No project images to remove"
+        echo "Removing project images..."
+        echo "$images" | xargs -r docker rmi -f 2>/dev/null && echo "✅ Project images removed"
     fi
     
-    echo "Step 5: Removing dangling images..."
-    local dangling=$(docker images -f "dangling=true" -q 2>/dev/null)
-    if [ -n "$dangling" ]; then
-        echo "$dangling" | xargs -r docker rmi -f 2>/dev/null && echo "✅ Dangling images removed" || echo "⚠️  Some dangling images couldn't be removed"
-    else
-        echo "✅ No dangling images to remove"
-    fi
+    # Clean unused resources
+    echo "Cleaning unused resources..."
+    docker system prune -a -f --volumes >/dev/null 2>&1 && echo "✅ Unused resources cleaned"
     
-    echo "Step 6: Removing all unused images..."
-    if docker image prune -a -f 2>/dev/null; then
-        echo "✅ Unused images removed"
-    else
-        echo "⚠️  Image pruning failed"
-    fi
+    # Clean build cache
+    echo "Cleaning build cache..."
+    docker builder prune -a -f >/dev/null 2>&1 && echo "✅ Build cache cleaned"
     
-    # Step 3: Remove volumes
-    echo "Step 7: Removing all unused volumes..."
-    if docker volume prune -f 2>/dev/null; then
-        echo "✅ Unused volumes removed"
-    else
-        echo "⚠️  Volume pruning failed"
-    fi
-    
-    # Step 4: Remove networks
-    echo "Step 8: Removing all unused networks..."
-    if docker network prune -f 2>/dev/null; then
-        echo "✅ Unused networks removed"
-    else
-        echo "⚠️  Network pruning failed"
-    fi
-    
-    # Step 5: Remove build cache
-    echo "Step 9: Removing all build cache..."
-    if docker builder prune -a -f 2>/dev/null; then
-        echo "✅ Build cache removed"
-    else
-        echo "⚠️  Build cache pruning failed"
-    fi
-    
-    # Step 6: Kill processes LAST (after Docker cleanup is done)
-    echo "Step 10: Killing docker-compose processes (final cleanup)..."
-    pkill -9 -f "docker-compose" 2>/dev/null || true
-    pkill -9 -f "docker.*build" 2>/dev/null || true
-    pkill -9 -f "docker.*run" 2>/dev/null || true
-    echo "✅ Process cleanup completed"
-    
-    # Show final disk usage
-    echo ""
-    if is_docker_available; then
-        echo "💾 Docker disk usage after cleanup:"
-        docker system df 2>/dev/null || echo "Could not get Docker disk usage"
-    else
-        echo "💾 Docker unavailable - cannot show disk usage"
-    fi
-    
-    echo "✅ Docker cleanup completed."
+    echo "✅ Cleanup completed"
     echo ""
 }
 
@@ -234,13 +176,9 @@ run_docker_compose_with_timeout() {
     shift 2
     local cmd=("$@")
     
-    echo "🚀 $description (timeout: ${timeout}s)"
-    echo "Command: docker-compose ${cmd[*]}"
-    
     # Check Docker availability before running command
     if ! is_docker_available; then
-        echo "❌ Docker daemon or socket is not available - cannot run docker-compose command"
-        echo "💡 Make sure Docker Desktop is running and the socket is accessible"
+        echo "❌ Docker daemon not available"
         return 1
     fi
     
@@ -250,49 +188,25 @@ run_docker_compose_with_timeout() {
     
     # Start the command in background and capture its PID
     (
-        # Set up signal handling for the subprocess
         trap 'echo "Subprocess interrupted"; exit 130' INT TERM
-        docker-compose "${cmd[@]}"
+        docker-compose "${cmd[@]}" 2>/dev/null
         echo $? > "$temp_file"
     ) &
     local pid=$!
     
-    # Monitor progress with more frequent updates for interactive commands
+    # Monitor progress
     local elapsed=0
     local check_interval=5
-    local last_status_time=0
     
     while kill -0 $pid 2>/dev/null; do
         sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
-        # Show progress every 5 seconds
-        echo "⏳ $description running... (${elapsed}s/${timeout}s)"
-        
-        # Show container status every 15 seconds for longer operations
-        if [ $((elapsed % 15)) -eq 0 ] && [ $timeout -gt 60 ]; then
-            echo "📊 Current container status:"
-            if is_docker_available; then
-                docker ps --format "table {{.Names}}\t{{.Status}}" --filter "name=dbdiff" | head -3
-            else
-                echo "⚠️  Docker unavailable - cannot show container status"
-            fi
-        fi
-        
         if [ $elapsed -ge $timeout ]; then
-            echo "❌ Command timed out after ${timeout}s. Killing process..."
-            
-            # Try graceful termination first
+            echo "❌ Command timed out after ${timeout}s"
             kill -TERM $pid 2>/dev/null || true
             sleep 2
-            
-            # Force kill if still running
-            if kill -0 $pid 2>/dev/null; then
-                echo "Force killing process..."
-                kill -9 $pid 2>/dev/null || true
-            fi
-            
-            # Clean up
+            kill -9 $pid 2>/dev/null || true
             rm -f "$temp_file"
             return 124
         fi
@@ -302,7 +216,6 @@ run_docker_compose_with_timeout() {
     wait $pid 2>/dev/null
     local exit_code=$?
     
-    # If subprocess created the status file, use that exit code
     if [ -f "$temp_file" ]; then
         local file_exit_code=$(cat "$temp_file" 2>/dev/null)
         if [ -n "$file_exit_code" ]; then
@@ -315,9 +228,9 @@ run_docker_compose_with_timeout() {
     local duration=$((end_time - start_time))
     
     if [ $exit_code -eq 0 ]; then
-        echo "✅ $description completed successfully (${duration}s)"
+        echo "✅ $description completed (${duration}s)"
     else
-        echo "❌ $description failed with exit code $exit_code (${duration}s)"
+        echo "❌ $description failed (exit code: $exit_code, ${duration}s)"
     fi
     
     return $exit_code
@@ -384,16 +297,12 @@ test_combination() {
     local interval=5
     
     while [ $elapsed -lt $timeout ]; do
-        echo "🔍 Checking database health... (${elapsed}s/${timeout}s)"
-        
         if docker-compose ps --format json $db_service | grep -q '"Health":"healthy"'; then
             echo "✅ Database $db_service is healthy!"
             break
         elif docker-compose ps --format json $db_service | grep -q '"Health":"unhealthy"'; then
             echo "❌ Database $db_service is unhealthy. Checking logs..."
-            echo "--- Database Logs ---"
             docker-compose logs --tail=20 $db_service
-            echo "--- End Logs ---"
             return 1
         fi
         
@@ -403,19 +312,7 @@ test_combination() {
     
     if [ $elapsed -ge $timeout ]; then
         echo "❌ Database $db_service failed to become healthy within ${timeout}s"
-        echo "--- Database Status ---"
-        docker-compose ps $db_service
-        echo "--- Database Logs ---"
         docker-compose logs --tail=30 $db_service
-        echo "--- End Logs ---"
-        return 1
-    fi
-    
-    # Check if database container is responsive
-    echo ""
-    echo "🔍 Testing database container responsiveness..."
-    if ! check_container_responsive $db_service; then
-        echo "❌ Database container is not responsive"
         return 1
     fi
     
@@ -429,56 +326,18 @@ test_combination() {
     
     # Test PHP version info
     echo ""
-    echo "📋 Getting PHP version info..."
-    
+    echo "📋 Getting PHP version..."
     local run_flags=$(get_docker_run_flags)
-    echo "🔧 Using docker-compose flags: $run_flags"
     
     if run_docker_compose_with_timeout 30 "PHP version check" run $run_flags --entrypoint="" $service_name php --version; then
         echo "✅ PHP version check successful"
     else
-        echo "❌ Failed to get PHP version for $service_name (timeout or error)"
-        return 1
-    fi
-    
-    echo ""
-    echo "📦 Getting Composer packages..."
-    if run_docker_compose_with_timeout 30 "Composer packages check" run $run_flags --entrypoint="" $service_name sh -c "composer show --installed | head -10"; then
-        echo "✅ Composer packages check successful"
-    else
-        echo "❌ Failed to get Composer packages for $service_name (timeout or error)"
-        return 1
-    fi
-    
-    echo ""
-    echo "🧪 Getting PHPUnit version..."
-    if run_docker_compose_with_timeout 30 "PHPUnit version check" run $run_flags --entrypoint="" $service_name ./vendor/bin/phpunit --version; then
-        echo "✅ PHPUnit version check successful"
-    else
-        echo "❌ Failed to get PHPUnit version for $service_name (timeout or error)"
-        return 1
-    fi
-    
-    echo ""
-    echo "🔌 Testing database connectivity..."
-    if run_docker_compose_with_timeout 30 "Database connectivity test" run $run_flags --entrypoint="" $service_name php -r "
-        try {
-            \$pdo = new PDO('mysql:host=${db_service};dbname=diff1', 'dbdiff', 'dbdiff');
-            echo 'Database connection successful' . PHP_EOL;
-        } catch (Exception \$e) {
-            echo 'Database connection failed: ' . \$e->getMessage() . PHP_EOL;
-            exit(1);
-        }
-    "; then
-        echo "✅ Database connectivity verified"
-    else
-        echo "❌ Database connectivity test failed"
+        echo "❌ Failed to get PHP version for $service_name"
         return 1
     fi
     
     echo ""
     echo "🧪 Running PHPUnit Tests..."
-    echo "⚡ Executing test suite with 5-minute timeout..."
     
     # Run PHPUnit with timeout and progress monitoring
     local test_start_time=$(date +%s)
@@ -496,14 +355,9 @@ test_combination() {
         else
             echo "❌ Some tests FAILED for $service_name after ${test_duration}s (exit code: $exit_code)"
         fi
-        echo "⚠️  Check the output above for details"
         
         # Show container logs for debugging
-        echo "--- Service Container Status ---"
-        docker-compose ps $service_name 2>/dev/null || echo "Service container not found"
-        echo "--- Database Container Status ---"
-        docker-compose ps $db_service 2>/dev/null || echo "Database container not found"
-        echo "--- Database Logs (last 20 lines) ---"
+        echo "--- Database Logs ---"
         docker-compose logs --tail=20 $db_service
         echo "--- End Logs ---"
         
@@ -513,42 +367,34 @@ test_combination() {
     echo ""
     echo "✅ Test completed successfully for $service_name"
     
-    # Show disk usage before cleanup
-    echo "💾 Disk usage before test cleanup:"
-    show_docker_disk_usage
-    
-    # Cleanup after each test to save disk space - AGGRESSIVE
-    echo "🧹 Performing aggressive cleanup after test..."
-    
-    if is_docker_available; then
-        # Stop all containers
-        echo "Stopping all containers..."
-        docker-compose down --remove-orphans --volumes 2>/dev/null || true
+    # Only cleanup in non-watch mode
+    if [ "$WATCH_MODE" != "true" ]; then
+        echo "🧹 Cleaning up after test..."
         
-        # Remove all project containers
-        echo "Removing all project containers..."
-        docker container ls -a --filter "name=dbdiff" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
-        
-        # Remove all project images to free space immediately
-        echo "Removing project images..."
-        docker images --filter "reference=dbdiff*" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
-        
-        # Clean all unused resources
-        echo "Cleaning all unused resources..."
-        docker system prune -a -f --volumes 2>/dev/null || true
-        
-        # Clean build cache
-        echo "Cleaning build cache..."
-        docker builder prune -a -f 2>/dev/null || true
+        if is_docker_available; then
+            # Stop all containers
+            docker-compose down --remove-orphans --volumes >/dev/null 2>&1
+            
+            # Remove project containers
+            docker container ls -a --filter "name=dbdiff" --format "{{.ID}}" | xargs -r docker rm -f >/dev/null 2>&1
+            
+            # Remove project images  
+            docker images --filter "reference=dbdiff*" --format "{{.ID}}" | xargs -r docker rmi -f >/dev/null 2>&1
+            
+            # Clean unused resources
+            docker system prune -a -f --volumes >/dev/null 2>&1
+            
+            # Clean build cache
+            docker builder prune -a -f >/dev/null 2>&1
+            
+            echo "✅ Cleanup completed"
+        else
+            echo "⚠️  Docker unavailable - skipping cleanup"
+        fi
     else
-        echo "⚠️  Docker unavailable - skipping Docker cleanup"
+        echo "🔄 Watch mode: Keeping containers running for next test..."
     fi
     
-    # Show disk usage after cleanup
-    echo "💾 Disk usage after test cleanup:"
-    show_docker_disk_usage
-    
-    echo "✅ Cleanup completed"
     echo "--------------------------------------"
     echo ""
 }
@@ -603,27 +449,52 @@ force_cleanup_before_start() {
     echo ""
 }
 
-# Function to forcefully kill all related processes
-force_kill_all_processes() {
-    echo "🔪 Force killing all related processes..."
+# Function to run tests in watch mode
+run_watch_mode() {
+    local php_arg=$1
+    local mysql_arg=$2
     
-    # Kill docker-compose processes
-    pgrep -f "docker-compose" | xargs -r kill -9 2>/dev/null || true
+    echo "🔄 Watch mode enabled - running tests once, then keeping containers active"
+    echo "Press Ctrl+C to exit and cleanup"
+    echo ""
     
-    # Kill docker build/run processes
-    pgrep -f "docker.*build" | xargs -r kill -9 2>/dev/null || true
-    pgrep -f "docker.*run" | xargs -r kill -9 2>/dev/null || true
+    echo "🔄 Running tests - $(date)"
+    echo "======================================"
     
-    # Kill any php processes that might be hanging
-    pgrep -f "php.*version" | xargs -r kill -9 2>/dev/null || true
-    pgrep -f "phpunit" | xargs -r kill -9 2>/dev/null || true
-    
-    # Kill any container processes only if Docker is available
-    if is_docker_available; then
-        docker ps -q | xargs -r docker kill 2>/dev/null || true
+    # Determine which combinations to test
+    if [ "$php_arg" = "all" ] && [ "$mysql_arg" = "all" ]; then
+        # Test all combinations
+        for php_version in "${PHP_VERSIONS[@]}"; do
+            for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+                test_combination $php_version $mysql_version
+            done
+        done
+    elif [ "$php_arg" = "all" ]; then
+        # Test all PHP versions with specific MySQL
+        for php_version in "${PHP_VERSIONS[@]}"; do
+            test_combination $php_version $mysql_arg
+        done
+    elif [ "$mysql_arg" = "all" ]; then
+        # Test specific PHP with all MySQL versions
+        for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+            test_combination $php_arg $mysql_version
+        done
+    else
+        # Test specific combination
+        test_combination $php_arg $mysql_arg
     fi
     
-    echo "✅ Force kill completed"
+    echo "✅ Initial test run completed"
+    echo ""
+    echo "🐳 Containers and resources are now active and ready for manual use"
+    echo "� You can use docker-compose commands in another terminal to interact with them"
+    echo "⏳ Waiting for Ctrl+C to cleanup and exit..."
+    echo ""
+    
+    # Wait indefinitely until interrupt
+    while true; do
+        sleep 60
+    done
 }
 
 # Function to test signal handling (for debugging)
@@ -685,7 +556,25 @@ debug_docker_run() {
 }
 
 # Parse command line arguments
-if [ $# -eq 0 ]; then
+WATCH_MODE="false"
+
+# Check for --watch flag
+for arg in "$@"; do
+    if [ "$arg" = "--watch" ]; then
+        WATCH_MODE="true"
+        break
+    fi
+done
+
+# Remove --watch from arguments
+args=()
+for arg in "$@"; do
+    if [ "$arg" != "--watch" ]; then
+        args+=("$arg")
+    fi
+done
+
+if [ ${#args[@]} -eq 0 ]; then
     # Interactive mode
     echo "=== DBDiff Interactive Test Runner ==="
     echo ""
@@ -705,11 +594,18 @@ if [ $# -eq 0 ]; then
         fi
     done
     
+    # Ask about watch mode
+    echo "Enable watch mode? (y/N)"
+    read -r watch_choice
+    if [[ "$watch_choice" =~ ^[Yy]$ ]]; then
+        WATCH_MODE="true"
+    fi
+    
     PHP_ARG=$php_choice
     MYSQL_ARG=$mysql_choice
-elif [ $# -eq 2 ]; then
-    PHP_ARG=$1
-    MYSQL_ARG=$2
+elif [ ${#args[@]} -eq 2 ]; then
+    PHP_ARG=${args[0]}
+    MYSQL_ARG=${args[1]}
 else
     show_usage
     exit 1
@@ -718,6 +614,11 @@ fi
 echo "=== DBDiff Test Runner ==="
 echo "PHP version: $PHP_ARG"
 echo "MySQL version: $MYSQL_ARG"
+if [ "$WATCH_MODE" = "true" ]; then
+    echo "Mode: Watch (continuous testing)"
+else
+    echo "Mode: Single run"
+fi
 echo ""
 
 # Start watchdog to monitor for hanging processes
@@ -729,30 +630,32 @@ if ! check_port_conflicts; then
     exit 1
 fi
 
-# Determine which combinations to test
-if [ "$PHP_ARG" = "all" ] && [ "$MYSQL_ARG" = "all" ]; then
-    # Test all combinations
-    for php_version in "${PHP_VERSIONS[@]}"; do
-        for mysql_version in "${MYSQL_VERSIONS[@]}"; do
-            test_combination $php_version $mysql_version
-        done
-    done
-elif [ "$PHP_ARG" = "all" ]; then
-    # Test all PHP versions with specific MySQL
-    for php_version in "${PHP_VERSIONS[@]}"; do
-        test_combination $php_version $MYSQL_ARG
-    done
-elif [ "$MYSQL_ARG" = "all" ]; then
-    # Test specific PHP with all MySQL versions
-    for mysql_version in "${MYSQL_VERSIONS[@]}"; do
-        test_combination $PHP_ARG $mysql_version
-    done
+# Run tests based on mode
+if [ "$WATCH_MODE" = "true" ]; then
+    run_watch_mode $PHP_ARG $MYSQL_ARG
 else
-    # Test specific combination
-    test_combination $PHP_ARG $MYSQL_ARG
+    # Single run mode
+    if [ "$PHP_ARG" = "all" ] && [ "$MYSQL_ARG" = "all" ]; then
+        # Test all combinations
+        for php_version in "${PHP_VERSIONS[@]}"; do
+            for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+                test_combination $php_version $mysql_version
+            done
+        done
+    elif [ "$PHP_ARG" = "all" ]; then
+        # Test all PHP versions with specific MySQL
+        for php_version in "${PHP_VERSIONS[@]}"; do
+            test_combination $php_version $MYSQL_ARG
+        done
+    elif [ "$MYSQL_ARG" = "all" ]; then
+        # Test specific PHP with all MySQL versions
+        for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+            test_combination $PHP_ARG $mysql_version
+        done
+    else
+        # Test specific combination
+        test_combination $PHP_ARG $MYSQL_ARG
+    fi
+    
+    echo "=== All tests completed ==="
 fi
-
-echo "=== All tests completed ==="
-
-# Final cleanup
-cleanup_docker
