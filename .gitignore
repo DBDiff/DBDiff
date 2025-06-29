@@ -7,3 +7,4 @@ Thumbs.db
 dist
 .idea
 .phpunit.result.cache
+.env

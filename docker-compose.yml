@@ -8,9 +8,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 7.4
+        PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql80
+    command: tail -f /dev/null
 
   cli-php74-mysql84:
     depends_on:
@@ -20,9 +21,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 7.4
+        PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql84
+    command: tail -f /dev/null
 
   cli-php74-mysql93:
     depends_on:
@@ -32,9 +34,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 7.4
+        PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql93
+    command: tail -f /dev/null
 
   # PHP 8.3 services
   cli-php83-mysql80:
@@ -45,9 +48,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.3
+        PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql80
+    command: tail -f /dev/null
 
   cli-php83-mysql84:
     depends_on:
@@ -57,9 +61,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.3
+        PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql84
+    command: tail -f /dev/null
 
   cli-php83-mysql93:
     depends_on:
@@ -69,9 +74,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.3
+        PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql93
+    command: tail -f /dev/null
 
   # PHP 8.4 services
   cli-php84-mysql80:
@@ -82,9 +88,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.4
+        PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql80
+    command: tail -f /dev/null
 
   cli-php84-mysql84:
     depends_on:
@@ -94,9 +101,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.4
+        PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql84
+    command: tail -f /dev/null
 
   cli-php84-mysql93:
     depends_on:
@@ -106,60 +114,61 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       args:
-        PHP_VERSION: 8.4
+        PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql93
+    command: tail -f /dev/null
 
   # Database services
   db-mysql80:
-    image: mysql:8.0
+    image: mysql:${MYSQL_VERSION_80}
     restart: always
     ports:
-      - '3306:3306'
+      - '${DB_PORT_MYSQL80}:3306'
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: diff1
-      MYSQL_USER: dbdiff
-      MYSQL_PASSWORD: dbdiff
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       timeout: 20s
       retries: 10
       interval: 5s
       start_period: 40s
 
   db-mysql84:
-    image: mysql:8.4
+    image: mysql:${MYSQL_VERSION_84}
     restart: always
     ports:
-      - '3307:3306'
+      - '${DB_PORT_MYSQL84}:3306'
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: diff1
-      MYSQL_USER: dbdiff
-      MYSQL_PASSWORD: dbdiff
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       timeout: 20s
       retries: 10
       interval: 5s
       start_period: 40s
 
   db-mysql93:
-    image: mysql:9.3
+    image: mysql:${MYSQL_VERSION_93}
     restart: always
     ports:
-      - '3308:3306'
+      - '${DB_PORT_MYSQL93}:3306'
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: diff1
-      MYSQL_USER: dbdiff
-      MYSQL_PASSWORD: dbdiff
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       timeout: 20s
       retries: 10
       interval: 5s
@@ -173,10 +182,10 @@ services:
     image: phpmyadmin/phpmyadmin:latest
     restart: always
     ports:
-      - 18080:80
+      - ${PHPMYADMIN_PORT_MYSQL80}:80
     environment:
       PMA_HOST: db-mysql80
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
 
   phpmyadmin-mysql84:
     depends_on:
@@ -185,10 +194,10 @@ services:
     image: phpmyadmin/phpmyadmin:latest
     restart: always
     ports:
-      - 18081:80
+      - ${PHPMYADMIN_PORT_MYSQL84}:80
     environment:
       PMA_HOST: db-mysql84
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
 
   phpmyadmin-mysql93:
     depends_on:
@@ -197,7 +206,7 @@ services:
     image: phpmyadmin/phpmyadmin:latest
     restart: always
     ports:
-      - 18082:80
+      - ${PHPMYADMIN_PORT_MYSQL93}:80
     environment:
       PMA_HOST: db-mysql93
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}

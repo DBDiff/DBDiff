@@ -2,6 +2,23 @@
 
 This Docker setup provides multiple PHP and MySQL version combinations for testing DBDiff across different environments.
 
+## Configuration
+
+The Docker setup is configurable via environment variables. Copy `.env.example` to `.env` and customize:
+
+```bash
+cp .env.example .env
+# Edit .env to customize ports, database credentials, timeouts, etc.
+```
+
+### Environment Variables
+
+Key configuration options:
+- `DB_PORT_MYSQL80`, `DB_PORT_MYSQL84`, `DB_PORT_MYSQL93` - Database ports
+- `PHPMYADMIN_PORT_MYSQL80`, `PHPMYADMIN_PORT_MYSQL84`, `PHPMYADMIN_PORT_MYSQL93` - PHPMyAdmin ports  
+- `DB_ROOT_PASSWORD`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database credentials
+- `DATABASE_STARTUP_TIMEOUT`, `PHPUNIT_TEST_TIMEOUT` - Timeout configurations
+
 ## Available Configurations
 
 ### PHP Versions
@@ -78,31 +95,70 @@ docker-compose run --rm cli-php83-mysql80 phpunit
 docker-compose run --rm cli-php84-mysql84 phpunit
 ```
 
-### Using the Test Runner Script
+### Using the Start Script
 
-The `test-runner.sh` script provides an easy way to test different PHP/MySQL combinations with automatic cleanup to save disk space.
+The `start.sh` script provides an easy way to test different PHP/MySQL combinations with automatic cleanup to save disk space.
 
 ```bash
 # Test specific PHP/MySQL combination
-sudo ./test-runner.sh 8.3 mysql80
+./start.sh 8.3 8.0
 
 # Test all PHP versions with specific MySQL version
-sudo ./test-runner.sh all mysql80
+./start.sh all 8.0
 
 # Test specific PHP version with all MySQL versions
-sudo ./test-runner.sh 8.3 all
+./start.sh 8.3 all
 
 # Test all combinations (requires lots of disk space)
-sudo ./test-runner.sh all all
+./start.sh all all
+
+# Watch mode - single combination
+./start.sh 8.3 8.0 --watch
+
+# Watch mode - multiple combinations (run each sequentially)
+./start.sh all 8.0 --watch
+
+# No teardown mode (keep containers after tests complete)
+./start.sh 8.3 8.0 --no-teardown
+
+# Watch mode with no teardown (keep all combinations active)
+./start.sh all 8.0 --watch --no-teardown
 
 # Interactive mode - select from menus
-sudo ./test-runner.sh
+sudo ./start.sh
 
 # Show help
-./test-runner.sh --help
+./start.sh --help
 ```
 
-**Note:** The test runner automatically cleans up Docker containers, images, volumes, and build cache after each test to save disk space.
+**Test Runner Modes:**
+
+- **Single Run**: Tests run once, then containers are cleaned up automatically
+- **Watch Mode (`--watch`)**: 
+  - Single combination: Tests run once, then containers stay active for manual use
+  - Multiple combinations: Each combination runs sequentially, press Ctrl+C to move to next
+- **No Teardown (`--no-teardown`)**: Containers remain active after script completion (works with both single and watch modes)
+
+**"All" Option Behavior:**
+- **Single Mode**: Each combination runs and cleans up sequentially (unless --no-teardown)
+- **Watch Mode**: Each combination runs in sequence, user must Ctrl+C to move to next combination
+- **Watch + No Teardown**: Each combination stays active permanently (no cleanup between combinations or at exit)
+
+**Note:** The start script automatically cleans up Docker containers, images, volumes, and build cache after each test to save disk space (unless --no-teardown is used).
+
+**Stop Script:**
+Use `./stop.sh` to manually clean up all containers and resources, especially useful after using `--no-teardown`:
+
+```bash
+# Normal cleanup
+./stop.sh
+
+# Aggressive cleanup (removes everything)
+./stop.sh --aggressive
+
+# Show help
+./stop.sh --help
+```
 
 ### Start all services
 ```bash
@@ -124,21 +180,21 @@ docker-compose down --rmi all --volumes --remove-orphans
 
 ## Database Connection Details
 
-All MySQL instances use the same credentials:
-- **Root Password**: `rootpass`
-- **Database**: `diff1`
-- **User**: `dbdiff`
-- **Password**: `dbdiff`
+Default MySQL credentials (configurable via `.env`):
+- **Root Password**: `rootpass` (DB_ROOT_PASSWORD)
+- **Database**: `diff1` (DB_NAME)
+- **User**: `dbdiff` (DB_USER) 
+- **Password**: `dbdiff` (DB_PASSWORD)
 
-### External Access Ports
-- MySQL 8.0: `localhost:3306`
-- MySQL 8.4: `localhost:3307` 
-- MySQL 9.3: `localhost:3308`
+### External Access Ports (configurable via .env)
+- MySQL 8.0: `localhost:3306` (DB_PORT_MYSQL80)
+- MySQL 8.4: `localhost:3307` (DB_PORT_MYSQL84)
+- MySQL 9.3: `localhost:3308` (DB_PORT_MYSQL93)
 
-### PHPMyAdmin Access
-- MySQL 8.0: http://localhost:8080
-- MySQL 8.4: http://localhost:8081
-- MySQL 9.3: http://localhost:8082
+### PHPMyAdmin Access (configurable via .env)
+- MySQL 8.0: http://localhost:18080 (PHPMYADMIN_PORT_MYSQL80)
+- MySQL 8.4: http://localhost:18081 (PHPMYADMIN_PORT_MYSQL84)
+- MySQL 9.3: http://localhost:18082 (PHPMYADMIN_PORT_MYSQL93)
 
 ## Building Custom Combinations
 
