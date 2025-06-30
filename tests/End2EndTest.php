@@ -54,13 +54,13 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         // Get MySQL server version to decide expectation output
         $databaseVersion = explode(".", $this->db->getAttribute(PDO::ATTR_SERVER_VERSION));
         $databaseMajor = $databaseVersion[0];
-        $isVersion5 = $databaseMajor === '5';
         $isVersion8 = $databaseMajor === '8';
+        $isVersion9 = $databaseMajor === '9';
         $this->migration_expected = $this->migration_expected . "_" . $databaseMajor;
         $this->migration_actual = $this->migration_actual . "_" . $databaseMajor;
         echo "\nDatabase server major version is: " . $databaseMajor . "\n";
 
-        if (!$isVersion5 && !$isVersion8) {
+        if (!$isVersion8 && !$isVersion9) {
             throw new ErrorException('Unsupported database version');
         }
 

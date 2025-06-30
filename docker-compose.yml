@@ -143,7 +143,6 @@ services:
     restart: always
     ports:
       - '${DB_PORT_MYSQL84}:3306'
-    command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -161,7 +160,6 @@ services:
     restart: always
     ports:
       - '${DB_PORT_MYSQL93}:3306'
-    command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
