@@ -7,7 +7,6 @@ use DBDiff\Exceptions\BaseException;
 use DBDiff\Logger;
 use DBDiff\Templater;
 
-
 class DBDiff {
     
     public function run() {
