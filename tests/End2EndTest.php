@@ -14,15 +14,6 @@ class End2EndTest extends PHPUnit\Framework\TestCase
     private $db1  = "diff1";
     private $db2  = "diff2";
     
-    public function __construct()
-    {
-        parent::__construct();
-        // Use environment variable for database host, fallback to 'db'
-        $this->host = $_ENV['DB_HOST'] ?? 'db';
-        echo "\nDEBUG: DB_HOST environment variable: " . ($_ENV['DB_HOST'] ?? 'NOT_SET');
-        echo "\nDEBUG: Using database host: " . $this->host;
-        echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
-    }
     // migration output expectations
     private $migration_actual = 'migration_actual';
     private $migration_expected = 'migration_expected';
@@ -31,6 +22,12 @@ class End2EndTest extends PHPUnit\Framework\TestCase
 
     protected function setUp(): void
     {
+        // Use environment variable for database host, fallback to 'db'
+        $this->host = $_ENV['DB_HOST'] ?? 'db';
+        echo "\nDEBUG: DB_HOST environment variable: " . ($_ENV['DB_HOST'] ?? 'NOT_SET');
+        echo "\nDEBUG: Using database host: " . $this->host;
+        echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
+
         // Retry connection up to 3 times with 2 second delays
         $maxRetries = 3;
         $retryDelay = 2;

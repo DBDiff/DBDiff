@@ -17,9 +17,8 @@ class DBDiffComprehensiveTest extends TestCase
     private $mysqlMajorVersion;
     private $recordMode = false; // Set to true to record new expected outputs
 
-    public function __construct()
+    protected function setUp(): void
     {
-        parent::__construct();
         $this->host = $_ENV['DB_HOST'] ?? 'db';
         
         // Check if we're in record mode (via environment variable)
@@ -28,10 +27,7 @@ class DBDiffComprehensiveTest extends TestCase
         if ($this->recordMode) {
             echo "\n🎬 RECORD MODE ENABLED - Will capture actual output as expected results\n";
         }
-    }
 
-    protected function setUp(): void
-    {
         // Connect to database with retry logic
         $maxRetries = 3;
         $retryDelay = 2;
