@@ -350,12 +350,9 @@ class DBDiffComprehensiveTest extends TestCase
         try {
             $dbdiff = new DBDiff\DBDiff;
             $dbdiff->run();
-        } catch (Exception $e) {
+        } finally {
             ob_end_clean();
-            unlink($outputFile);
-            throw $e;
         }
-        ob_end_clean();
         
         // Read generated file
         $output = file_exists($outputFile) ? file_get_contents($outputFile) : '';

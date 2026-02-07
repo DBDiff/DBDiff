@@ -88,9 +88,12 @@ class End2EndTest extends PHPUnit\Framework\TestCase
         ];
 
         ob_start();
-        $dbdiff = new DBDiff\DBDiff;
-        $dbdiff->run();
-        ob_end_clean();
+        try {
+            $dbdiff = new DBDiff\DBDiff;
+            $dbdiff->run();
+        } finally {
+            ob_end_clean();
+        }
 
         $migration_actual_file = file_get_contents("./tests/end2end/$this->migration_actual");
         $migration_expected_file = file_get_contents("./tests/end2end/$this->migration_expected");
