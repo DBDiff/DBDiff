@@ -85,9 +85,9 @@ echo "Starting tests..."
 echo ""
 
 if [ -n "$SPECIFIC_TEST" ]; then
-    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php $TEST_FILTER
+    php vendor/bin/phpunit $TEST_FILTER
 else
-    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php
+    php vendor/bin/phpunit
 fi
 
 echo ""
@@ -95,6 +95,8 @@ echo "✅ Tests completed!"
 
 if [ "$RECORD_MODE" = "true" ]; then
     echo ""
-    echo "📝 Expected output files have been recorded in tests/expected/"
+    echo "📝 Expected output files have been recorded in:"
+    echo "   - tests/expected/ (for comprehensive tests)"
+    echo "   - tests/end2end/ (for end-to-end tests)"
     echo "💡 You can now run tests normally to validate against these expectations"
 fi

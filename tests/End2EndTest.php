@@ -19,7 +19,8 @@ class End2EndTest extends PHPUnit\Framework\TestCase
     private $migration_expected = 'migration_expected';
     // db connection
     private $db;
-
+    private $databaseMajor;
+ 
     protected function setUp(): void
     {
         // Use environment variable for database host, fallback to 'db'
@@ -50,12 +51,12 @@ class End2EndTest extends PHPUnit\Framework\TestCase
 
         // Get MySQL server version to decide expectation output
         $databaseVersion = explode(".", $this->db->getAttribute(PDO::ATTR_SERVER_VERSION));
-        $databaseMajor = $databaseVersion[0];
-        $isVersion8 = $databaseMajor === '8';
-        $isVersion9 = $databaseMajor === '9';
-        $this->migration_expected = $this->migration_expected . "_" . $databaseMajor;
-        $this->migration_actual = $this->migration_actual . "_" . $databaseMajor;
-        echo "\nDatabase server major version is: " . $databaseMajor . "\n";
+        $this->databaseMajor = $databaseVersion[0];
+        $isVersion8 = $this->databaseMajor === '8';
+        $isVersion9 = $this->databaseMajor === '9';
+        $this->migration_expected = $this->migration_expected . "_" . $this->databaseMajor;
+        $this->migration_actual = $this->migration_actual . "_" . $this->databaseMajor;
+        echo "\nDatabase server major version is: " . $this->databaseMajor . "\n";
 
         if (!$isVersion8 && !$isVersion9) {
             throw new ErrorException('Unsupported database version');
@@ -95,13 +96,19 @@ class End2EndTest extends PHPUnit\Framework\TestCase
             ob_end_clean();
         }
 
-        $migration_actual_file = file_get_contents("./tests/end2end/$this->migration_actual");
-        $migration_expected_file = file_get_contents("./tests/end2end/$this->migration_expected");
+        $migration_actual_content = file_get_contents("./tests/end2end/$this->migration_actual");
+        $migration_expected_path = "./tests/end2end/$this->migration_expected";
 
-        // TODO: Apply the migration_actual UP to the target database and expect there to be no differences on the command-line anymore
-        // TODO: Apply the migration actual DOWN to the target database and expect there to be the same expected differences again
-
-        $this->assertEquals($migration_expected_file, $migration_actual_file);
+        if (($_ENV['DBDIFF_RECORD_MODE'] ?? 'false') === 'true') {
+            file_put_contents($migration_expected_path, $migration_actual_content);
+            echo "\n📝 Recorded expected output for End2EndTest (MySQL $this->databaseMajor)\n";
+        } else {
+            if (!file_exists($migration_expected_path)) {
+                $this->fail("Expected output file not found: $migration_expected_path. Run with DBDIFF_RECORD_MODE=true to create it.");
+            }
+            $migration_expected_content = file_get_contents($migration_expected_path);
+            $this->assertEquals($migration_expected_content, $migration_actual_content);
+        }
     }
 
     protected function tearDown(): void
