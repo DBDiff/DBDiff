@@ -85,9 +85,9 @@ echo "Starting tests..."
 echo ""
 
 if [ -n "$SPECIFIC_TEST" ]; then
-    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php $TEST_FILTER --verbose
+    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php $TEST_FILTER
 else
-    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php --verbose
+    php vendor/bin/phpunit tests/DBDiffComprehensiveTest.php
 fi
 
 echo ""
