@@ -8,4 +8,5 @@ dist
 .idea
 .phpunit.result.cache
 .phpunit.cache
+tests/logs/
 .env

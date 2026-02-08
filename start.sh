@@ -1090,43 +1090,126 @@ if [ "$WATCH_MODE" = "true" ]; then
 else
     # Single run mode
     if [ "$PHP_ARG" = "all" ] && [ "$MYSQL_ARG" = "all" ]; then
+        # Ensure log directory exists
+        mkdir -p tests/logs
+        local run_id=$(date +%Y%m%d_%H%M%S)
+        local pids=()
+        local mysql_logs=()
+        local mysql_names=()
+
         if [ "$PARALLEL_MODE" = "true" ]; then
             echo "⚡ Parallel Mode: Testing all combinations concurrently by MySQL version"
-            echo ""
+        else
+            echo "📋 Sequential Mode: Testing all combinations one-by-one"
+        fi
+        echo "📝 Full logs will be saved to: tests/logs/run_${run_id}_*.log"
+        echo ""
 
-            pids=()
-            logs=()
-            for mysql_version in "${MYSQL_VERSIONS[@]}"; do
-                log_file=$(mktemp)
-                logs+=("$log_file")
+        for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+            local mname=$(convert_service_to_mysql_version "$mysql_version")
+            mysql_names+=("$mname")
+            local log_file="tests/logs/run_${run_id}_mysql_${mname}.log"
+            mysql_logs+=("$log_file")
+
+            if [ "$PARALLEL_MODE" = "true" ]; then
                 (
-                    echo "Starting parallel track for MySQL: $(convert_service_to_mysql_version "$mysql_version")"
                     for php_version in "${PHP_VERSIONS[@]}"; do
                         test_combination $php_version $mysql_version
                     done
                 ) > "$log_file" 2>&1 &
                 pids+=($!)
-            done
-
-            exit_code=0
-            for i in "${!pids[@]}"; do
-                wait ${pids[$i]} || exit_code=$?
-                cat "${logs[$i]}"
-                rm -f "${logs[$i]}"
-            done
-
-            if [ $exit_code -ne 0 ]; then
-                echo "❌ Parallel tests failed!"
-                exit $exit_code
+            else
+                echo "⏳ Starting MySQL ${mname} track..."
+                (
+                    for php_version in "${PHP_VERSIONS[@]}"; do
+                        test_combination $php_version $mysql_version
+                    done
+                ) 2>&1 | tee "$log_file"
+                echo ""
             fi
-        else
-            # Test all combinations sequentially
-            for php_version in "${PHP_VERSIONS[@]}"; do
-                for mysql_version in "${MYSQL_VERSIONS[@]}"; do
-                    test_combination $php_version $mysql_version
+        done
+
+            # Progress Monitoring Loop
+            local completed=0
+            local total_combinations=$(( ${#MYSQL_VERSIONS[@]} * ${#PHP_VERSIONS[@]} ))
+
+            echo -en "⏳ Progress: [0%] (0/${total_combinations} combinations finished)..."
+            while [ $completed -lt $total_combinations ]; do
+                local current_completed=0
+                # Check logs for "Test completed successfully" or "Some tests FAILED"
+                for log in "${mysql_logs[@]}"; do
+                    if [ -f "$log" ]; then
+                        current_completed=$(( current_completed + $(grep -c "Test completed successfully\|Some tests FAILED" "$log" || true) ))
+                    fi
                 done
+
+                # Simple progress bar update
+                completed=$current_completed
+                local percent=$(( completed * 100 / total_combinations ))
+                echo -ne "\r⏳ Progress: [${percent}%] (${completed}/${total_combinations} combinations finished)..."
+
+                # Failsafe: check if all background processes are still alive
+                local running=0
+                for pid in "${pids[@]}"; do
+                    if kill -0 $pid 2>/dev/null; then running=$((running + 1)); fi
+                done
+                if [ $running -eq 0 ]; then break; fi
+
+                sleep 2
             done
-        fi
+            echo -e "\r✅ Progress: [100%] All background jobs finished!           "
+            echo ""
+
+        # Results Collection & Summary Table (used by both modes)
+        echo "📊 Results Summary Table:"
+        echo "+-------------+------------+----------+-----------------+"
+        echo "| MySQL       | PHP        | Status   | Duration        |"
+        echo "+-------------+------------+----------+-----------------+"
+
+        local global_exit_code=0
+        for i in "${!mysql_names[@]}"; do
+            if [ "$PARALLEL_MODE" = "true" ]; then
+                wait ${pids[$i]} || global_exit_code=$?
+            fi
+
+            local mname="${mysql_names[$i]}"
+            local log="${mysql_logs[$i]}"
+
+            for php_version in "${PHP_VERSIONS[@]}"; do
+                local status="FAILED"
+                local duration="N/A"
+                if grep -q "All tests PASSED for cli-php${php_version//.}-${MYSQL_VERSIONS[$i]}" "$log"; then
+                    status="PASSED"
+                else
+                    global_exit_code=1
+                fi
+
+                duration=$(grep "All tests PASSED for cli-php${php_version//.}-${MYSQL_VERSIONS[$i]}\|Some tests FAILED for cli-php${php_version//.}-${MYSQL_VERSIONS[$i]}" "$log" | grep -o "([0-9]\+s)" | tail -n 1 | tr -d '()')
+
+                if [ "$status" = "PASSED" ]; then
+                    printf "| %-11s | %-10s | \033[0;32m%-8s\033[0m | %-15s |\n" "$mname" "$php_version" "$status" "${duration}s"
+                else
+                    printf "| %-11s | %-10s | \033[0;31m%-8s\033[0m | %-15s |\n" "$mname" "$php_version" "$status" "${duration}s"
+                fi
+            done
+        done
+        echo "+-------------+------------+----------+-----------------+"
+        echo ""
+
+            # Report and Exit
+            if [ $global_exit_code -ne 0 ]; then
+                echo "❌ Some test combinations failed. Review logs for details."
+                for log in "${mysql_logs[@]}"; do
+                    if grep -q "FAILURES!" "$log"; then
+                        echo "--- Failure Snippet: $(basename $log) ---"
+                        # Show the failure details without the build spam
+                        grep -A 50 "FAILURES!" "$log" | grep -v "Building\|transferred\|WORKDIR" | head -n 50
+                        echo "----------------------------------------"
+                    fi
+                done
+                exit $global_exit_code
+            fi
+
     elif [ "$PHP_ARG" = "all" ]; then
         # Test all PHP versions with specific MySQL
         for php_version in "${PHP_VERSIONS[@]}"; do
