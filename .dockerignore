@@ -1,3 +1,13 @@
+# Exclude sensitive data
 .git
-.dockerignore
-*.md
+.env
+.env.example
+.phpunit.cache
+
+# Exclude build and local artifacts
+dist/
+images/
+reports/
+
+# Exclude vendor (it will be installed in the container)
+vendor/
