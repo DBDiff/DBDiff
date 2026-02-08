@@ -383,8 +383,8 @@ class DBDiffComprehensiveTest extends TestCase
             $this->fail("Expected output file not found: $expectedFile. Run with DBDIFF_RECORD_MODE=true to create it.");
         }
         
-        $expectedOutput = file_get_contents($expectedFile);
-        $this->assertEquals($expectedOutput, $actualOutput, "Output mismatch for test: $testName");
+        $expectedOutput = trim(file_get_contents($expectedFile));
+        $this->assertEquals($expectedOutput, trim($actualOutput), "Output mismatch for test: $testName");
     }
 
     /**

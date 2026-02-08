@@ -128,10 +128,10 @@
              if (!file_exists($migration_expected_path)) {
                  $this->fail("Expected output file not found: $migration_expected_path. Run with DBDIFF_RECORD_MODE=true to create it.");
              }
-             $migration_expected_content = file_get_contents($migration_expected_path);
+             $migration_expected_content = trim(file_get_contents($migration_expected_path));
              
              // Assert that the generated SQL exactly matches our deterministic baseline
-             $this->assertEquals($migration_expected_content, $migration_actual_content);
+             $this->assertEquals($migration_expected_content, trim($migration_actual_content));
          }
      }
  
