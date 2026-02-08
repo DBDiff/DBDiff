@@ -84,10 +84,19 @@ mkdir -p tests/config
 echo "Starting tests..."
 echo ""
 
+# Determine PHPUnit version to use appropriate flags
+PHPUNIT_VERSION=$(php vendor/bin/phpunit --version | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
+PHPUNIT_MAJOR=$(echo $PHPUNIT_VERSION | cut -d. -f1)
+
+FLAGS="--colors=always --testdox"
+if [ "$PHPUNIT_MAJOR" -ge 10 ]; then
+    FLAGS="$FLAGS --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings"
+fi
+
 if [ -n "$SPECIFIC_TEST" ]; then
-    php vendor/bin/phpunit --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings $TEST_FILTER
+    php vendor/bin/phpunit $FLAGS $TEST_FILTER
 else
-    php vendor/bin/phpunit --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings
+    php vendor/bin/phpunit $FLAGS
 fi
 
 echo ""

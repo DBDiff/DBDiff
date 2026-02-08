@@ -19,7 +19,9 @@ class DBDiffComprehensiveTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->host = $_ENV['DB_HOST'] ?? 'db';
+        $this->host = getenv('DB_HOST') ?: ($_ENV['DB_HOST'] ?? ($_SERVER['DB_HOST'] ?? 'db'));
+        echo "\nDEBUG [Comprehensive]: DB_HOST environment variable: " . (getenv('DB_HOST') ?: 'NOT_SET');
+        echo "\nDEBUG [Comprehensive]: Using database host: " . $this->host . "\n";
         
         // Check if we're in record mode (via environment variable)
         $this->recordMode = ($_ENV['DBDIFF_RECORD_MODE'] ?? 'false') === 'true';

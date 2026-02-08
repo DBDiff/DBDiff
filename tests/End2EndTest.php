@@ -36,8 +36,8 @@
      {
          // 1. Identify Database Host
          // We use DB_HOST environment variable (provided by Docker) or fallback to 'db'
-         $this->host = $_ENV['DB_HOST'] ?? 'db';
-         echo "\nDEBUG: DB_HOST environment variable: " . ($_ENV['DB_HOST'] ?? 'NOT_SET');
+         $this->host = getenv('DB_HOST') ?: ($_ENV['DB_HOST'] ?? ($_SERVER['DB_HOST'] ?? 'db'));
+         echo "\nDEBUG: DB_HOST environment variable: " . (getenv('DB_HOST') ?: 'NOT_SET');
          echo "\nDEBUG: Using database host: " . $this->host;
          echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
 
