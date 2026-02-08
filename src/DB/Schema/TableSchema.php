@@ -92,6 +92,16 @@ class TableSchema {
         // Columns
         $sourceColumns = $sourceSchema['columns'];
         $targetColumns = $targetSchema['columns'];
+        
+        // Filter out ignored fields
+        $params = \DBDiff\Params\ParamsFactory::get();
+        if (isset($params->fieldsToIgnore[$table])) {
+            foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
+                unset($sourceColumns[$fieldToIgnore]);
+                unset($targetColumns[$fieldToIgnore]);
+            }
+        }
+
         $differ = new MapDiffer();
         $diffs = $differ->doDiff($targetColumns, $sourceColumns);
         foreach ($diffs as $column => $diff) {

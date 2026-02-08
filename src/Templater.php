@@ -47,6 +47,6 @@ class Templater {
     private function getTemplate() {
         if (file_exists($this->params->template))
             return file_get_contents($this->params->template);
-        return "#---------- UP ----------\n{{\$up}}\n#---------- DOWN ----------\n{{\$down}}";
+        return "#---------- UP ----------\n{!! \$up !!}\n#---------- DOWN ----------\n{!! \$down !!}";
     }
 }

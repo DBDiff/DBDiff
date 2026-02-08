@@ -85,9 +85,10 @@ class DBDiffComprehensiveTest extends TestCase
         $this->assertExpectedOutput('schema_only', $output);
         
         // Verify it doesn't contain data operations
-        $this->assertStringNotContainsString('INSERT INTO', $output);
-        $this->assertStringNotContainsString('DELETE FROM', $output);
-        $this->assertStringNotContainsString('UPDATE', $output);
+        $this->assertStringNotContainsString('INSERT INTO ', $output);
+        $this->assertStringNotContainsString('DELETE FROM ', $output);
+        // Use regex for UPDATE to avoid matching 'ON UPDATE' in schema
+        $this->assertDoesNotMatchRegularExpression('/^UPDATE\s+/m', $output);
         
         // Verify it contains schema operations
         $this->assertStringContainsString('ALTER TABLE', $output);
