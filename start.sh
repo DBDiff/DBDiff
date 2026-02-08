@@ -131,6 +131,7 @@ show_usage() {
     echo "  $0 8.3 8.0 --watch            # Watch mode - run tests once then keep active"
     echo "  $0 8.3 8.0 --no-teardown      # Single run without cleanup"
     echo "  $0 8.3 8.0 --watch --no-teardown  # Watch mode with no cleanup on exit"
+    echo "  $0 8.3 8.0 --fast            # Fast restart mode - less aggressive cleanup"
     echo "  $0                            # Interactive mode"
     echo ""
     echo "Modes:"
@@ -141,6 +142,7 @@ show_usage() {
     echo "All option behavior:"
     echo "  Single mode:   Each combination runs and cleans up sequentially"
     echo "  Watch mode:    Each combination runs in sequence, user must Ctrl+C between each"
+    echo "  Fast mode:     Skips heavy cleanup (images/cache) for much faster restarts"
     echo ""
 }
 
@@ -230,6 +232,13 @@ cleanup_docker() {
     if [ -n "$containers" ]; then
         echo "Removing project containers..."
         echo "$containers" | xargs -r docker rm -f 2>/dev/null && echo "✅ Project containers removed"
+    fi
+    
+    if [ "$FAST_MODE" = "true" ]; then
+        echo "🏃 Fast mode: Skipping image, prune, and cache cleanup"
+        echo "✅ Cleanup completed"
+        echo ""
+        return 0
     fi
     
     # Remove project images (including PHPMyAdmin)
@@ -513,6 +522,11 @@ test_combination() {
 # Function to force clean everything before starting
 force_cleanup_before_start() {
     echo "🧹 Performing initial cleanup to ensure clean state..."
+    
+    if [ "$FAST_MODE" = "true" ]; then
+        echo "🏃 Fast mode: Skipping heavy Docker cleanup before start"
+        return 0
+    fi
     
     # Check if Docker is available before attempting cleanup
     if ! is_docker_available; then
@@ -945,6 +959,7 @@ get_mysql_version_display() {
 # Parse command line arguments
 WATCH_MODE="false"
 NO_TEARDOWN="false"
+FAST_MODE="false"
 
 # Check for flags
 for arg in "$@"; do
@@ -952,13 +967,15 @@ for arg in "$@"; do
         WATCH_MODE="true"
     elif [ "$arg" = "--no-teardown" ]; then
         NO_TEARDOWN="true"
+    elif [ "$arg" = "--fast" ]; then
+        FAST_MODE="true"
     fi
 done
 
 # Remove flags from arguments
 args=()
 for arg in "$@"; do
-    if [ "$arg" != "--watch" ] && [ "$arg" != "--no-teardown" ]; then
+    if [ "$arg" != "--watch" ] && [ "$arg" != "--no-teardown" ] && [ "$arg" != "--fast" ]; then
         args+=("$arg")
     fi
 done
@@ -998,6 +1015,13 @@ if [ ${#args[@]} -eq 0 ]; then
         NO_TEARDOWN="true"
     fi
     
+    # Ask about fast mode
+    echo "Enable fast restart mode (skip heavy cleanup)? (y/N)"
+    read -r fast_choice
+    if [[ "$fast_choice" =~ ^[Yy]$ ]]; then
+        FAST_MODE="true"
+    fi
+    
     PHP_ARG=$php_choice
     MYSQL_ARG=$mysql_choice
 elif [ ${#args[@]} -eq 2 ]; then
@@ -1022,6 +1046,9 @@ elif [ "$NO_TEARDOWN" = "true" ]; then
     echo "Mode: Single run with no teardown (containers stay active)"
 else
     echo "Mode: Single run (containers cleaned up after tests)"
+fi
+if [ "$FAST_MODE" = "true" ]; then
+    echo "Efficiency: Fast Restart (skipping heavy cleanup)"
 fi
 echo ""
 
