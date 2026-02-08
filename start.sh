@@ -131,7 +131,9 @@ show_usage() {
     echo "  $0 8.3 8.0 --watch            # Watch mode - run tests once then keep active"
     echo "  $0 8.3 8.0 --no-teardown      # Single run without cleanup"
     echo "  $0 8.3 8.0 --watch --no-teardown  # Watch mode with no cleanup on exit"
-    echo "  $0 8.3 8.0 --fast            # Fast restart mode - less aggressive cleanup"
+    echo "  $0 8.3 8.0 --fast             # Fast restart mode - less aggressive cleanup"
+    echo "  $0 all all --parallel         # Run all combinations in parallel by MySQL version"
+    echo "  $0 all all --record           # Record expected outputs for all combinations"
     echo "  $0                            # Interactive mode"
     echo ""
     echo "Modes:"
@@ -459,7 +461,15 @@ test_combination() {
     
     # Run PHPUnit with timeout and progress monitoring
     local test_start_time=$(date +%s)
-    if run_docker_compose_with_timeout $PHPUNIT_TEST_TIMEOUT "PHPUnit test execution" run $run_flags --entrypoint="" $service_name ./vendor/bin/phpunit --colors=always --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings; then
+    local phpunit_cmd="./vendor/bin/phpunit --colors=always --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings"
+    
+    # Run in record mode if flag is set
+    local env_vars=""
+    if [ "$RECORD_MODE" = "true" ]; then
+        env_vars="-e DBDIFF_RECORD_MODE=true"
+    fi
+
+    if run_docker_compose_with_timeout $PHPUNIT_TEST_TIMEOUT "PHPUnit test execution" run $run_flags $env_vars --entrypoint="" $service_name $phpunit_cmd; then
         local test_end_time=$(date +%s)
         local test_duration=$((test_end_time - test_start_time))
         echo "✅ All tests PASSED for $service_name (${test_duration}s)"
@@ -960,6 +970,8 @@ get_mysql_version_display() {
 WATCH_MODE="false"
 NO_TEARDOWN="false"
 FAST_MODE="false"
+PARALLEL_MODE="false"
+RECORD_MODE="false"
 
 # Check for flags
 for arg in "$@"; do
@@ -969,13 +981,17 @@ for arg in "$@"; do
         NO_TEARDOWN="true"
     elif [ "$arg" = "--fast" ]; then
         FAST_MODE="true"
+    elif [ "$arg" = "--parallel" ]; then
+        PARALLEL_MODE="true"
+    elif [ "$arg" = "--record" ]; then
+        RECORD_MODE="true"
     fi
 done
 
 # Remove flags from arguments
 args=()
 for arg in "$@"; do
-    if [ "$arg" != "--watch" ] && [ "$arg" != "--no-teardown" ] && [ "$arg" != "--fast" ]; then
+    if [ "$arg" != "--watch" ] && [ "$arg" != "--no-teardown" ] && [ "$arg" != "--fast" ] && [ "$arg" != "--parallel" ] && [ "$arg" != "--record" ]; then
         args+=("$arg")
     fi
 done
@@ -1014,7 +1030,7 @@ if [ ${#args[@]} -eq 0 ]; then
     if [[ "$no_teardown_choice" =~ ^[Yy]$ ]]; then
         NO_TEARDOWN="true"
     fi
-    
+
     # Ask about fast mode
     echo "Enable fast restart mode (skip heavy cleanup)? (y/N)"
     read -r fast_choice
@@ -1074,12 +1090,43 @@ if [ "$WATCH_MODE" = "true" ]; then
 else
     # Single run mode
     if [ "$PHP_ARG" = "all" ] && [ "$MYSQL_ARG" = "all" ]; then
-        # Test all combinations
-        for php_version in "${PHP_VERSIONS[@]}"; do
+        if [ "$PARALLEL_MODE" = "true" ]; then
+            echo "⚡ Parallel Mode: Testing all combinations concurrently by MySQL version"
+            echo ""
+
+            pids=()
+            logs=()
             for mysql_version in "${MYSQL_VERSIONS[@]}"; do
-                test_combination $php_version $mysql_version
+                log_file=$(mktemp)
+                logs+=("$log_file")
+                (
+                    echo "Starting parallel track for MySQL: $(convert_service_to_mysql_version "$mysql_version")"
+                    for php_version in "${PHP_VERSIONS[@]}"; do
+                        test_combination $php_version $mysql_version
+                    done
+                ) > "$log_file" 2>&1 &
+                pids+=($!)
             done
-        done
+
+            exit_code=0
+            for i in "${!pids[@]}"; do
+                wait ${pids[$i]} || exit_code=$?
+                cat "${logs[$i]}"
+                rm -f "${logs[$i]}"
+            done
+
+            if [ $exit_code -ne 0 ]; then
+                echo "❌ Parallel tests failed!"
+                exit $exit_code
+            fi
+        else
+            # Test all combinations sequentially
+            for php_version in "${PHP_VERSIONS[@]}"; do
+                for mysql_version in "${MYSQL_VERSIONS[@]}"; do
+                    test_combination $php_version $mysql_version
+                done
+            done
+        fi
     elif [ "$PHP_ARG" = "all" ]; then
         # Test all PHP versions with specific MySQL
         for php_version in "${PHP_VERSIONS[@]}"; do
