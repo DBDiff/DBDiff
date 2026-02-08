@@ -17,7 +17,7 @@
         "diff/diff": "2.0.*@dev"
     },
     "require-dev": {
-        "phpunit/phpunit": "4.8.*@dev"
+        "phpunit/phpunit": "8.5.*@dev"
     },
     "scripts": {
       "post-install-cmd": "scripts/post-install.sh",
