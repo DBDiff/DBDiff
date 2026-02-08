@@ -121,9 +121,10 @@
          // If DBDIFF_RECORD_MODE is true, we update the gold standard file instead of asserting.
          // This is useful when the environment or deterministic sorting order changes.
          if (($_ENV['DBDIFF_RECORD_MODE'] ?? 'false') === 'true') {
-             file_put_contents($migration_expected_path, $migration_actual_content);
-             echo "\n📝 Recorded NEW deterministic expected output for Legacy End2EndTest (MySQL $this->databaseMajor)\n";
-         } else {
+            file_put_contents($migration_expected_path, $migration_actual_content);
+            echo "\n📝 Recorded NEW deterministic expected output for Legacy End2EndTest (MySQL $this->databaseMajor)\n";
+            $this->addToAssertionCount(1);
+        } else {
              if (!file_exists($migration_expected_path)) {
                  $this->fail("Expected output file not found: $migration_expected_path. Run with DBDIFF_RECORD_MODE=true to create it.");
              }

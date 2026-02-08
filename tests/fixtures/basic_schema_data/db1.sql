@@ -6,15 +6,15 @@ CREATE TABLE `users` (
   `name` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
-  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `created_at` timestamp DEFAULT '2024-01-01 00:00:00',
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `users` (`id`, `name`, `email`, `status`) VALUES 
-(1, 'John Doe', 'john@example.com', 'active'),
-(2, 'Jane Smith', 'jane@example.com', 'active'),
-(3, 'Bob Wilson', 'bob@example.com', 'inactive');
+INSERT INTO `users` (`id`, `name`, `email`, `status`, `created_at`) VALUES 
+(1, 'John Doe', 'john@example.com', 'active', '2024-01-01 00:00:00'),
+(2, 'Jane Smith', 'jane@example.com', 'active', '2024-01-01 00:00:00'),
+(3, 'Bob Wilson', 'bob@example.com', 'inactive', '2024-01-01 00:00:00');
 
 CREATE TABLE `posts` (
   `id` int NOT NULL AUTO_INCREMENT,

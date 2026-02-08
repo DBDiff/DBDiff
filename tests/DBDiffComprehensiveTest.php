@@ -373,6 +373,7 @@ class DBDiffComprehensiveTest extends TestCase
             // Record mode: save actual output as expected
             file_put_contents($expectedFile, $actualOutput);
             echo "\n📝 Recorded expected output for: {$testName}_{$this->mysqlMajorVersion}\n";
+            $this->addToAssertionCount(1);
             return;
         }
         
