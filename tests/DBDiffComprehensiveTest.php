@@ -463,7 +463,7 @@ class DBDiffComprehensiveTest extends TestCase
     private function cleanupOutputFiles(): void
     {
         $patterns = [
-            'tests/expected/migration_*.txt',
+            'tests/end2end/migration_actual*',
             'tests/config/*.yaml',
             '/tmp/dbdiff_test_*'
         ];
