@@ -11,6 +11,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php74-mysql84:
@@ -24,6 +26,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php74-mysql93:
@@ -37,6 +41,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_74}
     environment:
       - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   # PHP 8.3 services
@@ -51,6 +57,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php83-mysql84:
@@ -64,6 +72,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php83-mysql93:
@@ -77,6 +87,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_83}
     environment:
       - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   # PHP 8.4 services
@@ -91,6 +103,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php84-mysql84:
@@ -104,6 +118,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   cli-php84-mysql93:
@@ -117,6 +133,8 @@ services:
         PHP_VERSION: ${PHP_VERSION_84}
     environment:
       - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
     command: tail -f /dev/null
 
   # Database services
