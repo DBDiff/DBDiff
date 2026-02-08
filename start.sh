@@ -450,7 +450,7 @@ test_combination() {
     
     # Run PHPUnit with timeout and progress monitoring
     local test_start_time=$(date +%s)
-    if run_docker_compose_with_timeout $PHPUNIT_TEST_TIMEOUT "PHPUnit test execution" run $run_flags --entrypoint="" $service_name ./vendor/bin/phpunit --colors=always; then
+    if run_docker_compose_with_timeout $PHPUNIT_TEST_TIMEOUT "PHPUnit test execution" run $run_flags --entrypoint="" $service_name ./vendor/bin/phpunit --colors=always --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings; then
         local test_end_time=$(date +%s)
         local test_duration=$((test_end_time - test_start_time))
         echo "✅ All tests PASSED for $service_name (${test_duration}s)"

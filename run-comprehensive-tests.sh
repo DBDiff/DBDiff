@@ -85,9 +85,9 @@ echo "Starting tests..."
 echo ""
 
 if [ -n "$SPECIFIC_TEST" ]; then
-    php vendor/bin/phpunit $TEST_FILTER
+    php vendor/bin/phpunit --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings $TEST_FILTER
 else
-    php vendor/bin/phpunit
+    php vendor/bin/phpunit --testdox --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings
 fi
 
 echo ""
