@@ -28,33 +28,33 @@ DBDiff is a MIT-licensed open source project with its ongoing development made p
 -   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
 -   Connects to a source and target database to do the comparison diff, locally and remotely
 -   Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source
+-   **Deterministic Output**: SQL is generated in a stable, predictable order (tables, columns, and data), ensuring consistent migrations and test pass rates across different environments.
 -   Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples)
 -   Diffs are SUPER fast and this tool has been tested with databases of multiple tables of millions of rows
 -   Since this diff tool is being used for migrations, it provides up and down SQL in the same file
--   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats, for example, Simple DB Migrate may work with simple-db-migrate.tmpl which includes: `SQL_UP = u""" {{ $up }} """ SQL_DOWN = u""" {{ $down }} """`
+-   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
 -   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
 
 ## Pre-requisites
-1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`) or PowerShell
-2. You will need to have git installed: http://git-scm.com/downloads
-3. You will need to have PHP installed (version 7.3.x): http://php.net/manual/en/install.php
-4. You will need to have Composer installed which is a Dependency Manager for PHP: https://getcomposer.org
+1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
+2. You will need to have git installed
+3. You will need to have PHP installed (version 7.4.x, 8.3.x, or 8.4.x)
+4. You will need to have Composer installed
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
 
-## Supported PHP Versions
-
-_Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
-
-* PHP 7.3.x
+* PHP 7.4.x
+* PHP 8.3.x
+* PHP 8.4.x
 
 ## Supported MySQL Database Versions
 
 _Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
 
-* MySQL 5.7.x
 * MySQL 8.0.x
+* MySQL 8.4.x (LTS)
+* MySQL 9.3.x (Innovation)
 
 ## Installation
 On the command-line, use `git` to clone the ssh version:
@@ -127,20 +127,19 @@ docker run -i -t --ipc=host --shm-size="1g" "dbdiff:latest" <command>
 docker image rm dbdiff:latest
 ```
 
-### Docker Compose DBDiff Environment with PHP 7.3, phpMyAdmin & MySQL 5.7
+### Cross-Version Testing
+
+You can easily test DBDiff against any combination of PHP and MySQL using the provided `start.sh` script.
 
 ```bash
-docker-compose -f docker-compose.yml -f docker/docker-compose.mysql-5.7.yml up --build
-# Access phpMyAdmin at localhost:8080 with Username: root, Password: rootpass
+# Run tests for a specific combination
+./start.sh 8.3 8.0
+
+# Run all 9 version combinations in parallel (3x speedup)
+./start.sh all all --parallel
 ```
 
-### Docker Compose DBDiff Environment with PHP 7.3, phpMyAdmin & MySQL 8.0
-
-
-```bash
-docker-compose -f docker-compose.yml -f docker/docker-compose.mysql-8.0.yml up --build
-# Access phpMyAdmin at localhost:8080 with Username: root, Password: rootpass
-```
+See the [DOCKER.md](DOCKER.md) file for extensive documentation on the Dockerized test runner, including flags for **fast restarts**, **recording fixtures**, and **automated CI**.
 
 ### Removing Docker Compose DBDiff Environment
 

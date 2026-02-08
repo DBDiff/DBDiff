@@ -103,33 +103,34 @@ The `start.sh` script provides an easy way to test different PHP/MySQL combinati
 # Test specific PHP/MySQL combination
 ./start.sh 8.3 8.0
 
-# Test all PHP versions with specific MySQL version
-./start.sh all 8.0
-
-# Test specific PHP version with all MySQL versions
-./start.sh 8.3 all
-
-# Test all combinations (requires lots of disk space)
+# Test all combinations (sequentially)
 ./start.sh all all
+
+# HIGH PERFORMANCE: Test all combinations in parallel
+./start.sh all all --parallel
+
+# RECORD MODE: Update expected test fixtures for all versions
+./start.sh all all --record
+
+# FAST RESTART: Skip heavy Docker cleanup for faster iterations
+./start.sh 8.3 8.0 --fast
 
 # Watch mode - single combination
 ./start.sh 8.3 8.0 --watch
 
-# Watch mode - multiple combinations (run each sequentially)
-./start.sh all 8.0 --watch
-
-# No teardown mode (keep containers after tests complete)
-./start.sh 8.3 8.0 --no-teardown
-
-# Watch mode with no teardown (keep all combinations active)
-./start.sh all 8.0 --watch --no-teardown
-
 # Interactive mode - select from menus
-sudo ./start.sh
-
-# Show help
-./start.sh --help
+./start.sh
 ```
+
+**Advanced Flags:**
+
+- **Parallel Mode (`--parallel`)**: Spawns multiple background processes to test different MySQL major versions concurrently. This provides a ~3x speedup when running `all all`.
+- **Fast Mode (`--fast`)**: Skips the aggressive deletion of Docker images and build caches between runs. Use this when iterating on code and the underlying environment/dependencies haven't changed.
+- **Record Mode (`--record`)**: Tunnels the `DBDIFF_RECORD_MODE` environment variable into the test containers. This will cause tests to overwrite the expected fixtures in `tests/expected/` with the actual current output.
+- **Watch Mode (`--watch`)**: 
+  - Single combination: Tests run once, then containers stay active for manual use.
+  - Multiple combinations: Each combination runs in sequence, press Ctrl+C to move to the next.
+- **No Teardown (`--no-teardown`)**: Containers remain active after script completion (works with both single and watch modes).
 
 **Test Runner Modes:**
 
@@ -196,20 +197,25 @@ Default MySQL credentials (configurable via `.env`):
 - MySQL 8.4: http://localhost:18081 (PHPMYADMIN_PORT_MYSQL84)
 - MySQL 9.3: http://localhost:18082 (PHPMYADMIN_PORT_MYSQL93)
 
-## Building Custom Combinations
+## Continuous Integration
 
-The Dockerfile accepts a `PHP_VERSION` build argument, so you can easily add more PHP versions by updating the docker-compose.yml file with additional services using different PHP_VERSION values.
+The project uses GitHub Actions to ensure full compatibility across all supported versions on every pull request.
 
-Example:
-```yaml
-cli-php82-mysql80:
-  depends_on:
-    - db-mysql80
-  build:
-    context: .
-    dockerfile: docker/Dockerfile
-    args:
-      PHP_VERSION: 8.2
-  environment:
-    - DB_HOST=db-mysql80
-```
+**Matrix Grid:**
+- **PHP**: 7.4, 8.3, 8.4
+- **MySQL**: 8.0, 8.4, 9.3
+
+## Deterministic Testing
+
+DBDiff is now built with **deterministic SQL generation**. This means:
+1. Tables are processed in alphabetical order.
+2. `ALTER` statements within a table (columns, keys, constraints) are sorted by item name.
+3. Data operations (`INSERT`, `UPDATE`, `DELETE`) are sorted by primary key.
+
+This ensures that test fixtures are stable across platforms and different database versions.
+
+## Support for Modern PHP & PHPUnit
+
+- Fully compatible with **PHP 8.4**.
+- Test suite modernized for **PHPUnit 11**.
+- Clean test output with automatic suppression of third-party legacy deprecations in the `vendor/` folder.
