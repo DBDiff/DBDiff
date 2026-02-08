@@ -97,7 +97,7 @@ class DiffSorter {
             }
 
             // Quaternary sort by data keys if it's a data diff
-            if (isset($a->diff['keys']) && isset($b->diff['keys'])) {
+            if (is_array($a->diff) && isset($a->diff['keys']) && is_array($b->diff) && isset($b->diff['keys'])) {
                 return strcmp(json_encode($a->diff['keys']), json_encode($b->diff['keys']));
             }
 

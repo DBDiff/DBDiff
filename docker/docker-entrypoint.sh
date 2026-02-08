@@ -11,6 +11,12 @@ function waitForMySQL {
 # Otherwise if phpunit is the first argument, runs the phpunit test suite
 RUN_CMD=${1:-false}
 
+# If the first argument is 'tail' or 'bash', just exec it directly
+# This allows 'command: tail -f /dev/null' to keep the container alive
+if [[ $RUN_CMD == 'tail' || $RUN_CMD == 'bash' || $RUN_CMD == 'sh' ]]; then
+  exec "$@"
+fi
+
 if [[ $RUN_CMD == 'phpunit' ]]; then
   waitForMySQL
   ./vendor/bin/phpunit
