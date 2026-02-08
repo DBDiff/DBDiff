@@ -4,25 +4,25 @@ CREATE TABLE `cc` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'x';
-DELETE FROM `asas` WHERE `id` = '7' AND `firstname` = 'e';
 DELETE FROM `asas` WHERE `id` = '6' AND `firstname` = 't';
+DELETE FROM `asas` WHERE `id` = '7' AND `firstname` = 'e';
 DELETE FROM `zz` WHERE `id` = '1' AND `name` = 'name';
 DROP TABLE `zz`;
 ALTER TABLE `aa` ENGINE = InnoDB;
-ALTER TABLE `bb` DEFAULT COLLATE latin1_swedish_ci;
 ALTER TABLE `aa` DEFAULT COLLATE latin1_swedish_ci;
 ALTER TABLE `asas` DEFAULT COLLATE latin1_spanish_ci;
+ALTER TABLE `bb` DEFAULT COLLATE latin1_swedish_ci;
+ALTER TABLE `aa` ADD `as` int NOT NULL;
 ALTER TABLE `aa` ADD `qw` int NOT NULL;
 ALTER TABLE `bb` ADD `jj` int NOT NULL;
-ALTER TABLE `aa` ADD `as` int NOT NULL;
 ALTER TABLE `aa` CHANGE `name` `name` varchar(255) NOT NULL;
 ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) DEFAULT NULL;
 ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) CHARACTER SET latin1 COLLATE latin1_spanish_ci NOT NULL;
 ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) CHARACTER SET latin1 COLLATE latin1_spanish_ci NOT NULL;
 ALTER TABLE `aa` DROP `zx`;
 ALTER TABLE `aa` ADD KEY `as` (`as`);
-ALTER TABLE `bb` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` ADD UNIQUE KEY `name` (`name`);
+ALTER TABLE `bb` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` DROP INDEX `id`;
 ALTER TABLE `aa` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` DROP INDEX `namekey`;
@@ -35,10 +35,10 @@ INSERT INTO `cc` VALUES('11');
 UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
 """
 SQL_DOWN = u"""
-DELETE FROM `cc` WHERE `id` = '11';
-DELETE FROM `asas` WHERE `id` = '4' AND `firstname` = 'v';
-DELETE FROM `asas` WHERE `id` = '3' AND `firstname` = 'x';
 DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'c';
+DELETE FROM `asas` WHERE `id` = '3' AND `firstname` = 'x';
+DELETE FROM `asas` WHERE `id` = '4' AND `firstname` = 'v';
+DELETE FROM `cc` WHERE `id` = '11';
 DROP TABLE `cc`;
 CREATE TABLE `zz` (
   `id` int NOT NULL,
@@ -50,16 +50,16 @@ CREATE TABLE `zz` (
   KEY `time` (`time`,`bool`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 ALTER TABLE `aa` ENGINE = MyISAM;
-ALTER TABLE `asas` DEFAULT COLLATE latin1_bin;
 ALTER TABLE `aa` DEFAULT COLLATE latin1_spanish_ci;
+ALTER TABLE `asas` DEFAULT COLLATE latin1_bin;
 ALTER TABLE `bb` DEFAULT COLLATE latin1_bin;
 ALTER TABLE `aa` DROP `as`;
 ALTER TABLE `aa` DROP `qw`;
 ALTER TABLE `bb` DROP `jj`;
-ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL;
-ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL;
-ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci NOT NULL;
 ALTER TABLE `aa` CHANGE `name` `name` varchar(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci NOT NULL DEFAULT 'aa';
+ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci NOT NULL;
+ALTER TABLE `asas` CHANGE `firstname` `firstname` varchar(255) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL;
+ALTER TABLE `asas` CHANGE `lastname` `lastname` varchar(255) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL;
 ALTER TABLE `aa` ADD `zx` int NOT NULL;
 ALTER TABLE `aa` DROP INDEX `as`;
 ALTER TABLE `aa` DROP INDEX `name`;

@@ -1,0 +1,17 @@
+#---------- UP ----------
+
+#---------- DOWN ----------
+DELETE FROM `posts` WHERE `id` = '3';
+DELETE FROM `users` WHERE `id` = '3';
+ALTER TABLE `users` CHANGE `status` `status` enum('active','inactive','pending') DEFAULT 'pending';
+ALTER TABLE `posts` ADD `published_at` datetime DEFAULT NULL;
+ALTER TABLE `users` ADD `phone` varchar(20) DEFAULT NULL;
+ALTER TABLE `users` ADD `updated_at` timestamp NULL DEFAULT '2024-01-01 00:00:00';
+ALTER TABLE `posts` ADD KEY `published` (`published`);
+ALTER TABLE `users` ADD KEY `status` (`status`);
+INSERT INTO `posts` VALUES('4','4','Alice Post','This is Alice post content','1','2024-01-03 12:00:00');
+INSERT INTO `users` VALUES('4','Alice Brown','alice@example.com','555-9999','active','2024-01-01 00:00:10','2024-01-01 00:00:10');
+UPDATE `posts` SET `title` = 'First Post Updated', `content` = 'This is the updated first post content' WHERE `id` = '1';
+UPDATE `posts` SET `published` = '1' WHERE `id` = '2';
+UPDATE `users` SET `created_at` = '2024-01-01 00:00:10' WHERE `id` = '1';
+UPDATE `users` SET `status` = 'pending', `created_at` = '2024-01-01 00:00:10' WHERE `id` = '2';
