@@ -1,7 +1,7 @@
-<p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="100" src="https://avatars3.githubusercontent.com/u/12562465?s=200&v=4" alt="DBDiff logo"></a></p>
+<p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="200" src="images/akal-logo.svg" alt="Akal Logo"></a></p>
 
 <p align="center">
-	<a href="https://travis-ci.org/DBDiff/DBDiff"><img src="https://img.shields.io/travis/DBDiff/DBDiff/better-ci-coverage.svg" alt="Build Status"></a>
+	<a href="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml"><img src="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml/badge.svg" alt="Build Status"></a>
 	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/downloads" alt="Total Downloads"></a>
 	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/d/monthly" alt="Monthly Downloads"></a>
 	<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
@@ -16,13 +16,6 @@
 	When used alongside a <a href="#compatible-migration-tools">compatible database migration tool</a>, it can help enable database version control within your team or enterprise.
 </p>
 
-<h2 align="center">Supporting DBDiff</h2>
-
-DBDiff is a MIT-licensed open source project with its ongoing development made possible entirely by the support of backers. For getting a mention in return, please consider:
-
-- [Become a backer or sponsor on Patreon](https://www.patreon.com/dbdiff).
-- [One-time donation via PayPal](https://www.paypal.me/dbdiff)
-- If you are an individual, company or organisation interested in commercial support packages for DBDiff then please [get in touch](https://akalsoftware.com/contact-us/)
 
 ## Features
 -   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
@@ -264,22 +257,16 @@ The following comparisons run in exactly the following order:
 | [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)          | Python / PIP | Generic database migration tool inpired on Rails migrations |
 | [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
 	
-Please do [let us know](https://akalsoftware.com/contact-us/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
+Please do [let us know](https://akalsoftware.com/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
 
-## Questions & Support :thought_balloon:
+## Questions & Support 💡
 
 * Create a new [issue](https://github.com/dbdiff/dbdiff/issues/new/choose) if you can't find yours [being addressed](https://github.com/dbdiff/dbdiff/issues)
-* Watch this space, as we're in the process of creating a [discourse forum](https://github.com/discourse/discourse) for all the DBDiff community
+* Watch this space, as we're in the process of creating a discourse forum for all the DBDiff community
 - The documentation so far is what you see on this page, however this will slowly be expanded onto it's own website
-* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/contact-us/)
+* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/)
 
-## Backers :two_hearts:
-
-Sean McNamara
-
-[Back DBDiff on Patreon](https://www.patreon.com/dbdiff) and have your name or logo displayed prominently here!
-
-## Contributions :revolving_hearts:
+## Contributions 💖
 
 Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/master/.github/CONTRIBUTING.md) before making a pull request.
 
@@ -287,9 +274,9 @@ Thank you to all the people who already contributed to DBDiff!
 
 <a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
 
-## Feedback :speech_balloon:
+## Feedback 💬
 
-If you've made it down here, you're probably a fan :wink:
+If you've made it down here, you're probably a fan 😉
 
 Could you please kindly spare 2 minutes to give us your feedback on DBDiff:
 
@@ -301,5 +288,5 @@ We read each and every suggestion that comes through.
 
 [MIT](http://opensource.org/licenses/MIT)
 
-<p style="display:flex; justify-content:center; align-items: center; align-content: center">Made with &nbsp;:heart:&nbsp; by&nbsp;&nbsp; 
-<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="100" valign="center" src="https://d33wubrfki0l68.cloudfront.net/03c6103a8e7ddc526761f7562ca1a66bfe8436d5/17098/assets/images/akal-logo.svg" alt="Akal Software logo"></a></p>
+<p align="center">Made with 💖 by 
+<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="150" src="images/akal-logo.svg" alt="Akal Logo"></a></p>

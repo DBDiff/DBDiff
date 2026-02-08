@@ -7,7 +7,9 @@
         }
     ],
     "license": "MIT",
-    "bin": ["./dbdiff"],
+    "bin": [
+        "./dbdiff"
+    ],
     "autoload": {
         "psr-4": {
             "DBDiff\\": "src/"
@@ -15,7 +17,7 @@
     },
     "prefer-stable": true,
     "require": {
-        "php" : ">=7.3",
+        "php": ">=7.3",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
         "symfony/yaml": "^5.1|^6.0|^7.0",
@@ -29,16 +31,10 @@
         "phpunit/phpunit": "^9.4.3|^10.0|^11.0"
     },
     "scripts": {
-      "post-install-cmd": "scripts/post-install.sh",
-      "post-update-cmd": "scripts/post-install.sh"
+        "post-install-cmd": "scripts/post-install.sh",
+        "post-update-cmd": "scripts/post-install.sh"
     },
     "support": {
         "email": "hello@akalsoftware.com"
-    },
-    "funding": [
-        {
-            "type": "patreon",
-            "url": "https://www.patreon.com/dbdiff"
-        }
-    ]
+    }
 }
