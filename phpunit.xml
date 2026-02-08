@@ -1,27 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
          colors="true"
-         cacheDirectory=".phpunit.cache"
-         displayDetailsOnIncompleteTests="true"
-         displayDetailsOnSkippedTests="true"
-         displayDetailsOnTestsThatTriggerDeprecations="true"
-         displayDetailsOnTestsThatTriggerErrors="true"
-         displayDetailsOnTestsThatTriggerNotices="true"
-         displayDetailsOnTestsThatTriggerWarnings="true"
-         failOnDeprecation="false"
-         failOnNotice="false"
-         failOnWarning="false"
+         convertDeprecationsToExceptions="false"
 >
     <testsuites>
-        <testsuite name="DBDiff end to end test">
+        <testsuite name="DBDiff">
             <directory>./tests/</directory>
         </testsuite>
     </testsuites>
-    <source>
-        <include>
+    <filter>
+        <whitelist processUncoveredFiles="true">
             <directory suffix=".php">src</directory>
-        </include>
-    </source>
+        </whitelist>
+    </filter>
 </phpunit>
