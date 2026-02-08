@@ -461,7 +461,7 @@ test_combination() {
     
     # Run PHPUnit with timeout and progress monitoring
     local test_start_time=$(date +%s)
-    local phpunit_cmd="./run-comprehensive-tests.sh"
+    local phpunit_cmd="./scripts/run-tests.sh"
     
     # Run in record mode if flag is set
     local env_vars=""

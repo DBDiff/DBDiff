@@ -9,7 +9,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 # Default values
 RECORD_MODE="false"
@@ -88,11 +88,11 @@ echo ""
 PHPUNIT_VERSION=$(php vendor/bin/phpunit --version | head -n 1 | head -n 1 | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
 PHPUNIT_MAJOR=$(echo $PHPUNIT_VERSION | cut -d. -f1)
 
-CONFIG_FLAG=""
+CONFIG_FLAG="-c tests/phpunit.xml"
 FLAGS="--colors=always --testdox"
 
 if [ "$PHPUNIT_MAJOR" -lt 10 ]; then
-    CONFIG_FLAG="-c phpunit.v9.xml"
+    CONFIG_FLAG="-c tests/phpunit.v9.xml"
 else
     FLAGS="$FLAGS --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings"
 fi

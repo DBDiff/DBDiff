@@ -83,7 +83,7 @@ phar.readonly = false
 Then in the root of the dbdiff repository to produce a Phar build simply run:
 
 ```
-$ ./build
+$ ./scripts/build
 ```
 
 A `dist` folder should be created containing the following files:
@@ -273,6 +273,30 @@ Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdi
 Thank you to all the people who already contributed to DBDiff!
 
 <a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
+
+## Releasing 🚀
+
+DBDiff uses automated workflows for versioning and distribution:
+
+### 1. Automated Release (Recommended)
+You can trigger a formal release directly from the **GitHub Actions** tab:
+- Select the **"Release DBDiff"** workflow.
+- Click **"Run workflow"** and specify the new version (e.g. `v2.0.0`).
+- This will automatically:
+    - Build the production PHAR using `scripts/build`.
+    - Create and push the Git tag.
+    - Create a GitHub Release with build assets attached.
+    - Notify Packagist to update the stable version.
+
+### 2. Manual/Local Release
+If you need to tag a release locally:
+```bash
+./scripts/release.sh v2.0.0
+git push origin v2.0.0
+```
+Then manually upload the files from the `dist/` folder to the GitHub Release page.
+
+---
 
 ## Feedback 💬
 
