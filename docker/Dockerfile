@@ -25,14 +25,27 @@ RUN useradd -m -s /bin/bash dbdiff && \
 USER dbdiff
 
 # Copy only the essentials first to leverage Docker cache
-COPY --chown=dbdiff:dbdiff composer.json ./
+# Ensure strict permissions: read/write for owner, read-only for others
+COPY --chown=dbdiff:dbdiff --chmod=644 composer.json ./
 
-# Install dependencies (without dev for production, or with dev for tests)
-# Note: In a production image you would use --no-dev
+# Install dependencies
 RUN composer install --no-interaction --no-progress --optimize-autoloader
 
-# Copy the rest of the application files
-# The .dockerignore handles the exclusion of sensitive/unnecessary files
-COPY --chown=dbdiff:dbdiff . .
+# Explicitly copy source code and assets to avoid insensitive data inclusion (S6470)
+# And enforce restrictive permissions
+COPY --chown=dbdiff:dbdiff --chmod=755 src/ src/
+COPY --chown=dbdiff:dbdiff --chmod=755 templates/ templates/
+COPY --chown=dbdiff:dbdiff --chmod=755 scripts/ scripts/
+COPY --chown=dbdiff:dbdiff --chmod=755 docker/ docker/
+
+# Copy individual files (chmod 755 for executables, 644 for regular files)
+COPY --chown=dbdiff:dbdiff --chmod=755 dbdiff ./
+COPY --chown=dbdiff:dbdiff --chmod=755 dbdiff.php ./
+COPY --chown=dbdiff:dbdiff --chmod=755 start.sh ./
+COPY --chown=dbdiff:dbdiff --chmod=755 stop.sh ./
+COPY --chown=dbdiff:dbdiff --chmod=644 README.md LICENSE SECURITY.md ./
+
+# Copy tests last (if needed for the image to run tests)
+COPY --chown=dbdiff:dbdiff --chmod=755 tests/ tests/
 
 ENTRYPOINT ["./docker/docker-entrypoint.sh"]

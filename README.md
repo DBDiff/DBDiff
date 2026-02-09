@@ -1,4 +1,4 @@
-<p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="200" src="images/akal-logo.svg" alt="Akal Logo"></a></p>
+<p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="100" src="https://avatars3.githubusercontent.com/u/12562465?s=200&v=4" alt="DBDiff logo"></a></p>
 
 <p align="center">
 	<a href="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml"><img src="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml/badge.svg" alt="Build Status"></a>
