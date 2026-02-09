@@ -1010,7 +1010,7 @@ if [ ${#args[@]} -eq 0 ]; then
     done
     
     echo "Select MySQL version:"
-    local mysql_display=($(get_mysql_version_display))
+    mysql_display=($(get_mysql_version_display))
     select mysql_choice in "${mysql_display[@]}" "all"; do
         if [ -n "$mysql_choice" ]; then
             break

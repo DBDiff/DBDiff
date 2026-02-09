@@ -27,7 +27,7 @@
         "diff/diff": "~3.0"
     },
     "require-dev": {
-        "ext-PDO": "*",
+        "ext-pdo": "*",
         "phpunit/phpunit": "^9.4.3|^10.0|^11.0"
     },
     "scripts": {
