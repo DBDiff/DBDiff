@@ -13,7 +13,10 @@
     "autoload": {
         "psr-4": {
             "DBDiff\\": "src/"
-        }
+        },
+        "files": [
+            "src/Library/helper.php"
+        ]
     },
     "prefer-stable": true,
     "require": {
