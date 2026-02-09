@@ -31,6 +31,9 @@ USER root
 # Docker Cache Layer 1
 COPY --chown=root:root --chmod=644 composer.json ./
 
+# Copy scripts early so Composer post-install hooks can run during install
+COPY --chown=root:root --chmod=755 scripts/ scripts/
+
 # Install dependencies as root (standard practice in many Dockerfiles)
 # We are still building the image here
 RUN composer install --no-interaction --no-progress --optimize-autoloader
@@ -41,7 +44,6 @@ RUN composer install --no-interaction --no-progress --optimize-autoloader
 # This allows 'dbdiff' user to read/execute but NOT modify
 COPY --chown=root:root --chmod=755 src/ src/
 COPY --chown=root:root --chmod=755 templates/ templates/
-COPY --chown=root:root --chmod=755 scripts/ scripts/
 COPY --chown=root:root --chmod=755 docker/ docker/
 
 # Copy individual files
