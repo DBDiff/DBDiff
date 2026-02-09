@@ -14,7 +14,7 @@ class UpdateDataSQL implements SQLGenInterface {
         
         $values = $this->obj->diff['diff'];
         array_walk($values, function(&$diff, $column) {
-            if(!is_null($diff->getNewValue())) {
+            if(method_exists($diff, 'getNewValue') && !is_null($diff->getNewValue())) {
                 $diff = '`' . $column . "` = '" . addslashes($diff->getNewValue()) . "'";
             }
             else {
@@ -37,7 +37,12 @@ class UpdateDataSQL implements SQLGenInterface {
         
         $values = $this->obj->diff['diff'];
         array_walk($values, function(&$diff, $column) {
-            $diff = '`'.$column."` = '".addslashes($diff->getOldValue())."'";
+            if(method_exists($diff, 'getOldValue') && !is_null($diff->getOldValue())) {
+                $diff = '`'.$column."` = '".addslashes($diff->getOldValue())."'";
+            }
+            else {
+                $diff = '`' . $column . "` = NULL";
+            }
         });
         $values = implode(', ', $values);
 
