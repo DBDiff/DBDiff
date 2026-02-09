@@ -1,0 +1,57 @@
+name: DBDiff Test Suite
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php-version }} / MySQL ${{ matrix.mysql-version }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['7.4', '8.3', '8.4']
+        mysql-version: ['8.0', '8.4', '9.3']
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_ROOT_PASSWORD: rootpass
+      DB_USER: dbdiff
+      DB_PASSWORD: dbdiff
+
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql-version }}
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: diff1
+          MYSQL_USER: dbdiff
+          MYSQL_PASSWORD: dbdiff
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_mysql, mysqli, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run comprehensive tests
+      run: ./scripts/run-tests.sh

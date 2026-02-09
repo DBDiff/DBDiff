@@ -21,6 +21,7 @@ use DBDiff\Diff\AlterTableDropConstraint;
 use DBDiff\SQLGen\Schema\SQL;
 
 use DBDiff\Logger;
+use Illuminate\Support\Str;
 
 
 class TableSchema {
@@ -49,9 +50,9 @@ class TableSchema {
             preg_match("/`([^`]+)`/", $line, $matches);
             $name = $matches[1];
             $line = trim($line, ',');
-            if (starts_with($line, '`')) { // column
+            if (Str::startsWith($line, '`')) { // column
                 $columns[$name] = $line;
-            } else if (starts_with($line, 'CONSTRAINT')) { // constraint
+            } else if (Str::startsWith($line, 'CONSTRAINT')) { // constraint
                 $constraints[$name] = $line;
             } else { // keys
                 $keys[$name] = $line;
@@ -91,6 +92,16 @@ class TableSchema {
         // Columns
         $sourceColumns = $sourceSchema['columns'];
         $targetColumns = $targetSchema['columns'];
+        
+        // Filter out ignored fields
+        $params = \DBDiff\Params\ParamsFactory::get();
+        if (isset($params->fieldsToIgnore[$table])) {
+            foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
+                unset($sourceColumns[$fieldToIgnore]);
+                unset($targetColumns[$fieldToIgnore]);
+            }
+        }
+
         $differ = new MapDiffer();
         $diffs = $differ->doDiff($targetColumns, $sourceColumns);
         foreach ($diffs as $column => $diff) {
