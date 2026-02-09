@@ -2,9 +2,9 @@ name: DBDiff Test Suite
 
 on:
   push:
-    branches: [ master, pr/108 ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, pr/108 ]
+    branches: [ master ]
 
 jobs:
   test:
