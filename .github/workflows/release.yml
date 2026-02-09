@@ -1,0 +1,56 @@
+name: Release DBDiff
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer version to release (e.g. v1.1.0, v2.0.0)'
+        required: true
+        default: 'v1.1.0'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.3'
+        extensions: phar, openssl, zlib
+        tools: composer
+        ini-values: phar.readonly=0
+
+    - name: Install dependencies
+      run: composer install --no-dev --optimize-autoloader
+
+    - name: Build PHAR
+      run: |
+        chmod +x scripts/build
+        php scripts/build
+
+    - name: Create Tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
+        git push origin ${{ github.event.inputs.version }}
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        name: Release ${{ github.event.inputs.version }}
+        files: |
+          dist/dbdiff.phar
+          dist/dbdiff.phar.gz
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

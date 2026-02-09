@@ -2,6 +2,13 @@
 
 
 class SetDBCharset {
+    public $table;
+    public $column;
+    public $key;
+    public $name;
+    public $diff;
+    public $source;
+    public $target;
 
     function __construct($db, $charset, $prevCharset) {
         $this->db = $db;

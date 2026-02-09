@@ -1,0 +1,13 @@
+# Exclude sensitive data
+.git
+.env
+.env.example
+.phpunit.cache
+
+# Exclude build and local artifacts
+dist/
+images/
+reports/
+
+# Exclude vendor (it will be installed in the container)
+vendor/

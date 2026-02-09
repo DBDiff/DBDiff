@@ -1,0 +1,10 @@
+#---------- UP ----------
+DELETE FROM `users` WHERE `id` = '3';
+ALTER TABLE `users` DROP `phone`;
+INSERT INTO `users` VALUES('2','User 2','user2@example.com');
+UPDATE `users` SET `name` = 'User 1' WHERE `id` = '1';
+#---------- DOWN ----------
+DELETE FROM `users` WHERE `id` = '2';
+ALTER TABLE `users` ADD `phone` varchar(20) DEFAULT NULL;
+INSERT INTO `users` VALUES('3','User 3','user3@example.com','555-3333');
+UPDATE `users` SET `name` = 'User 1 Modified' WHERE `id` = '1';

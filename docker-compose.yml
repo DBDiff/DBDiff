@@ -1,0 +1,379 @@
+services:
+  # PHP 7.4 services
+  cli-php74-mysql80:
+    depends_on:
+      db-mysql80:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_74}
+    environment:
+      - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php74-mysql84:
+    depends_on:
+      db-mysql84:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_74}
+    environment:
+      - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php74-mysql93:
+    depends_on:
+      db-mysql93:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_74}
+    environment:
+      - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php74-mysql96:
+    depends_on:
+      db-mysql96:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_74}
+    environment:
+      - DB_HOST=db-mysql96
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # PHP 8.3 services
+  cli-php83-mysql80:
+    depends_on:
+      db-mysql80:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php83-mysql84:
+    depends_on:
+      db-mysql84:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php83-mysql93:
+    depends_on:
+      db-mysql93:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php83-mysql96:
+    depends_on:
+      db-mysql96:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST=db-mysql96
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # PHP 8.4 services
+  cli-php84-mysql80:
+    depends_on:
+      db-mysql80:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-mysql84:
+    depends_on:
+      db-mysql84:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-mysql93:
+    depends_on:
+      db-mysql93:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-mysql96:
+    depends_on:
+      db-mysql96:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST=db-mysql96
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # PHP 8.5 services
+  cli-php85-mysql80:
+    depends_on:
+      db-mysql80:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_85}
+    environment:
+      - DB_HOST=db-mysql80
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php85-mysql84:
+    depends_on:
+      db-mysql84:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_85}
+    environment:
+      - DB_HOST=db-mysql84
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php85-mysql93:
+    depends_on:
+      db-mysql93:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_85}
+    environment:
+      - DB_HOST=db-mysql93
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php85-mysql96:
+    depends_on:
+      db-mysql96:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_85}
+    environment:
+      - DB_HOST=db-mysql96
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # Database services
+  db-mysql80:
+    image: mysql:${MYSQL_VERSION_80}
+    restart: always
+    ports:
+      - '${DB_PORT_MYSQL80}:3306'
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 40s
+
+  db-mysql84:
+    image: mysql:${MYSQL_VERSION_84}
+    restart: always
+    ports:
+      - '${DB_PORT_MYSQL84}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 40s
+
+  db-mysql93:
+    image: mysql:${MYSQL_VERSION_93}
+    restart: always
+    ports:
+      - '${DB_PORT_MYSQL93}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 40s
+
+  db-mysql96:
+    image: mysql:${MYSQL_VERSION_96}
+    restart: always
+    ports:
+      - '${DB_PORT_MYSQL96}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 40s
+
+  # PHPMyAdmin services
+  phpmyadmin-mysql80:
+    depends_on:
+      db-mysql80:
+        condition: service_healthy
+    image: phpmyadmin/phpmyadmin:5.2
+    restart: always
+    ports:
+      - ${PHPMYADMIN_PORT_MYSQL80}:80
+    environment:
+      PMA_HOST: db-mysql80
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+  phpmyadmin-mysql84:
+    depends_on:
+      db-mysql84:
+        condition: service_healthy
+    image: phpmyadmin/phpmyadmin:5.2
+    restart: always
+    ports:
+      - ${PHPMYADMIN_PORT_MYSQL84}:80
+    environment:
+      PMA_HOST: db-mysql84
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+  phpmyadmin-mysql93:
+    depends_on:
+      db-mysql93:
+        condition: service_healthy
+    image: phpmyadmin/phpmyadmin:5.2
+    restart: always
+    ports:
+      - ${PHPMYADMIN_PORT_MYSQL93}:80
+    environment:
+      PMA_HOST: db-mysql93
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+  phpmyadmin-mysql96:
+    depends_on:
+      db-mysql96:
+        condition: service_healthy
+    image: phpmyadmin/phpmyadmin:5.2
+    restart: always
+    ports:
+      - ${PHPMYADMIN_PORT_MYSQL96}:80
+    environment:
+      PMA_HOST: db-mysql96
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}

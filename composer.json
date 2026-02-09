@@ -1,26 +1,40 @@
 {
     "name": "dbdiff/dbdiff",
     "type": "project",
+    "authors": [
+        {
+            "name": "Jasdeep Khalsa"
+        }
+    ],
     "license": "MIT",
-    "bin": ["./dbdiff"],
+    "bin": [
+        "./dbdiff"
+    ],
     "autoload": {
         "psr-4": {
             "DBDiff\\": "src/"
         }
     },
+    "prefer-stable": true,
     "require": {
+        "php": ">=7.3",
+        "ext-json": "*",
         "aura/cli": "2.*@dev",
-        "symfony/yaml": "2.8.*@dev",
-        "illuminate/database": "4.*",
-        "illuminate/view": "4.*",
-        "illuminate/container": "4.*",
-        "diff/diff": "2.0.*@dev"
+        "symfony/yaml": "^5.1|^6.0|^7.0",
+        "illuminate/database": "^8|^9|^10|^11",
+        "illuminate/view": "^8|^9|^10|^11",
+        "illuminate/container": "^8|^9|^10|^11",
+        "diff/diff": "~3.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "4.8.*@dev"
+        "ext-pdo": "*",
+        "phpunit/phpunit": "^9.4.3|^10.0|^11.0"
     },
     "scripts": {
-      "post-install-cmd": "scripts/post-install.sh",
-      "post-update-cmd": "scripts/post-install.sh"
+        "post-install-cmd": "scripts/post-install.sh",
+        "post-update-cmd": "scripts/post-install.sh"
+    },
+    "support": {
+        "email": "hello@akalsoftware.com"
     }
 }

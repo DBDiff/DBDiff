@@ -1,0 +1,26 @@
+#!/usr/bin/env php
+<?php
+
+$root = dirname(__DIR__);
+$dir = $root . '/dist';
+$file = $dir . '/dbdiff.phar';
+
+@unlink($file);
+@mkdir($dir, 0755, true);
+
+$phar = new Phar($file);
+
+$phar->startBuffering();
+
+$phar->buildFromDirectory($root, '/src\/.*|vendor\/.*|dbdiff\.php/');
+
+$stub = $phar->createDefaultStub('dbdiff.php');
+$stub = "#!/usr/bin/env php \n" . $stub;
+$phar->setStub($stub);
+
+$phar->compress(Phar::GZ);
+$phar->stopBuffering();
+
+chmod($file, 0755);
+
+echo 'Build successful: dist/dbdiff.phar' . PHP_EOL;
