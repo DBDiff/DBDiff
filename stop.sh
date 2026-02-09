@@ -3,7 +3,7 @@
 # Stop script for DBDiff Docker containers and services
 # This provides the same teardown functionality as start.sh --no-teardown cleanup
 
-echo "� DBDiff Stop Script"
+echo "🛑 DBDiff Stop Script"
 echo "This will stop and clean up all DBDiff Docker containers, images, volumes, and networks"
 echo ""
 

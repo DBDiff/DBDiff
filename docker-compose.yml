@@ -204,7 +204,7 @@ services:
     depends_on:
       db-mysql80:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL80}:80
@@ -216,7 +216,7 @@ services:
     depends_on:
       db-mysql84:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL84}:80
@@ -228,7 +228,7 @@ services:
     depends_on:
       db-mysql93:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL93}:80

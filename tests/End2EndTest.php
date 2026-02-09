@@ -1,7 +1,5 @@
 <?php
  
- require 'vendor/autoload.php';
- 
  use Illuminate\Database\Capsule\Manager as Capsule;
  
  /**
@@ -37,9 +35,14 @@
          // 1. Identify Database Host
          // We use DB_HOST environment variable (provided by Docker) or fallback to 'db'
          $this->host = getenv('DB_HOST') ?: ($_ENV['DB_HOST'] ?? ($_SERVER['DB_HOST'] ?? 'db'));
-         echo "\nDEBUG: DB_HOST environment variable: " . (getenv('DB_HOST') ?: 'NOT_SET');
-         echo "\nDEBUG: Using database host: " . $this->host;
-         echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
+         
+         $debug = getenv('DBDIFF_DEBUG') === 'true';
+         
+         if ($debug) {
+             echo "\nDEBUG: DB_HOST environment variable: " . (getenv('DB_HOST') ?: 'NOT_SET');
+             echo "\nDEBUG: Using database host: " . $this->host;
+             echo "\nDEBUG: Full connection string will be: mysql:host=" . $this->host . ";port=" . $this->port . "\n";
+         }
 
          // 2. Establish Database Connection with Retry Logic
          // This ensures tests don't fail if the MySQL container is still warming up
@@ -49,15 +52,23 @@
          for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
              try {
                  $this->db = new PDO("mysql:host=$this->host;port=$this->port", $this->user, $this->pass);
-                 echo "\nSuccessfully connected to database on attempt $attempt\n";
+                 if ($debug) {
+                     echo "\nSuccessfully connected to database on attempt $attempt\n";
+                 }
                  break;
              } catch (PDOException $e) {
-                 echo "\nConnection attempt $attempt failed: " . $e->getMessage();
-                 if ($attempt === $maxRetries) {
-                     echo "\nFailed to connect after $maxRetries attempts. Please check if MySQL is running.\n";
-                     exit(1);
+                 if ($debug) {
+                     echo "\nConnection attempt $attempt failed: " . $e->getMessage();
                  }
-                 echo "\nRetrying in $retryDelay seconds...\n";
+                 if ($attempt === $maxRetries) {
+                     if ($debug) {
+                         echo "\nFailed to connect after $maxRetries attempts. Please check if MySQL is running.\n";
+                     }
+                     $this->fail("Failed to connect to database after $maxRetries attempts: " . $e->getMessage());
+                 }
+                 if ($debug) {
+                     echo "\nRetrying in $retryDelay seconds...\n";
+                 }
                  sleep($retryDelay);
              }
          }
@@ -69,7 +80,10 @@
          $this->databaseMajor = $databaseVersion[0];
          $this->migration_expected = $this->migration_expected . "_" . $this->databaseMajor;
          $this->migration_actual = $this->migration_actual . "_" . $this->databaseMajor;
-         echo "\nDatabase server major version is: " . $this->databaseMajor . "\n";
+         
+         if ($debug) {
+             echo "\nDatabase server major version is: " . $this->databaseMajor . "\n";
+         }
  
          // 4. Reset Test Databases
          // Ensure we start with a clean slate for every test execution
