@@ -14,38 +14,51 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-install mysqli pdo pdo_mysql
 
 # Add Composer
-ADD https://getcomposer.org/composer.phar /usr/local/bin/composer
-RUN chmod +x /usr/local/bin/composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN chmod 755 /usr/local/bin/composer
 
-# Create a non-root user for security (Sonar hotspot fix)
-RUN useradd -m -s /bin/bash dbdiff && \
-    chown -R dbdiff:dbdiff /usr/src/dbdiff
+# Create a non-root user for execution
+RUN useradd -m -s /bin/bash dbdiff
 
-# Switch to the non-root user
-USER dbdiff
+# Prepare application directory
+RUN mkdir -p /usr/src/dbdiff && chown root:root /usr/src/dbdiff
 
-# Copy only the essentials first to leverage Docker cache
-# Ensure strict permissions: read-only for everyone (444)
-COPY --chown=dbdiff:dbdiff --chmod=444 composer.json ./
+# Switch BACK to root for copying files (to ensure they are owned by root)
+# We will drop privileges only at runtime or when strictly necessary
+USER root
 
-# Install dependencies
+# Copy composer.json as root:root with read-only permissions for others
+# Docker Cache Layer 1
+COPY --chown=root:root --chmod=644 composer.json ./
+
+# Install dependencies as root (standard practice in many Dockerfiles)
+# We are still building the image here
 RUN composer install --no-interaction --no-progress --optimize-autoloader
 
-# Explicitly copy source code and assets to avoid insensitive data inclusion (S6470)
-# And enforce restrictive permissions (read-only/executable 555 for dirs/scripts)
-COPY --chown=dbdiff:dbdiff --chmod=555 src/ src/
-COPY --chown=dbdiff:dbdiff --chmod=555 templates/ templates/
-COPY --chown=dbdiff:dbdiff --chmod=555 scripts/ scripts/
-COPY --chown=dbdiff:dbdiff --chmod=555 docker/ docker/
+# Explicitly copy source code and assets
+# Enforce root ownership and strict read-only permissions for non-root users
+# 755 = rwxr-xr-x (Owner: RWX, Group: RX, Others: RX)
+# This allows 'dbdiff' user to read/execute but NOT modify
+COPY --chown=root:root --chmod=755 src/ src/
+COPY --chown=root:root --chmod=755 templates/ templates/
+COPY --chown=root:root --chmod=755 scripts/ scripts/
+COPY --chown=root:root --chmod=755 docker/ docker/
 
-# Copy individual files (chmod 555 for executables, 444 for regular files)
-COPY --chown=dbdiff:dbdiff --chmod=555 dbdiff ./
-COPY --chown=dbdiff:dbdiff --chmod=555 dbdiff.php ./
-COPY --chown=dbdiff:dbdiff --chmod=555 start.sh ./
-COPY --chown=dbdiff:dbdiff --chmod=555 stop.sh ./
-COPY --chown=dbdiff:dbdiff --chmod=444 README.md LICENSE SECURITY.md ./
+# Copy individual files
+COPY --chown=root:root --chmod=755 dbdiff ./
+COPY --chown=root:root --chmod=755 dbdiff.php ./
+COPY --chown=root:root --chmod=755 start.sh ./
+COPY --chown=root:root --chmod=755 stop.sh ./
+COPY --chown=root:root --chmod=644 README.md LICENSE SECURITY.md ./
 
-# Copy tests last (if needed for the image to run tests)
-COPY --chown=dbdiff:dbdiff --chmod=555 tests/ tests/
+# Copy tests
+COPY --chown=root:root --chmod=755 tests/ tests/
+
+# CRITICAL: We need a writable directory for any runtime artifacts if the app creates them.
+# If DBDiff writes to .phpunit.cache or similar, we must create that folder and give ownership to dbdiff.
+RUN mkdir -p .phpunit.cache && chown dbdiff:dbdiff .phpunit.cache
+
+# Final switch to non-root user for runtime execution
+USER dbdiff
 
 ENTRYPOINT ["./docker/docker-entrypoint.sh"]
