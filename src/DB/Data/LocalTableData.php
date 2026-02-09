@@ -126,8 +126,8 @@ class LocalTableData {
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result = $this->source->select(
            "SELECT * FROM (
-                SELECT $columnsAas, $columnsBas, MD5(concat($columnsA)) AS hash1,
-                MD5(concat($columnsB)) AS hash2 FROM {$db1}.{$table} as a 
+                SELECT $columnsAas, $columnsBas, SHA2(concat($columnsA), 256) AS hash1,
+                SHA2(concat($columnsB), 256) AS hash2 FROM {$db1}.{$table} as a 
                 INNER JOIN {$db2}.{$table} as b  
                 ON $keyCols
             ) t WHERE hash1 <> hash2");

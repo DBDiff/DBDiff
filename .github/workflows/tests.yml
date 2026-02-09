@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.3', '8.4']
-        mysql-version: ['8.0', '8.4', '9.3']
+        php-version: ['7.4', '8.3', '8.4', '8.5']
+        mysql-version: ['8.0', '8.4', '9.3', '9.6']
 
     env:
       DB_HOST: 127.0.0.1
