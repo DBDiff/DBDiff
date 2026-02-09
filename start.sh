@@ -70,7 +70,7 @@ cleanup_on_interrupt() {
 # Configuration variables - derive arrays and mappings from individual variables
 # Build PHP versions array from individual variables
 PHP_VERSIONS=()
-for var in PHP_VERSION_74 PHP_VERSION_83 PHP_VERSION_84; do
+for var in PHP_VERSION_74 PHP_VERSION_83 PHP_VERSION_84 PHP_VERSION_85; do
     if [ -n "${!var}" ]; then
         PHP_VERSIONS+=("${!var}")
     fi
@@ -87,21 +87,24 @@ fi
 if [ -n "$MYSQL_VERSION_93" ]; then
     MYSQL_VERSION_MAPPING+=("$MYSQL_VERSION_93:mysql93")
 fi
+if [ -n "$MYSQL_VERSION_96" ]; then
+    MYSQL_VERSION_MAPPING+=("$MYSQL_VERSION_96:mysql96")
+fi
 
 # Static MySQL service names
-MYSQL_VERSIONS=("mysql80" "mysql84" "mysql93")
+MYSQL_VERSIONS=("mysql80" "mysql84" "mysql93" "mysql96")
 
 # Fallback to defaults if individual variables not found
 if [ ${#PHP_VERSIONS[@]} -eq 0 ]; then
-    PHP_VERSIONS=("7.4" "8.3" "8.4")
+    PHP_VERSIONS=("7.4" "8.3" "8.4" "8.5")
 fi
 if [ ${#MYSQL_VERSION_MAPPING[@]} -eq 0 ]; then
-    MYSQL_VERSION_MAPPING=("8.0:mysql80" "8.4:mysql84" "9.3:mysql93")
+    MYSQL_VERSION_MAPPING=("8.0:mysql80" "8.4:mysql84" "9.3:mysql93" "9.6:mysql96")
 fi
 
 # Port configuration - derive arrays from individual variables
-DB_PORTS=(${DB_PORT_MYSQL80:-3306} ${DB_PORT_MYSQL84:-3307} ${DB_PORT_MYSQL93:-3308})
-PHPMYADMIN_PORTS=(${PHPMYADMIN_PORT_MYSQL80:-18080} ${PHPMYADMIN_PORT_MYSQL84:-18081} ${PHPMYADMIN_PORT_MYSQL93:-18082})
+DB_PORTS=(${DB_PORT_MYSQL80:-3306} ${DB_PORT_MYSQL84:-3307} ${DB_PORT_MYSQL93:-3308} ${DB_PORT_MYSQL96:-3309})
+PHPMYADMIN_PORTS=(${PHPMYADMIN_PORT_MYSQL80:-18080} ${PHPMYADMIN_PORT_MYSQL84:-18081} ${PHPMYADMIN_PORT_MYSQL93:-18082} ${PHPMYADMIN_PORT_MYSQL96:-18083})
 
 # Database connection details
 DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-"rootpass"}
@@ -153,10 +156,12 @@ check_port_conflicts() {
     local ports=(
         "${DB_PORT_MYSQL80:-3306}" 
         "${DB_PORT_MYSQL84:-3307}" 
-        "${DB_PORT_MYSQL93:-3308}" 
+        "${DB_PORT_MYSQL93:-3308}"
+        "${DB_PORT_MYSQL96:-3309}" 
         "${PHPMYADMIN_PORT_MYSQL80:-18080}" 
         "${PHPMYADMIN_PORT_MYSQL84:-18081}" 
         "${PHPMYADMIN_PORT_MYSQL93:-18082}"
+        "${PHPMYADMIN_PORT_MYSQL96:-18083}"
     )
     local conflicts=()
     
@@ -778,6 +783,10 @@ show_running_services() {
         echo "  • MySQL ${MYSQL_VERSION_93:-9.3}:  mysql://$DB_USER:$DB_PASSWORD@localhost:${DB_PORT_MYSQL93:-3308}/$DB_NAME"
         echo "    Root access: mysql://root:$DB_ROOT_PASSWORD@localhost:${DB_PORT_MYSQL93:-3308}/$DB_NAME"
     fi
+    if echo "$running_services" | grep -q "db-mysql96"; then
+        echo "  • MySQL ${MYSQL_VERSION_96:-9.6}:  mysql://$DB_USER:$DB_PASSWORD@localhost:${DB_PORT_MYSQL96:-3309}/$DB_NAME"
+        echo "    Root access: mysql://root:$DB_ROOT_PASSWORD@localhost:${DB_PORT_MYSQL96:-3309}/$DB_NAME"
+    fi
     
     # Only show database section if we have any DB services running
     if echo "$running_services" | grep -q "db-mysql"; then
@@ -820,6 +829,10 @@ show_running_services() {
         echo "  • php74-mysql93: docker-compose exec cli-php74-mysql93 bash"
         has_cli=true
     fi
+    if echo "$running_services" | grep -q "cli-php74-mysql96"; then
+        echo "  • php74-mysql96: docker-compose exec cli-php74-mysql96 bash"
+        has_cli=true
+    fi
     if echo "$running_services" | grep -q "cli-php83-mysql80"; then
         echo "  • php83-mysql80: docker-compose exec cli-php83-mysql80 bash"
         has_cli=true
@@ -832,6 +845,10 @@ show_running_services() {
         echo "  • php83-mysql93: docker-compose exec cli-php83-mysql93 bash"
         has_cli=true
     fi
+    if echo "$running_services" | grep -q "cli-php83-mysql96"; then
+        echo "  • php83-mysql96: docker-compose exec cli-php83-mysql96 bash"
+        has_cli=true
+    fi
     if echo "$running_services" | grep -q "cli-php84-mysql80"; then
         echo "  • php84-mysql80: docker-compose exec cli-php84-mysql80 bash"
         has_cli=true
@@ -842,6 +859,26 @@ show_running_services() {
     fi
     if echo "$running_services" | grep -q "cli-php84-mysql93"; then
         echo "  • php84-mysql93: docker-compose exec cli-php84-mysql93 bash"
+        has_cli=true
+    fi
+    if echo "$running_services" | grep -q "cli-php84-mysql96"; then
+        echo "  • php84-mysql96: docker-compose exec cli-php84-mysql96 bash"
+        has_cli=true
+    fi
+    if echo "$running_services" | grep -q "cli-php85-mysql80"; then
+        echo "  • php85-mysql80: docker-compose exec cli-php85-mysql80 bash"
+        has_cli=true
+    fi
+    if echo "$running_services" | grep -q "cli-php85-mysql84"; then
+        echo "  • php85-mysql84: docker-compose exec cli-php85-mysql84 bash"
+        has_cli=true
+    fi
+    if echo "$running_services" | grep -q "cli-php85-mysql93"; then
+        echo "  • php85-mysql93: docker-compose exec cli-php85-mysql93 bash"
+        has_cli=true
+    fi
+    if echo "$running_services" | grep -q "cli-php85-mysql96"; then
+        echo "  • php85-mysql96: docker-compose exec cli-php85-mysql96 bash"
         has_cli=true
     fi
     
