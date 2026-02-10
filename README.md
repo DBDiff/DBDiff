@@ -28,6 +28,7 @@
 -   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
 -   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
+-   Runs on parallel threads to speed up the diff process
 
 ## Pre-requisites
 1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
@@ -213,6 +214,8 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 	- table1
 	- table2
 	- table3
+    - parallelTables: 8          # optional, defaults to 1
+    - skipIdenticalTables: true  # enables the CHECKSUM-based short-circuit
 	fieldsToIgnore:
 		table1:
 			- field1
@@ -245,6 +248,9 @@ The following comparisons run in exactly the following order:
 ### Schema Comparison
 -   Looks to see if there are any differences in column numbers, name, type, collation or attributes
 -   Any new columns in the source, which are not found in the target, are added
+
+### Checksum Comparison
+-   If the `skipIdenticalTables` setting is enabled, the checksum of each table is calculated and compared to see if they are identical. If they are identical, the table is skipped and no further comparisons are run for that table.
 
 ### Data Comparison
 -   And then for each table, the table storage type (e.g. MyISAM, CSV), the collation (e.g. utf8\_general\_ci), and number of rows are compared, in that order. If there are any differences they are noted before moving onto the next test

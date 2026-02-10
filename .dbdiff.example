@@ -24,3 +24,6 @@ fieldsToIgnore:
     table4:
         - field1
         - field4
+options:
+    parallelTables: 4          # optional
+    skipIdenticalTables: true  # enables the CHECKSUM-based short-circuit
