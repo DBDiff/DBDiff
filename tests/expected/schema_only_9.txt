@@ -1,0 +1,14 @@
+#---------- UP ----------
+ALTER TABLE `users` CHANGE `status` `status` enum('active','inactive') DEFAULT 'active';
+ALTER TABLE `posts` DROP `published_at`;
+ALTER TABLE `users` DROP `phone`;
+ALTER TABLE `users` DROP `updated_at`;
+ALTER TABLE `posts` DROP INDEX `published`;
+ALTER TABLE `users` DROP INDEX `status`;
+#---------- DOWN ----------
+ALTER TABLE `users` CHANGE `status` `status` enum('active','inactive','pending') DEFAULT 'pending';
+ALTER TABLE `posts` ADD `published_at` datetime DEFAULT NULL;
+ALTER TABLE `users` ADD `phone` varchar(20) DEFAULT NULL;
+ALTER TABLE `users` ADD `updated_at` timestamp NULL DEFAULT '2024-01-01 00:00:00';
+ALTER TABLE `posts` ADD KEY `published` (`published`);
+ALTER TABLE `users` ADD KEY `status` (`status`);

@@ -5,6 +5,7 @@ use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
+use Illuminate\Support\Arr;
 
 
 class TableData {
@@ -30,7 +31,7 @@ class TableData {
             $data = $iterator->next(ArrayDiff::$size);
             foreach ($data as $entry) {
                 $diffSequence[] = new InsertData($table, [
-                    'keys' => array_only($entry, $key),
+                    'keys' => Arr::only($entry, $key),
                     'diff' => new \Diff\DiffOp\DiffOpAdd($entry)
                 ]);
             }
@@ -47,7 +48,7 @@ class TableData {
             $data = $iterator->next(ArrayDiff::$size);
             foreach ($data as $entry) {
                 $diffSequence[] = new DeleteData($table, [
-                    'keys' => array_only($entry, $key),
+                    'keys' => Arr::only($entry, $key),
                     'diff' => new \Diff\DiffOp\DiffOpRemove($entry)
                 ]);
             }

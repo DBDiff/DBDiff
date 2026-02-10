@@ -1,7 +1,7 @@
 <p align="center"><a href="https://dbdiff.github.io/DBDiff/" target="_blank" rel="noopener noreferrer"><img width="100" src="https://avatars3.githubusercontent.com/u/12562465?s=200&v=4" alt="DBDiff logo"></a></p>
 
 <p align="center">
-	<a href="https://travis-ci.org/DBDiff/DBDiff"><img src="https://img.shields.io/travis/DBDiff/DBDiff/better-ci-coverage.svg" alt="Build Status"></a>
+	<a href="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml"><img src="https://github.com/DBDiff/DBDiff/actions/workflows/tests.yml/badge.svg" alt="Build Status"></a>
 	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/downloads" alt="Total Downloads"></a>
 	<a href="https://packagist.org/packages/dbdiff/dbdiff"><img src="https://poser.pugx.org/dbdiff/dbdiff/d/monthly" alt="Monthly Downloads"></a>
 	<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
@@ -16,33 +16,39 @@
 	When used alongside a <a href="#compatible-migration-tools">compatible database migration tool</a>, it can help enable database version control within your team or enterprise.
 </p>
 
-<h2 align="center">Supporting DBDiff</h2>
-
-DBDiff is a MIT-licensed open source project with its ongoing development made possible entirely by the support of backers. For getting a mention in return, please consider:
-
-- [Become a backer or sponsor on Patreon](https://www.patreon.com/dbdiff).
-- [One-time donation via PayPal](https://www.paypal.me/dbdiff)
-- If you are an individual, company or organisation interested in commercial support packages for DBDiff then please [get in touch](https://akalsoftware.com/contact-us/)
 
 ## Features
 -   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
 -   Connects to a source and target database to do the comparison diff, locally and remotely
 -   Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source
+-   **Deterministic Output**: SQL is generated in a stable, predictable order (tables, columns, and data), ensuring consistent migrations and test pass rates across different environments.
 -   Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples)
 -   Diffs are SUPER fast and this tool has been tested with databases of multiple tables of millions of rows
 -   Since this diff tool is being used for migrations, it provides up and down SQL in the same file
--   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats, for example, Simple DB Migrate may work with simple-db-migrate.tmpl which includes: `SQL_UP = u""" {{ $up }} """ SQL_DOWN = u""" {{ $down }} """`
+-   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
 -   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
 -   Runs on parallel threads to speed up the diff process
 
 ## Pre-requisites
-1. You will need to have access to the command-line, for Linux/Mac a Terminal or on Windows it will be a command prompt (`cmd`)
-2. You will need to have git installed: http://git-scm.com/downloads
-3. You will need to have PHP installed (version 5.4.x): http://php.net/manual/en/install.php
-4. You will need to have Composer installed which is a Dependency Manager for PHP: https://getcomposer.org
+1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
+2. You will need to have git installed
+3. You will need to have PHP installed (version 7.4.x, 8.3.x, or 8.4.x)
+4. You will need to have Composer installed
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
+
+* PHP 7.4.x
+* PHP 8.3.x
+* PHP 8.4.x
+
+## Supported MySQL Database Versions
+
+_Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
+
+* MySQL 8.0.x
+* MySQL 8.4.x (LTS)
+* MySQL 9.3.x (Innovation)
 
 ## Installation
 On the command-line, use `git` to clone the ssh version:
@@ -78,7 +84,7 @@ phar.readonly = false
 Then in the root of the dbdiff repository to produce a Phar build simply run:
 
 ```
-$ ./build
+$ ./scripts/build
 ```
 
 A `dist` folder should be created containing the following files:
@@ -89,6 +95,51 @@ A `dist` folder should be created containing the following files:
 Feel free to rename `dbdiff.phar` to `dbdiff` and move it to `/usr/local/bin` or another directory of your choice.
 
 You can also add it to your system's path if you wish to make it globally available on your system as a utility.
+
+## Docker
+
+You may now use `docker` and `docker-compose` to create a local environment for DBDiff (for testing or production), including a PHP server with a database and the DBDiff CLI available as a service.
+
+Please ensure you have `docker` and/or `docker-compose` installed locally, as well as a download of the git repository, before continuing.
+
+_Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
+
+### Docker Standalone DBDiff CLI with PHP 7.3
+
+```bash
+# Build DBDiff CLI Image
+docker build --tag "dbdiff:latest" --file "docker/Dockerfile" .
+```
+
+```bash
+# Run DBDiff CLI Image as a Container
+docker run -i -t --ipc=host --shm-size="1g" "dbdiff:latest" <command>
+```
+
+```bash
+# Remove DBDiff CLI Image
+docker image rm dbdiff:latest
+```
+
+### Cross-Version Testing
+
+You can easily test DBDiff against any combination of PHP and MySQL using the provided `start.sh` script.
+
+```bash
+# Run tests for a specific combination
+./start.sh 8.3 8.0
+
+# Run all 9 version combinations in parallel (3x speedup)
+./start.sh all all --parallel
+```
+
+See the [DOCKER.md](DOCKER.md) file for extensive documentation on the Dockerized test runner, including flags for **fast restarts**, **recording fixtures**, and **automated CI**.
+
+### Removing Docker Compose DBDiff Environment
+
+```bash
+docker-compose down
+```
 
 ## Setup
 
@@ -113,7 +164,7 @@ Congratulations you have installed and ran DBDiff!
 
 ## Command-Line API
 
-###### Note: The command-line parameters will always override the settings in the `.dbdiff` config file
+_Note: The command-line parameters will always override the settings in the `.dbdiff` config file_
 
 -   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
 -   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)
@@ -212,22 +263,16 @@ The following comparisons run in exactly the following order:
 | [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)          | Python / PIP | Generic database migration tool inpired on Rails migrations |
 | [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
 	
-Please do [let us know](https://akalsoftware.com/contact-us/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
+Please do [let us know](https://akalsoftware.com/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
 
-## Questions & Support :thought_balloon:
+## Questions & Support 💡
 
 * Create a new [issue](https://github.com/dbdiff/dbdiff/issues/new/choose) if you can't find yours [being addressed](https://github.com/dbdiff/dbdiff/issues)
-* Watch this space, as we're in the process of creating a [discourse forum](https://github.com/discourse/discourse) for all the DBDiff community
+* Watch this space, as we're in the process of creating a discourse forum for all the DBDiff community
 - The documentation so far is what you see on this page, however this will slowly be expanded onto it's own website
-* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/contact-us/)
+* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/)
 
-## Backers :two_hearts:
-
-Sean McNamara
-
-[Back DBDiff on Patreon](https://www.patreon.com/dbdiff) and have your name or logo displayed prominently here!
-
-## Contributions :revolving_hearts:
+## Contributions 💖
 
 Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/master/.github/CONTRIBUTING.md) before making a pull request.
 
@@ -235,9 +280,33 @@ Thank you to all the people who already contributed to DBDiff!
 
 <a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
 
-## Feedback :speech_balloon:
+## Releasing 🚀
 
-If you've made it down here, you're probably a fan :wink:
+DBDiff uses automated workflows for versioning and distribution:
+
+### 1. Automated Release (Recommended)
+You can trigger a formal release directly from the **GitHub Actions** tab:
+- Select the **"Release DBDiff"** workflow.
+- Click **"Run workflow"** and specify the new version (e.g. `v2.0.0`).
+- This will automatically:
+    - Build the production PHAR using `scripts/build`.
+    - Create and push the Git tag.
+    - Create a GitHub Release with build assets attached.
+    - Notify Packagist to update the stable version.
+
+### 2. Manual/Local Release
+If you need to tag a release locally:
+```bash
+./scripts/release.sh v2.0.0
+git push origin v2.0.0
+```
+Then manually upload the files from the `dist/` folder to the GitHub Release page.
+
+---
+
+## Feedback 💬
+
+If you've made it down here, you're probably a fan 😉
 
 Could you please kindly spare 2 minutes to give us your feedback on DBDiff:
 
@@ -249,5 +318,5 @@ We read each and every suggestion that comes through.
 
 [MIT](http://opensource.org/licenses/MIT)
 
-<p style="display:flex; justify-content:center; align-items: center; align-content: center">Made with &nbsp;:heart:&nbsp; by&nbsp;&nbsp; 
-<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="100" valign="center" src="https://d33wubrfki0l68.cloudfront.net/235d6386bc34b2e633b93640a616161b85ee7ba6/1bd9c/assets/images/akalsoftware.svg" alt="Akal Software logo"></a></p>
+<p align="center">Made with 💖 by 
+<a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="150" src="images/akal-logo.svg" alt="Akal Logo"></a></p>
