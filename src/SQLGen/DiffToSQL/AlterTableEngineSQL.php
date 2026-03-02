@@ -1,24 +1,33 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class AlterTableEngineSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
-    }
-    
-    public function getUp() {
-        $table = $this->obj->table;
-        $engine = $this->obj->engine;
-        return "ALTER TABLE `$table` ENGINE = $engine;";
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
-        $prevEngine = $this->obj->prevEngine;
-        return "ALTER TABLE `$table` ENGINE = $prevEngine;";
+    public function getUp(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $t = $this->dialect->quote($this->obj->table);
+        return "ALTER TABLE $t ENGINE = {$this->obj->engine};";
+    }
+
+    public function getDown(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $t = $this->dialect->quote($this->obj->table);
+        return "ALTER TABLE $t ENGINE = {$this->obj->prevEngine};";
     }
 
 }

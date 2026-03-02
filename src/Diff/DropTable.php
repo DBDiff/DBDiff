@@ -10,8 +10,13 @@ class DropTable {
     public $source;
     public $target;
 
-    function __construct($table, $connection) {
-        $this->table = $table;
-        $this->connection = $connection;
+    /** @var \DBDiff\DB\DBManager */
+    public $manager;
+    public $connectionName;
+
+    function __construct($table, $manager, string $connectionName = 'target') {
+        $this->table          = $table;
+        $this->manager        = $manager;
+        $this->connectionName = $connectionName;
     }
 }

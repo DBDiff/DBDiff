@@ -1,53 +1,47 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class UpdateDataSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
     
-    public function getUp() {
-        $table = $this->obj->table;
-        
+    public function getUp(): string {
+        $t      = $this->dialect->quote($this->obj->table);
+        $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
-        array_walk($values, function(&$diff, $column) {
-            if(!is_null($diff->getNewValue())) {
-                $diff = '`' . $column . "` = '" . addslashes($diff->getNewValue()) . "'";
-            }
-            else {
-                $diff = '`' . $column . "` = NULL";
-            }
+        array_walk($values, function (&$diff, $column) use ($d) {
+            $q    = $d->quote($column);
+            $diff = is_null($diff->getNewValue())
+                ? "$q = NULL"
+                : "$q = '" . addslashes($diff->getNewValue()) . "'";
         });
-        $values = implode(', ', $values);
-
         $keys = $this->obj->diff['keys'];
-        array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".addslashes($value)."'";
+        array_walk($keys, function (&$value, $column) use ($d) {
+            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
         });
-        $condition = implode(' AND ', $keys);
-        
-        return "UPDATE `$table` SET $values WHERE $condition;";
+        return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
-        
+    public function getDown(): string {
+        $t      = $this->dialect->quote($this->obj->table);
+        $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
-        array_walk($values, function(&$diff, $column) {
-            $diff = '`'.$column."` = '".addslashes($diff->getOldValue())."'";
+        array_walk($values, function (&$diff, $column) use ($d) {
+            $diff = $d->quote($column) . " = '" . addslashes($diff->getOldValue()) . "'";
         });
-        $values = implode(', ', $values);
-
         $keys = $this->obj->diff['keys'];
-        array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".addslashes($value)."'";
+        array_walk($keys, function (&$value, $column) use ($d) {
+            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
         });
-        $condition = implode(' AND ', $keys);
-        
-        return "UPDATE `$table` SET $values WHERE $condition;";
+        return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }
-
 }

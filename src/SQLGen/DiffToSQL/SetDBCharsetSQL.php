@@ -1,24 +1,33 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class SetDBCharsetSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
-    }
-    
-    public function getUp() {
-        $db = $this->obj->db;
-        $charset = $this->obj->charset;
-        return "ALTER DATABASE `$db` CHARACTER SET $charset;";
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    public function getDown() {
-        $db = $this->obj->db;
-        $prevCharset = $this->obj->prevCharset;
-        return "ALTER DATABASE `$db` CHARACTER SET $prevCharset;";
+    public function getUp(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $db = $this->dialect->quote($this->obj->db);
+        return "ALTER DATABASE $db CHARACTER SET {$this->obj->charset};";
+    }
+
+    public function getDown(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $db = $this->dialect->quote($this->obj->db);
+        return "ALTER DATABASE $db CHARACTER SET {$this->obj->prevCharset};";
     }
 
 }

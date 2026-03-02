@@ -17,7 +17,8 @@ class CLIGetter implements ParamsGetter {
         $getopt = $context->getopt([
             'server1::', 'server2::', 'format::',
             'template::', 'type::', 'include::',
-            'nocomments::', 'config::', 'output::', 'debug::'
+            'nocomments::', 'config::', 'output::', 'debug::',
+            'driver::', 'supabase::'
         ]);
     
         $input = $getopt->get(1);
@@ -45,6 +46,14 @@ class CLIGetter implements ParamsGetter {
             $params->output = $getopt->get('--output');
         if ($getopt->get('--debug'))
             $params->debug = $getopt->get('--debug');
+        if ($getopt->get('--driver'))
+            $params->driver = strtolower($getopt->get('--driver'));
+        if ($getopt->get('--supabase')) {
+            // --supabase is a convenience alias for --driver=pgsql that also
+            // enables SSL (Supabase requires an encrypted connection).
+            $params->driver  = 'pgsql';
+            $params->sslmode = 'require';
+        }
 
         return $params;
     }

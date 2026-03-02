@@ -1,24 +1,33 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class SetDBCollationSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
-    }
-    
-    public function getUp() {
-        $db = $this->obj->db;
-        $collation = $this->obj->collation;
-        return "ALTER DATABASE `$db` COLLATE $collation;";
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    public function getDown() {
-        $db = $this->obj->db;
-        $prevCollation = $this->obj->prevCollation;
-        return "ALTER DATABASE `$db` COLLATE $prevCollation;";
+    public function getUp(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $db = $this->dialect->quote($this->obj->db);
+        return "ALTER DATABASE $db COLLATE {$this->obj->collation};";
+    }
+
+    public function getDown(): string {
+        if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        $db = $this->dialect->quote($this->obj->db);
+        return "ALTER DATABASE $db COLLATE {$this->obj->prevCollation};";
     }
 
 }

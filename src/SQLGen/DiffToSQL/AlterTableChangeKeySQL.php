@@ -1,26 +1,42 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class AlterTableChangeKeySQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
-    }
-    
-    public function getUp() {
-        $table = $this->obj->table;
-        $key = $this->obj->key;
-        $schema = $this->obj->diff->getNewValue();
-        return "ALTER TABLE `$table` DROP INDEX `$key`;\nALTER TABLE `$table` ADD $schema;";
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
-        $key = $this->obj->key;
-        $schema = $this->obj->diff->getOldValue();
-        return "ALTER TABLE `$table` DROP INDEX `$key`;\nALTER TABLE `$table` ADD $schema;";
+    private function buildChange(string $table, string $key, string $schema): string {
+        $drop = $this->dialect->dropIndex($table, $key);
+        if ($this->dialect->getDriver() === 'mysql') {
+            $t = $this->dialect->quote($table);
+            return "$drop\nALTER TABLE $t ADD $schema;";
+        }
+        return "$drop\n$schema;";
+    }
+
+    public function getUp(): string {
+        return $this->buildChange(
+            $this->obj->table,
+            $this->obj->key,
+            $this->obj->diff->getNewValue()
+        );
+    }
+
+    public function getDown(): string {
+        return $this->buildChange(
+            $this->obj->table,
+            $this->obj->key,
+            $this->obj->diff->getOldValue()
+        );
     }
 
 }

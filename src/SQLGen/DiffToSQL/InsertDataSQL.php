@@ -1,36 +1,35 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class InsertDataSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
+    protected SQLDialectInterface $dialect;
+
+    function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
     
-    public function getUp() {
-        $table = $this->obj->table;
+    public function getUp(): string {
+        $t      = $this->dialect->quote($this->obj->table);
         $values = $this->obj->diff['diff']->getNewValue();
         $values = array_map(function ($el) {
-            if(!is_null($el)) {
-                return "'" . addslashes($el) . "'";
-            }
-            else {
-                return 'NULL';
-            }
+            return is_null($el) ? 'NULL' : "'" . addslashes($el) . "'";
         }, $values);
-        return "INSERT INTO `$table` VALUES(".implode(',', $values).");";
+        return "INSERT INTO $t VALUES(" . implode(',', $values) . ");";
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
+    public function getDown(): string {
+        $t    = $this->dialect->quote($this->obj->table);
+        $d    = $this->dialect;
         $keys = $this->obj->diff['keys'];
-        array_walk($keys, function(&$value, $column) {
-            $value = '`'.$column."` = '".addslashes($value)."'";
+        array_walk($keys, function (&$value, $column) use ($d) {
+            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
         });
-        $condition = implode(' AND ', $keys);
-        return "DELETE FROM `$table` WHERE $condition;";
+        return "DELETE FROM $t WHERE " . implode(' AND ', $keys) . ';';
     }
-
 }
