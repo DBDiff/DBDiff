@@ -377,3 +377,53 @@ services:
     environment:
       PMA_HOST: db-mysql96
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+  # PHP × PostgreSQL CLI services (used for Postgres end-to-end tests)
+  cli-php83-postgres16:
+    depends_on:
+      db-postgres16:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres16
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres16:
+    depends_on:
+      db-postgres16:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres16
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # PostgreSQL database service
+  db-postgres16:
+    image: postgres:${POSTGRES_VERSION_16}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES16}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s

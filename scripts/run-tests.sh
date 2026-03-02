@@ -2,9 +2,12 @@
 
 # Test runner script for DBDiff comprehensive tests
 # Usage: 
-#   ./run-tests.sh                    # Run tests normally
+#   ./run-tests.sh                    # Run tests normally (MySQL only)
 #   ./run-tests.sh --record           # Run in record mode to capture expected outputs
 #   ./run-tests.sh --specific <test>  # Run specific test method
+#   ./run-tests.sh --postgres         # Run PostgreSQL end-to-end tests
+#   ./run-tests.sh --postgres <host>  # Run PostgreSQL tests against a specific host
+#   ./run-tests.sh --sqlite           # Run SQLite end-to-end tests
 
 set -e
 
@@ -15,6 +18,8 @@ cd "$SCRIPT_DIR/.."
 RECORD_MODE="false"
 SPECIFIC_TEST=""
 MYSQL_VERSION=""
+POSTGRES_HOST=""
+SQLITE_ONLY="false"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -31,20 +36,42 @@ while [[ $# -gt 0 ]]; do
             MYSQL_VERSION="$2"
             shift 2
             ;;
+        --postgres)
+            # Optional host argument: --postgres db-postgres16
+            # If next arg looks like a hostname (no leading --), use it; otherwise use default.
+            if [[ -n "${2:-}" && "${2:-}" != --* ]]; then
+                POSTGRES_HOST="$2"
+                shift 2
+            else
+                POSTGRES_HOST="${DB_HOST_POSTGRES:-db-postgres16}"
+                shift
+            fi
+            ;;
+        --sqlite)
+            SQLITE_ONLY="true"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             echo "Usage: $0 [--record] [--specific <test_method>] [--mysql <version>]"
+            echo "          [--postgres [host]] [--sqlite]"
             echo ""
             echo "Options:"
             echo "  --record                Run in record mode to capture expected outputs"
             echo "  --specific <test>       Run specific test method"
             echo "  --mysql <version>       Test with specific MySQL version (8.0, 8.4, 9.3)"
+            echo "  --postgres [host]       Enable PostgreSQL end-to-end tests"
+            echo "                          (default host: db-postgres16)"
+            echo "  --sqlite                Run only SQLite end-to-end tests"
             echo ""
             echo "Examples:"
-            echo "  $0                                    # Run all tests"
-            echo "  $0 --record                          # Record expected outputs"
-            echo "  $0 --specific testSchemaOnlyDiff     # Run specific test"
-            echo "  $0 --mysql 8.4                       # Test with MySQL 8.4"
+            echo "  $0                                       # Run all tests (MySQL)"
+            echo "  $0 --record                             # Record expected outputs"
+            echo "  $0 --specific testSchemaOnlyDiff        # Run specific test"
+            echo "  $0 --mysql 8.4                          # Test with MySQL 8.4"
+            echo "  $0 --postgres                           # Run Postgres e2e tests"
+            echo "  $0 --postgres localhost                  # Postgres on localhost"
+            echo "  $0 --sqlite                             # Run SQLite e2e tests"
             exit 1
             ;;
     esac
@@ -62,8 +89,16 @@ fi
 
 if [ -n "$MYSQL_VERSION" ]; then
     echo "🗄️  MySQL Version: $MYSQL_VERSION"
-    # Here you could add logic to switch to specific MySQL version
-    # For now, we'll use whatever version is running
+fi
+
+if [ -n "$POSTGRES_HOST" ]; then
+    echo "🐘 PostgreSQL host: $POSTGRES_HOST"
+    export DB_HOST_POSTGRES="$POSTGRES_HOST"
+fi
+
+if [ "$SQLITE_ONLY" = "true" ]; then
+    echo "🗂️  Running SQLite end-to-end tests only"
+    SPECIFIC_TEST="End2EndSQLiteTest"
 fi
 
 if [ -n "$SPECIFIC_TEST" ]; then

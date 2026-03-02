@@ -4,14 +4,16 @@ FROM php:${PHP_VERSION}-cli
 # Set working directory
 WORKDIR /usr/src/dbdiff
 
-# Install system dependencies
+# Install system dependencies (includes libpq-dev for PostgreSQL and libsqlite3-dev for SQLite)
 RUN apt-get update && apt-get install -y \
     git-core \
     unzip \
+    libpq-dev \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Add MySQL PDO extension
-RUN docker-php-ext-install mysqli pdo pdo_mysql
+# Add MySQL, PostgreSQL, and SQLite PDO extensions
+RUN docker-php-ext-install mysqli pdo pdo_mysql pdo_pgsql pdo_sqlite
 
 # Add Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
