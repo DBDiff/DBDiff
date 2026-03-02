@@ -27,7 +27,8 @@
 -   Since this diff tool is being used for migrations, it provides up and down SQL in the same file
 -   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats
 -   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
--   Works with just MySQL for now, but we will be expanding to other DBs in the future on request (please create an issue and vote on it!)
+-   **Multi-database support**: MySQL, PostgreSQL, and SQLite via the `--driver` flag
+-   **Supabase-ready**: use `--supabase` as a one-flag shorthand for connecting to a Supabase PostgreSQL instance over SSL
 
 ## Pre-requisites
 1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
@@ -41,13 +42,34 @@ _Note: Make a note of where `composer.phar` is installed as we will need it late
 * PHP 8.3.x
 * PHP 8.4.x
 
-## Supported MySQL Database Versions
+## Supported Databases
 
 _Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
 
+### MySQL
 * MySQL 8.0.x
 * MySQL 8.4.x (LTS)
 * MySQL 9.3.x (Innovation)
+* MySQL 9.6.x (Innovation)
+
+### PostgreSQL
+* PostgreSQL 16.x
+
+Use `--driver=pgsql` (or pass `driver: pgsql` in your `.dbdiff` config file).
+
+### SQLite
+* SQLite 3.x (any version supported by the installed `pdo_sqlite` PHP extension)
+
+Use `--driver=sqlite`. For SQLite the comparison argument uses the file path as the database name:
+```bash
+./dbdiff --driver=sqlite server1./path/to/source.db:server1./path/to/target.db
+```
+
+### Supabase
+Use the `--supabase` shorthand flag — it sets `driver=pgsql` and enables SSL automatically:
+```bash
+./dbdiff --supabase --server1=user:pass@db.xxx.supabase.co:5432 server1.mydb:server1.mydb
+```
 
 ## Installation
 On the command-line, use `git` to clone the ssh version:
@@ -97,9 +119,11 @@ You can also add it to your system's path if you wish to make it globally availa
 
 ## Docker
 
-You may now use `docker` and `docker-compose` to create a local environment for DBDiff (for testing or production), including a PHP server with a database and the DBDiff CLI available as a service.
+You may now use `docker` / `docker-compose` **or Podman / podman-compose** to create a local environment for DBDiff (for testing or production), including a PHP server with a database and the DBDiff CLI available as a service.
 
-Please ensure you have `docker` and/or `docker-compose` installed locally, as well as a download of the git repository, before continuing.
+Please ensure you have one of the following installed locally, as well as a download of the git repository, before continuing:
+- **Docker** + `docker-compose` (or Docker Desktop)
+- **Podman** + `podman-compose` — a daemonless, rootless Docker-compatible alternative (see [DOCKER.md](DOCKER.md) for setup details)
 
 _Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
 
@@ -166,8 +190,8 @@ Congratulations you have installed and ran DBDiff!
 _Note: The command-line parameters will always override the settings in the `.dbdiff` config file_
 
 -   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
--   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)
--   **--template=templates/simple-db-migrate.tmpl** - Specifies the output template, if any. By default will be plain SQL
+-   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)-   **--driver=mysql|pgsql|sqlite** - Database driver to use. Defaults to `mysql`. Use `pgsql` for PostgreSQL (including Supabase), `sqlite` for file-based SQLite databases.
+-   **--supabase** - Convenience shorthand: sets `--driver=pgsql` and enables SSL (`sslmode=require`). Designed for use with [Supabase](https://supabase.com/).-   **--template=templates/simple-db-migrate.tmpl** - Specifies the output template, if any. By default will be plain SQL
 -   **--type=schema** or **data** or **all** - Specifies the type of diff to do either on the schema, data or both. schema is the default
 -   **--include=up** or **down** or **all** - Specified whether to include the up, down or both data in the output. up is the default
 -   **--nocomments=true** - By default automated comments starting with the hash (\#) character are included in the output file, which can be removed with this parameter
@@ -177,20 +201,35 @@ _Note: The command-line parameters will always override the settings in the `.db
 
 ## Usage Examples
 
-### Example 1
+### Example 1 -- MySQL (default)
 `$ ./dbdiff server1.db1:server2.db2`
 
-This would by default look for the `.dbdiff` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the schema and output a commented migration.sql file inside the current directory which includes only the up SQL as per default
+Looks for the `.dbdiff` config file for connection details and compares the schemas of `db1` and `db2`, outputting `migration.sql` in the current directory.
 
-### Example 2
+### Example 2 -- MySQL table data diff
 `$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data`
 
-This would by default look for the `.dbdiff` config file for the DB connection details, if it’s not there the tool would return an error. If it’s there, the connection details would be used to compare the SQL of only the data of the specified table1 inside each database and output a .sql file which has no comments inside the current directory which includes only the up SQL as per default
+Compares only the data of `table1` between the two databases; no comment headers in output.
 
-### Example 3
+### Example 3 -- MySQL with template and full output
 `$ ./dbdiff --config=config.conf --template=templates/simple-db-migrate.tmpl --include=all server1.db1:server2.db2 --output=./sql/simple-schema.sql`
 
-Instead of looking for `.dbdiff`, this would look for `config.conf` (which should be valid YAML) for the settings, and then override any of those settings from `config.conf` for the --template and --include parameters given in the command-line parameters - thus comparing the source with the target database and outputting an SQL file called simple-schema.sql to the ./sql folder, which should already exist otherwise the program will throw an error, and which includes only the schema as an up and down SQL diff in the simple-db-migrate format (as specified by the template). This example would work perfectly alongside the simple-db-migrate tool
+Uses `config.conf` for connection settings, applies the simple-db-migrate template, and writes both up and down SQL to `./sql/simple-schema.sql`.
+
+### Example 4 -- PostgreSQL
+`$ ./dbdiff --driver=pgsql --server1=user:pass@localhost:5432 server1.staging:server1.production`
+
+Compares two PostgreSQL databases on the same server. Use `--driver=pgsql` or set `driver: pgsql` in your `.dbdiff` file.
+
+### Example 5 -- Supabase
+`$ ./dbdiff --supabase --server1=postgres:pass@db.xxxx.supabase.co:5432 server1.staging:server1.production`
+
+`--supabase` is equivalent to `--driver=pgsql` with SSL enabled. No extra config needed.
+
+### Example 6 -- SQLite
+`$ ./dbdiff --driver=sqlite server1./var/db/v1.db:server1./var/db/v2.db`
+
+Compares two SQLite files. No `--server1` flag is needed -- the file paths are embedded directly in the comparison argument. Paths must not contain dots other than in the filename extension.
 
 ## File Examples
 
@@ -198,13 +237,14 @@ Instead of looking for `.dbdiff`, this would look for `config.conf` (which shou
 	server1:
 		user: user
 		password: password
-		port: port # for MySQL this is 3306
+		port: port # MySQL: 3306 | PostgreSQL: 5432
 		host: host1 # usually localhost or 127.0.0.1
 	server2:
 		user: user
 		password: password
-		port: port # for MySQL this is 3306
+		port: port # MySQL: 3306 | PostgreSQL: 5432
 		host: host1 # usually localhost or 127.0.0.1
+	driver: mysql # mysql | pgsql | sqlite (default: mysql)
 	template: templates/simple-db-migrate.tmpl
 	type: all
 	include: all

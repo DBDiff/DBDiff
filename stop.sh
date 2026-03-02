@@ -17,6 +17,18 @@ else
     echo "⚠️  .env file not found - using defaults"
 fi
 
+# Compose command: prefer COMPOSE_CMD env var, then docker-compose, then podman-compose
+if [ -z "${COMPOSE_CMD:-}" ]; then
+    if command -v docker-compose &>/dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif command -v podman-compose &>/dev/null; then
+        COMPOSE_CMD="podman-compose"
+    else
+        echo "❌ Neither docker-compose nor podman-compose found."
+        exit 1
+    fi
+fi
+
 # Set defaults if not provided in .env
 DATABASE_STARTUP_TIMEOUT=${DATABASE_STARTUP_TIMEOUT:-90}
 DATABASE_HEALTH_TIMEOUT=${DATABASE_HEALTH_TIMEOUT:-30}
@@ -52,7 +64,7 @@ cleanup_docker() {
     
     # Stop and remove containers
     echo "Stopping containers..."
-    if docker-compose down --remove-orphans --volumes 2>/dev/null; then
+    if $COMPOSE_CMD down --remove-orphans --volumes 2>/dev/null; then
         echo "✅ Containers stopped"
     else
         echo "⚠️  Failed to stop containers"
@@ -104,14 +116,14 @@ force_cleanup() {
         return 0
     fi
     
-    # Kill any existing docker-compose processes
-    echo "Killing existing docker-compose processes..."
+    # Kill any existing $COMPOSE_CMD processes
+    echo "Killing existing $COMPOSE_CMD processes..."
     pkill -9 -f "docker-compose" 2>/dev/null || true
     pkill -9 -f "docker.*build" 2>/dev/null || true
     
     # Stop all containers related to this project
     echo "Stopping project containers..."
-    docker-compose down --remove-orphans --volumes 2>/dev/null || true
+    $COMPOSE_CMD down --remove-orphans --volumes 2>/dev/null || true
     
     # Remove any hanging containers
     echo "Removing hanging containers..."

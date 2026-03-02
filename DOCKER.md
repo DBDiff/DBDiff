@@ -14,10 +14,65 @@ cp .env.example .env
 ### Environment Variables
 
 Key configuration options:
-- `DB_PORT_MYSQL80`, `DB_PORT_MYSQL84`, `DB_PORT_MYSQL93` - Database ports
+- `DB_PORT_MYSQL80`, `DB_PORT_MYSQL84`, `DB_PORT_MYSQL93` - MySQL database ports
+- `DB_PORT_POSTGRES16` - PostgreSQL 16 database port (default: `5432`)
 - `PHPMYADMIN_PORT_MYSQL80`, `PHPMYADMIN_PORT_MYSQL84`, `PHPMYADMIN_PORT_MYSQL93` - PHPMyAdmin ports  
-- `DB_ROOT_PASSWORD`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database credentials
+- `DB_ROOT_PASSWORD`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database credentials (shared by MySQL and PostgreSQL)
 - `DATABASE_STARTUP_TIMEOUT`, `PHPUNIT_TEST_TIMEOUT` - Timeout configurations
+
+## Podman Support
+
+Podman is a daemonless, rootless, Docker-compatible container engine. All `docker-compose` commands work identically with `podman-compose`. Podman is a great alternative if you do not have Docker Desktop installed or prefer not to run a background daemon.
+
+### Installing Podman
+
+**Ubuntu / Debian:**
+```bash
+sudo apt-get install -y podman podman-compose
+```
+
+**macOS (via Homebrew):**
+```bash
+brew install podman podman-compose
+podman machine init && podman machine start
+```
+
+**Windows (via winget):**
+```powershell
+winget install RedHat.Podman
+winget install RedHat.Podman-Desktop  # optional GUI
+```
+
+> Podman Desktop is a cross-platform GUI available at https://podman-desktop.io/ — it provides a Docker Desktop-like interface and can run the same compose files without any changes.
+
+### Using podman-compose instead of docker-compose
+
+Simply substitute `docker-compose` for `podman-compose` in any command in this guide:
+
+```bash
+# Start PostgreSQL and run Postgres e2e tests
+podman-compose up -d db-postgres16
+podman-compose run --rm \
+  -e DB_HOST_POSTGRES=db-postgres16 \
+  cli-php83-postgres16 \
+  bash -c "scripts/run-tests.sh --postgres db-postgres16"
+
+# Stop everything
+podman-compose down
+```
+
+The `start.sh` and `stop.sh` scripts also support Podman automatically if `docker-compose` is not found:
+
+```bash
+# Prefer podman-compose when docker-compose is unavailable
+COMPOSE_CMD=podman-compose ./start.sh 8.3 8.0
+```
+
+### Rootless networking note
+
+Podman runs containers as your own user by default. If port binding below 1024 fails, either:
+- Map to a high port in `.env` (e.g. `DB_PORT_MYSQL80=13306`)
+- Or run `sudo sysctl net.ipv4.ip_unprivileged_port_start=0` once
 
 ## Available Configurations
 
@@ -25,11 +80,16 @@ Key configuration options:
 - PHP 7.4
 - PHP 8.3
 - PHP 8.4
+- PHP 8.5
 
 ### MySQL Versions
 - MySQL 8.0 (port 3306)
 - MySQL 8.4 (port 3307)
 - MySQL 9.3 (port 3308)
+- MySQL 9.6 (port 3309)
+
+### PostgreSQL Versions
+- PostgreSQL 16 (port 5432)
 
 ## Services
 
@@ -43,11 +103,14 @@ Key configuration options:
 - `cli-php84-mysql80` - PHP 8.4 with MySQL 8.0
 - `cli-php84-mysql84` - PHP 8.4 with MySQL 8.4
 - `cli-php84-mysql93` - PHP 8.4 with MySQL 9.3
+- `cli-php83-postgres16` - PHP 8.3 with PostgreSQL 16
+- `cli-php84-postgres16` - PHP 8.4 with PostgreSQL 16
 
 ### Database Services
 - `db-mysql80` - MySQL 8.0 (accessible on localhost:3306)
 - `db-mysql84` - MySQL 8.4 (accessible on localhost:3307)
 - `db-mysql93` - MySQL 9.3 (accessible on localhost:3308)
+- `db-postgres16` - PostgreSQL 16 (accessible on localhost:5432)
 
 ### PHPMyAdmin Services
 - `phpmyadmin-mysql80` - PHPMyAdmin for MySQL 8.0 (http://localhost:8080)
@@ -83,6 +146,18 @@ docker-compose run --rm cli-php84-mysql84 server1.php server2.php database1 data
 docker-compose run --rm cli-php84-mysql93 server1.php server2.php database1 database2
 ```
 
+### Run DBDiff with PostgreSQL
+```bash
+# Start the PostgreSQL service
+docker-compose up -d db-postgres16
+
+# Run a Postgres diff with PHP 8.3
+docker-compose run --rm cli-php83-postgres16 \
+  bash -c "./dbdiff --driver=pgsql \
+  --server1=dbdiff:dbdiff@db-postgres16:5432 \
+  server1.mydb_staging:server1.mydb_production"
+```
+
 ### Run PHPUnit tests with specific combination
 ```bash
 # Run tests with PHP 7.4 and MySQL 8.0
@@ -93,6 +168,21 @@ docker-compose run --rm cli-php83-mysql80 phpunit
 
 # Run tests with PHP 8.4 and MySQL 8.4
 docker-compose run --rm cli-php84-mysql84 phpunit
+
+# Run PostgreSQL end-to-end tests (record baseline on first run)
+docker-compose run --rm \
+  -e DB_HOST_POSTGRES=db-postgres16 \
+  cli-php83-postgres16 \
+  bash -c "DBDIFF_RECORD_MODE=true scripts/run-tests.sh --postgres db-postgres16"
+
+# Run PostgreSQL end-to-end tests (compare against baseline)
+docker-compose run --rm \
+  -e DB_HOST_POSTGRES=db-postgres16 \
+  cli-php83-postgres16 \
+  bash -c "scripts/run-tests.sh --postgres db-postgres16"
+
+# Run SQLite end-to-end tests (no extra service needed)
+docker-compose run --rm cli-php83-mysql80 bash -c "scripts/run-tests.sh --sqlite"
 ```
 
 ### Using the Start Script
@@ -191,6 +281,7 @@ Default MySQL credentials (configurable via `.env`):
 - MySQL 8.0: `localhost:3306` (DB_PORT_MYSQL80)
 - MySQL 8.4: `localhost:3307` (DB_PORT_MYSQL84)
 - MySQL 9.3: `localhost:3308` (DB_PORT_MYSQL93)
+- PostgreSQL 16: `localhost:5432` (DB_PORT_POSTGRES16)
 
 ### PHPMyAdmin Access (configurable via .env)
 - MySQL 8.0: http://localhost:18080 (PHPMYADMIN_PORT_MYSQL80)
@@ -202,8 +293,10 @@ Default MySQL credentials (configurable via `.env`):
 The project uses GitHub Actions to ensure full compatibility across all supported versions on every pull request.
 
 **Matrix Grid:**
-- **PHP**: 7.4, 8.3, 8.4
-- **MySQL**: 8.0, 8.4, 9.3
+- **PHP**: 7.4, 8.3, 8.4, 8.5
+- **MySQL**: 8.0, 8.4, 9.3, 9.6
+- **PostgreSQL**: 16
+- **SQLite**: bundled (runs in every MySQL CLI container via `pdo_sqlite`)
 
 ## Deterministic Testing
 
