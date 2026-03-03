@@ -15,6 +15,9 @@
          failOnWarning="false"
 >
     <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">./Migration</directory>
+        </testsuite>
         <testsuite name="DBDiff">
             <file>./DBDiffComprehensiveTest.php</file>
             <file>./End2EndTest.php</file>

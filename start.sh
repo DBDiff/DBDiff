@@ -34,7 +34,6 @@ fi
 
 # Set defaults for environment variables if not set (or if .env is missing/partial)
 # PHP Versions
-export PHP_VERSION_74=${PHP_VERSION_74:-7.4}
 export PHP_VERSION_83=${PHP_VERSION_83:-8.3}
 export PHP_VERSION_84=${PHP_VERSION_84:-8.4}
 export PHP_VERSION_85=${PHP_VERSION_85:-8.5}
@@ -107,7 +106,7 @@ cleanup_on_interrupt() {
 # Configuration variables - derive arrays and mappings from individual variables
 # Build PHP versions array from individual variables
 PHP_VERSIONS=()
-for var in PHP_VERSION_74 PHP_VERSION_83 PHP_VERSION_84 PHP_VERSION_85; do
+for var in PHP_VERSION_83 PHP_VERSION_84 PHP_VERSION_85; do
     if [ -n "${!var}" ]; then
         PHP_VERSIONS+=("${!var}")
     fi
@@ -133,7 +132,7 @@ MYSQL_VERSIONS=("mysql80" "mysql84" "mysql93" "mysql96")
 
 # Fallback to defaults if individual variables not found
 if [ ${#PHP_VERSIONS[@]} -eq 0 ]; then
-    PHP_VERSIONS=("7.4" "8.3" "8.4" "8.5")
+    PHP_VERSIONS=("8.3" "8.4" "8.5")
 fi
 if [ ${#MYSQL_VERSION_MAPPING[@]} -eq 0 ]; then
     MYSQL_VERSION_MAPPING=("8.0:mysql80" "8.4:mysql84" "9.3:mysql93" "9.6:mysql96")
@@ -854,22 +853,6 @@ show_running_services() {
     # CLI services
     local has_cli=false
     echo "💻 PHP CLI Services (use $COMPOSE_CMD exec):"
-    if echo "$running_services" | grep -q "cli-php74-mysql80"; then
-        echo "  • php74-mysql80: $COMPOSE_CMD exec cli-php74-mysql80 bash"
-        has_cli=true
-    fi
-    if echo "$running_services" | grep -q "cli-php74-mysql84"; then
-        echo "  • php74-mysql84: $COMPOSE_CMD exec cli-php74-mysql84 bash"
-        has_cli=true
-    fi
-    if echo "$running_services" | grep -q "cli-php74-mysql93"; then
-        echo "  • php74-mysql93: $COMPOSE_CMD exec cli-php74-mysql93 bash"
-        has_cli=true
-    fi
-    if echo "$running_services" | grep -q "cli-php74-mysql96"; then
-        echo "  • php74-mysql96: $COMPOSE_CMD exec cli-php74-mysql96 bash"
-        has_cli=true
-    fi
     if echo "$running_services" | grep -q "cli-php83-mysql80"; then
         echo "  • php83-mysql80: $COMPOSE_CMD exec cli-php83-mysql80 bash"
         has_cli=true

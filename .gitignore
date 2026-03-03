@@ -10,3 +10,4 @@ dist
 .phpunit.cache
 tests/logs/
 .env
+docs/

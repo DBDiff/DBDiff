@@ -16,10 +16,16 @@
         }
     },
     "prefer-stable": true,
+    "config": {
+        "platform": {
+            "php": "8.0"
+        }
+    },
     "require": {
-        "php": ">=7.3",
+        "php": ">=8.0",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
+        "symfony/console": "^5.4|^6.0|^7.0",
         "symfony/yaml": "^5.1|^6.0|^7.0",
         "illuminate/database": "^8|^9|^10|^11",
         "illuminate/view": "^8|^9|^10|^11",

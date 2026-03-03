@@ -1,0 +1,81 @@
+# dbdiff.yml — DBDiff configuration
+#
+# Copy this file to dbdiff.yml (or .dbdiff.yml) in your project root.
+# Rename individual values as needed.
+#
+# Command-line flags always WIN over values in this file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Database connection ───────────────────────────────────────────────────────
+# Used by migration:up / migration:down / migration:status (the runner commands).
+# The diff command uses --server1 / --server2 on the command line instead.
+
+database:
+  driver: mysql          # mysql | pgsql | sqlite
+  host: 127.0.0.1
+  port: 3306
+  name: mydb             # For SQLite, use `path` instead:
+  # path: ./database.sqlite
+  user: root
+  password: secret
+  # sslmode: require     # Needed for Supabase / production Postgres
+
+# ── Migrations ────────────────────────────────────────────────────────────────
+migrations:
+  dir: ./migrations                   # Where migration files are stored
+  history_table: _dbdiff_migrations   # Tracking table (created automatically)
+  out_of_order: false                 # Allow applying older versions after newer ones
+
+# ── Diff command defaults ─────────────────────────────────────────────────────
+# The values below are used by `dbdiff diff` when the corresponding flag is
+# not supplied on the command line.  They mirror the legacy .dbdiff file format.
+
+# server1:
+#   user: user
+#   password: password
+#   port: 3306
+#   host: 127.0.0.1
+
+# server2:
+#   user: user
+#   password: password
+#   port: 3306
+#   host: 127.0.0.1
+
+# type: schema        # schema | data | all
+# include: up         # up | down | both
+# nocomments: false
+# format: native      # native | flyway | liquibase-xml | liquibase-yaml | laravel
+
+# ── Supabase (Postgres) ───────────────────────────────────────────────────────
+# Option A — paste a connection string directly (simplest):
+#
+# database:
+#   url: postgres://postgres.PROJREF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
+#
+# The `url` key overrides individual host/user/password/port values.
+# SSL is automatically enabled when a Supabase hostname is detected.
+#
+# Option B — session-mode connection pooler (port 6543, pgbouncer):
+#
+# database:
+#   url: postgres://postgres.PROJREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+#
+# pgbouncer mode is auto-enabled on port 6543 (sets PDO emulate_prepares = true).
+#
+# Option C — explicit fields (equivalent to Option A without URL parsing):
+#
+# database:
+#   driver: pgsql
+#   host: db.PROJREF.supabase.co
+#   port: 5432
+#   name: postgres
+#   user: postgres
+#   password: your-db-password
+#   sslmode: require
+#
+# Diff against two Supabase projects on the command line (no config file needed):
+#
+#   dbdiff diff \
+#     --server1-url postgres://postgres.ABC:PASS@aws-0-us-east-1.pooler.supabase.com:5432/postgres \
+#     --server2-url postgres://postgres.XYZ:PASS@aws-0-us-east-1.pooler.supabase.com:5432/staging

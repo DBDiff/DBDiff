@@ -33,12 +33,11 @@
 ## Pre-requisites
 1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
 2. You will need to have git installed
-3. You will need to have PHP installed (version 7.4.x, 8.3.x, 8.4.x, or 8.5.x)
+3. You will need to have PHP installed (version 8.3.x, 8.4.x, or 8.5.x)
 4. You will need to have Composer installed
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
 
-* PHP 7.4.x
 * PHP 8.3.x
 * PHP 8.4.x
 * PHP 8.5.x
@@ -74,6 +73,55 @@ Use `--driver=sqlite`. For SQLite the comparison argument uses the file path as 
 Use the `--supabase` shorthand flag — it sets `driver=pgsql` and enables SSL automatically:
 ```bash
 ./dbdiff --supabase --server1=user:pass@db.xxx.supabase.co:5432 server1.mydb:server1.mydb
+```
+
+## Compatible Database Variants
+
+The databases below work with DBDiff's existing drivers with no code changes, because they speak standard MySQL or PostgreSQL wire protocols. **Unless otherwise noted, these have not been tested by the core team.** Feel free to open a PR to add official support.
+
+### MySQL-compatible — use `--driver=mysql` (the default)
+
+| Database | Connection | Notes |
+|---|---|---|
+| MariaDB 10.x / 11.x | `--server1=user:pass@host:3306` | MySQL wire protocol; minor DDL dialect differences |
+| AWS Aurora MySQL | `--server1=user:pass@cluster-endpoint:3306` | Standard MySQL protocol |
+| PlanetScale | `--server1=user:pass@host:3306` | MySQL-compatible SaaS |
+| Vitess / VTGate | `--server1=user:pass@vtgate-host:3306` | MySQL wire protocol via VTGate |
+| Percona XtraDB Cluster | `--server1=user:pass@host:3306` | MySQL-compatible; Galera replication metadata ignored |
+| TiDB | `--server1=user:pass@host:4000` | MySQL-compatible; default port 4000 |
+
+### PostgreSQL-compatible — use `--driver=pgsql`
+
+| Database | Connection | Notes |
+|---|---|---|
+| AWS Aurora PostgreSQL | `--server1-url postgres://user:pass@cluster:5432/db` | Standard pgsql connection |
+| AWS RDS PostgreSQL | `--server1-url postgres://user:pass@host:5432/db` | Standard pgsql connection |
+| [Neon](https://neon.tech) | `--server1-url postgres://user:pass@host.neon.tech:5432/db` | Standard pgsql; see Neon Branching below |
+| AlloyDB (Google Cloud) | `--server1-url postgres://user:pass@host:5432/db` | Google's Postgres-compatible offering |
+| CockroachDB | `--server1-url postgresql://user:pass@host:26257/db` | Postgres wire protocol; some DDL differences |
+| YugabyteDB | `--server1-url postgres://user:pass@host:5433/db` | Postgres-compatible YSQL layer |
+| Multigres | `--server1-url postgres://user:pass@multigres-host:5432/db` | Transparent Postgres proxy; no changes needed |
+| TimescaleDB | `--driver=pgsql` as normal | Postgres extension; hypertable DDL diffs natively |
+| pgvector | `--driver=pgsql` as normal | `vector(N)` column types and HNSW/IVFFlat indexes diff natively |
+
+### Neon Branching
+
+Neon's instant copy-on-write branching lets you diff any two branches directly — each branch is an independent PostgreSQL endpoint:
+
+```bash
+./dbdiff \
+  --server1-url postgres://user:pass@main-branch.hostname.neon.tech/mydb \
+  --server2-url postgres://user:pass@feature-branch.hostname.neon.tech/mydb \
+  --format=flyway --description=my_feature
+```
+
+### Dolt (Git for Databases)
+
+[Dolt](https://github.com/dolthub/dolt) is a MySQL-compatible database with full Git-style branching. DBDiff's MySQL adapter connects to a Dolt server directly — each Dolt branch is exposed as a separate database:
+
+```bash
+# Start a Dolt server, then diff two branches
+./dbdiff server1.main:server1.feature_add_users
 ```
 
 ## Installation
@@ -132,7 +180,7 @@ Please ensure you have one of the following installed locally, as well as a down
 
 _Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
 
-### Docker Standalone DBDiff CLI with PHP 7.3
+### Docker Standalone DBDiff CLI
 
 ```bash
 # Build DBDiff CLI Image
@@ -299,12 +347,60 @@ The following comparisons run in exactly the following order:
 
 ## Compatible Migration Tools
 
-| Project | Language / Package Manager | Description |
-|---------|--------|-------------|
-| [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate)          | Python / PIP | Generic database migration tool inpired on Rails migrations |
-| [Flyway](https://github.com/flyway/flyway)                | Java / Maven | Database Migrations Made Easy |
-	
-Please do [let us know](https://akalsoftware.com/) if you're using any other migration tools with DBDiff, other than the ones listed here, so we can add it.
+DBDiff supports multiple output formats via the `--format` flag. Add `--description=<slug>` to customise the generated file name.
+
+| `--format` | Tool | Output file | `--include` support |
+|---|---|---|---|
+| `native` (default) | Plain SQL / any tool | `migration.sql` | `up`, `down`, `both` |
+| `flyway` | [Flyway](https://flywaydb.org) | `V{timestamp}__{desc}.sql` | `up` required; `down` adds `U{ts}__{desc}.sql` (Flyway Teams) |
+| `liquibase-xml` | [Liquibase](https://liquibase.com) | `changelog.xml` | Both directions in one file (`<sql>` + `<rollback>`) |
+| `liquibase-yaml` | [Liquibase](https://liquibase.com) | `changelog.yaml` | Both directions in one file |
+| `laravel` | [Laravel Migrations](https://laravel.com/docs/migrations) | `YYYY_MM_DD_HHMMSS_{desc}.php` | Both directions in one file (`up()`/`down()`) |
+
+### Flyway
+
+```bash
+./dbdiff --format=flyway --description=add_users server1.mydb:server2.mydb
+```
+
+Move the generated `V{timestamp}__add_users.sql` into your Flyway `sql/` migrations directory, then run `flyway migrate`.
+
+### Liquibase
+
+```bash
+# XML
+./dbdiff --format=liquibase-xml --description=add_users server1.mydb:server2.mydb
+
+# YAML
+./dbdiff --format=liquibase-yaml --description=add_users server1.mydb:server2.mydb
+```
+
+Add the generated `changelog.xml` (or `.yaml`) to your Liquibase master changelog, then run `liquibase update`.
+
+### Laravel
+
+```bash
+./dbdiff --format=laravel --description=add_users server1.mydb:server2.mydb
+```
+
+Move the generated `YYYY_MM_DD_HHMMSS_add_users.php` into `database/migrations/`, then run `php artisan migrate`.
+
+### Simple DB Migrate
+
+Use the bundled template with the legacy `--template` flag:
+
+```bash
+./dbdiff --template=templates/simple-db-migrate.tmpl server1.mydb:server2.mydb
+```
+
+| Project | Language | Description |
+|---|---|---|
+| [Flyway](https://github.com/flyway/flyway) | Java / Maven | Database migrations made easy |
+| [Liquibase](https://github.com/liquibase/liquibase) | Java / Maven | Database changelog and migration tool |
+| [Laravel Migrations](https://laravel.com/docs/migrations) | PHP / Composer | Schema migrations built into the Laravel framework |
+| [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate) | Python / PIP | Rails-inspired database migration tool |
+
+Please [let us know](https://akalsoftware.com/) if you're using DBDiff with other migration tools so we can add them here.
 
 ## Questions & Support 💡
 
