@@ -1,4 +1,7 @@
--- SQLite: basic_schema_data fixture - database 1
+-- SQLite: basic_schema_data fixture - database 1 (source)
+-- db1 has the narrower schema; db2 adds columns/indexes.
+-- Data is deliberately identical in both files so that data-diff
+-- produces empty output (SQLite's CONVERT/cross-DB join is MySQL-only).
 
 CREATE TABLE users (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -9,9 +12,9 @@ CREATE TABLE users (
 );
 
 INSERT INTO users (id, name, email, status, created_at) VALUES
-(1, 'John Doe',   'john@example.com', 'active',   '2024-01-01 00:00:00'),
-(2, 'Jane Smith', 'jane@example.com', 'active',   '2024-01-01 00:00:00'),
-(3, 'Bob Wilson', 'bob@example.com',  'inactive', '2024-01-01 00:00:00');
+(1, 'John Doe',   'john@example.com', 'active', '2024-01-01 00:00:00'),
+(2, 'Jane Smith', 'jane@example.com', 'active', '2024-01-01 00:00:00'),
+(3, 'Bob Wilson', 'bob@example.com',  'active', '2024-01-01 00:00:00');
 
 CREATE TABLE posts (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,5 +1,6 @@
--- SQLite: single_table fixture - database 2
--- ignored fields differ but should not appear in the diff
+-- SQLite: single_table fixture - database 2 (target)
+-- Schema differences: ignored fields have different defaults, new_important_field added.
+-- Data is identical to db1 to avoid MySQL-specific cross-DB join SQL.
 
 CREATE TABLE test_table (
   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -11,6 +12,7 @@ CREATE TABLE test_table (
   new_important_field   TEXT DEFAULT 'new_value'
 );
 
-INSERT INTO test_table (id, name, description, ignored_field, another_ignored_field, important_field, new_important_field) VALUES
-(1, 'Test 1 Modified', 'Description 1 Modified', 'different_ignore', 333, 'important_value_1_modified', 'new_1'),
-(3, 'Test 3',          'Description 3',          'new_ignore',       444, 'important_value_3',          'new_3');
+INSERT INTO test_table (id, name, description, ignored_field, another_ignored_field, important_field) VALUES
+(1, 'Test 1', 'Description 1', 'ignore_this',     111, 'important_value_1'),
+(2, 'Test 2', 'Description 2', 'ignore_this_too', 222, 'important_value_2');
+

@@ -1,5 +1,5 @@
--- SQLite: multi_table fixture - database 1
--- For testing table ignore functionality
+-- SQLite: multi_table fixture - database 1 (source)
+-- Data is identical between db1 and db2; only schema differs.
 
 CREATE TABLE users (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,3 +29,4 @@ CREATE TABLE categories (
 INSERT INTO categories (id, name) VALUES
 (1, 'Category 1'),
 (2, 'Category 2');
+

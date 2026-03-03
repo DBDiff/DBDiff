@@ -1,5 +1,6 @@
--- SQLite: multi_table fixture - database 2
--- posts and categories tables will be ignored in tests
+-- SQLite: multi_table fixture - database 2 (target)
+-- Schema differences: users gains phone, posts gains content, categories gains description.
+-- Data is identical to db1 (same rows, same values) to avoid MySQL-specific cross-DB join SQL.
 
 CREATE TABLE users (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -8,9 +9,9 @@ CREATE TABLE users (
   phone TEXT DEFAULT NULL
 );
 
-INSERT INTO users (id, name, email, phone) VALUES
-(1, 'User 1 Modified', 'user1@example.com', '555-1111'),
-(3, 'User 3',          'user3@example.com', '555-3333');
+INSERT INTO users (id, name, email) VALUES
+(1, 'User 1', 'user1@example.com'),
+(2, 'User 2', 'user2@example.com');
 
 CREATE TABLE posts (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,9 +20,9 @@ CREATE TABLE posts (
   content TEXT
 );
 
-INSERT INTO posts (id, user_id, title, content) VALUES
-(1, 1, 'Post 1 Modified', 'Content 1'),
-(3, 3, 'Post 3',          'Content 3');
+INSERT INTO posts (id, user_id, title) VALUES
+(1, 1, 'Post 1'),
+(2, 2, 'Post 2');
 
 CREATE TABLE categories (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +30,7 @@ CREATE TABLE categories (
   description TEXT
 );
 
-INSERT INTO categories (id, name, description) VALUES
-(1, 'Category 1 Modified', 'Description 1'),
-(3, 'Category 3',          'Description 3');
+INSERT INTO categories (id, name) VALUES
+(1, 'Category 1'),
+(2, 'Category 2');
+

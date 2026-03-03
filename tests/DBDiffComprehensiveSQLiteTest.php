@@ -22,8 +22,10 @@ class DBDiffComprehensiveSQLiteTest extends AbstractComprehensiveTest
             $this->markTestSkipped('pdo_sqlite extension not loaded — skipping SQLite comprehensive tests.');
         }
 
-        $this->db1 = '/tmp/dbdiff_comp_src.sqlite3';
-        $this->db2 = '/tmp/dbdiff_comp_tgt.sqlite3';
+        // Paths MUST be dot-free (no extension) — parseInput() splits on '.'
+        // so 'server1./tmp/file.db' would be mis-parsed as a 3-part table input.
+        $this->db1 = '/tmp/dbdiff_comp_src';
+        $this->db2 = '/tmp/dbdiff_comp_tgt';
 
         // Start with fresh files
         foreach ([$this->db1, $this->db2] as $file) {
