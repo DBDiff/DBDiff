@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.3', '8.4']
+        php-version: ['7.4', '8.3', '8.4', '8.5']
 
     steps:
     - uses: actions/checkout@v4
@@ -96,8 +96,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.3', '8.4']
-        postgres-version: ['16']
+        php-version: ['7.4', '8.3', '8.4', '8.5']
+        postgres-version: ['14', '15', '16', '17', '18']
 
     env:
       DB_HOST_POSTGRES: 127.0.0.1
