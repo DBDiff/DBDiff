@@ -87,6 +87,22 @@ class DsnParserTest extends TestCase
         $this->assertStringStartsWith('.', $r['path']);
     }
 
+    public function testSqliteBarePathGetsLeadingSlash(): void
+    {
+        // sqlite://rel/path has no leading / or . → resolveSqlitePath prepends /
+        $r = DsnParser::parse('sqlite://rel/path/db.sqlite');
+        $this->assertSame('sqlite', $r['driver']);
+        $this->assertSame('/rel/path/db.sqlite', $r['path']);
+    }
+
+    public function testSqliteSchemeWithoutDoubleSlash(): void
+    {
+        // sqlite:/var/db.sqlite — single slash, unusual but seen in some ORMs
+        $r = DsnParser::parse('sqlite:/var/db.sqlite');
+        $this->assertSame('sqlite', $r['driver']);
+        $this->assertSame('/var/db.sqlite', $r['path']);
+    }
+
     public function testSqliteEmptyArrayKeysPresent(): void
     {
         $r = DsnParser::parse('sqlite:///tmp/test.db');
