@@ -1,5 +1,6 @@
 <?php namespace DBDiff\Migration\Config;
 
+use DBDiff\Migration\Exceptions\ConfigException;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\Yaml\Exception\ParseException;
 
@@ -181,13 +182,13 @@ class MigrationConfig
     private function loadFile(string $path): void
     {
         if (!file_exists($path)) {
-            throw new \RuntimeException("Config file not found: {$path}");
+            throw new ConfigException("Config file not found: {$path}");
         }
 
         try {
             $this->raw = Yaml::parseFile($path) ?? [];
         } catch (ParseException $e) {
-            throw new \RuntimeException("Failed to parse config file '{$path}': " . $e->getMessage());
+            throw new ConfigException("Failed to parse config file '{$path}': " . $e->getMessage());
         }
 
         // Populate database section

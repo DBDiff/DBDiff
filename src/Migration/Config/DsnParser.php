@@ -25,7 +25,7 @@
  */
 class DsnParser
 {
-    private static array $SCHEME_MAP = [
+    private static array $schemeMap = [
         'mysql'      => 'mysql',
         'pgsql'      => 'pgsql',
         'postgres'   => 'pgsql',
@@ -51,25 +51,12 @@ class DsnParser
         // the empty authority (the third slash) is treated as a malformed URL.
         // Handle SQLite ourselves to avoid that bug entirely.
         if (preg_match('/^sqlite:(\/\/)?(.*)$/i', $url, $m)) {
-            $rawPath = $m[2];
-
-            // sqlite:///abs/path  → rawPath = /abs/path   (starts with /)
-            // sqlite://./rel/path → rawPath = ./rel/path  (starts with .)
-            // sqlite://rel/path   → rawPath = rel/path    (treat as absolute)
-            if (str_starts_with($rawPath, '/')) {
-                $filePath = $rawPath;
-            } elseif (str_starts_with($rawPath, '.')) {
-                $filePath = $rawPath;
-            } else {
-                $filePath = '/' . $rawPath;
-            }
-
             return [
                 'driver'    => 'sqlite',
                 'host'      => '',
                 'port'      => 0,
                 'name'      => '',
-                'path'      => $filePath,
+                'path'      => self::resolveSqlitePath($m[2]),
                 'user'      => '',
                 'password'  => '',
                 'sslmode'   => '',
@@ -85,13 +72,13 @@ class DsnParser
 
         $scheme = strtolower($parsed['scheme']);
 
-        if (!isset(self::$SCHEME_MAP[$scheme])) {
+        if (!isset(self::$schemeMap[$scheme])) {
             throw new \InvalidArgumentException(
-                "Unsupported scheme '{$scheme}'. Supported: " . implode(', ', array_keys(self::$SCHEME_MAP))
+                "Unsupported scheme '{$scheme}'. Supported: " . implode(', ', array_keys(self::$schemeMap))
             );
         }
 
-        $driver = self::$SCHEME_MAP[$scheme];
+        $driver = self::$schemeMap[$scheme];
 
         // ── MySQL / Postgres ──────────────────────────────────────────────────
         $host     = $parsed['host']     ?? 'localhost';
@@ -113,16 +100,7 @@ class DsnParser
         $pgbouncer = filter_var($query['pgbouncer'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         // Supabase heuristics — apply sensible defaults when we detect a Supabase host
-        if (self::isSupabaseHost($host)) {
-            if (empty($sslMode)) {
-                $sslMode = 'require';
-            }
-
-            // Port 6543 is the session-mode connection pooler (pgbouncer)
-            if ($port === 6543) {
-                $pgbouncer = true;
-            }
-        }
+        self::applySupabaseHeuristics($host, $port, $sslMode, $pgbouncer);
 
         return [
             'driver'    => $driver,
@@ -135,6 +113,49 @@ class DsnParser
             'sslmode'   => $sslMode,
             'pgbouncer' => $pgbouncer,
         ];
+    }
+
+    /**
+     * Resolve the file path from the path component of a sqlite:// URL.
+     *
+     * sqlite:///abs/path  → /abs/path   (absolute — starts with /)
+     * sqlite://./rel/path → ./rel/path  (relative — starts with .)
+     * sqlite://rel/path   → /rel/path   (treat as absolute for consistency)
+     */
+    private static function resolveSqlitePath(string $rawPath): string
+    {
+        if (str_starts_with($rawPath, '/') || str_starts_with($rawPath, '.')) {
+            return $rawPath;
+        }
+
+        return '/' . $rawPath;
+    }
+
+    /**
+     * Apply Supabase-specific connection defaults when a Supabase host is
+     * detected.  Mutates $sslMode and $pgbouncer in place.
+     *
+     * - Forces sslmode=require when not already set.
+     * - Enables pgbouncer mode when the pooler port (6543) is used.
+     */
+    private static function applySupabaseHeuristics(
+        string $host,
+        int    $port,
+        string &$sslMode,
+        bool   &$pgbouncer
+    ): void {
+        if (!self::isSupabaseHost($host)) {
+            return;
+        }
+
+        if (empty($sslMode)) {
+            $sslMode = 'require';
+        }
+
+        // Port 6543 is the session-mode connection pooler (pgbouncer)
+        if ($port === 6543) {
+            $pgbouncer = true;
+        }
     }
 
     /**

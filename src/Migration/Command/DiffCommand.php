@@ -72,92 +72,126 @@ class DiffCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $format      = strtolower($input->getOption('format'));
-        $description = $input->getOption('description') ?: '';
-        $version     = date('YmdHis');
+        try {
+            $params = $this->buildParams($input);
+            $this->resolveConnections($input, $params);
 
-        // ── Build params object ───────────────────────────────────────────────
-        $params             = new DefaultParams;
-        $params->format     = $format;
-        $params->type       = $input->getOption('type');
-        $params->include    = $this->normaliseInclude($input->getOption('include'));
-        $params->nocomments = (bool) $input->getOption('nocomments');
-        $params->debug      = (bool) $input->getOption('debug');
-        $params->template   = $input->getOption('template') ?? '';
-        $params->config     = $input->getOption('config');
+            if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
+                $this->mergeFileConfig($params);
+            }
 
-        // ── Resolve server connections ────────────────────────────────────────
+            $written = $this->runAndWrite($params, $input->getOption('output'), $output);
+
+            if (!$written) {
+                $output->writeln('<info>Databases are identical — no migration needed.</info>');
+            }
+
+            return Command::SUCCESS;
+        } catch (\Throwable $e) {
+            $output->writeln("<error>{$e->getMessage()}</error>");
+            return Command::FAILURE;
+        }
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Build a DefaultParams object from the raw console input options.
+     * No validation occurs here — that happens in resolveConnections().
+     */
+    private function buildParams(InputInterface $input): DefaultParams
+    {
+        $params              = new DefaultParams;
+        $params->format      = strtolower($input->getOption('format'));
+        $params->type        = $input->getOption('type');
+        $params->include     = $this->normaliseInclude($input->getOption('include'));
+        $params->nocomments  = (bool) $input->getOption('nocomments');
+        $params->debug       = (bool) $input->getOption('debug');
+        $params->template    = $input->getOption('template') ?? '';
+        $params->config      = $input->getOption('config');
+        $params->description = $input->getOption('description') ?: '';
+
+        return $params;
+    }
+
+    /**
+     * Populate $params with connection details from either URL-style or legacy
+     * CLI options.  Throws \InvalidArgumentException on invalid/missing input.
+     */
+    private function resolveConnections(InputInterface $input, DefaultParams $params): void
+    {
         $s1url = $input->getOption('server1-url');
         $s2url = $input->getOption('server2-url');
 
         if ($s1url || $s2url) {
-            // URL-style: parse DSNs and auto-build the input from db names
-            try {
-                [$params, $autoInput] = $this->applyServerUrls($params, $s1url, $s2url);
-            } catch (\InvalidArgumentException $e) {
-                $output->writeln("<error>{$e->getMessage()}</error>");
-                return Command::FAILURE;
-            }
-
-            // Use the explicit input arg if given (allows table-level diffs
-            // even when URL-style connection is used), otherwise use auto.
-            $rawInput = $input->getArgument('input');
+            $autoInput     = $this->applyServerUrls($params, $s1url, $s2url);
+            $rawInput      = $input->getArgument('input');
             $params->input = $rawInput ? $this->parseInput($rawInput) : $autoInput;
 
-        } else {
-            // Legacy style
-            $rawInput = $input->getArgument('input');
-            if (!$rawInput) {
-                $output->writeln('<error>Missing input argument. Provide server1.db:server2.db or use --server1-url / --server2-url.</error>');
-                return Command::FAILURE;
-            }
-
-            $params->input  = $this->parseInput($rawInput);
-            $params->driver = $input->getOption('supabase') ? 'pgsql' : $input->getOption('driver');
-
-            if ($input->getOption('supabase')) {
-                $params->sslmode = 'require';
-            }
-            if ($s1 = $input->getOption('server1')) {
-                $params->server1 = $this->parseServer($s1);
-            }
-            if ($s2 = $input->getOption('server2')) {
-                $params->server2 = $this->parseServer($s2);
-            }
+            return;
         }
 
-        // Allow a .dbdiff YAML to fill in missing values
-        if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
-            $this->mergeFileConfig($params);
+        // Legacy style
+        $rawInput = $input->getArgument('input');
+
+        if (!$rawInput) {
+            throw new \InvalidArgumentException(
+                'Missing input argument. Provide server1.db:server2.db or use --server1-url / --server2-url.'
+            );
         }
 
-        // ── Run diff ──────────────────────────────────────────────────────────
-        try {
-            $dbdiff = new DBDiff;
-            $result = $dbdiff->getDiffResult($params);
-        } catch (\Exception $e) {
-            $output->writeln("<error>Error: {$e->getMessage()}</error>");
-            return Command::FAILURE;
+        $params->input  = $this->parseInput($rawInput);
+        $params->driver = $input->getOption('supabase') ? 'pgsql' : $input->getOption('driver');
+
+        if ($input->getOption('supabase')) {
+            $params->sslmode = 'require';
         }
+        if ($s1 = $input->getOption('server1')) {
+            $params->server1 = $this->parseServer($s1);
+        }
+        if ($s2 = $input->getOption('server2')) {
+            $params->server2 = $this->parseServer($s2);
+        }
+    }
+
+    /**
+     * Run the diff, format the result, and persist output files.
+     *
+     * @return bool  true when output was written; false when databases are identical.
+     */
+    private function runAndWrite(DefaultParams $params, ?string $outputOpt, OutputInterface $output): bool
+    {
+        $dbdiff = new DBDiff;
+        $result = $dbdiff->getDiffResult($params);
 
         if ($result['empty']) {
-            $output->writeln('<info>Databases are identical — no migration needed.</info>');
-            return Command::SUCCESS;
+            return false;
         }
 
-        // ── Apply format ──────────────────────────────────────────────────────
-        try {
-            $formatter = FormatRegistry::get($format);
-        } catch (\InvalidArgumentException $e) {
-            $output->writeln("<error>{$e->getMessage()}</error>");
-            return Command::FAILURE;
-        }
+        $formatter = FormatRegistry::get($params->format);
+        $rendered  = $formatter->render(
+            $result['up'],
+            $result['down'],
+            $params->description ?? '',
+            date('YmdHis')
+        );
 
-        $rendered = $formatter->render($result['up'], $result['down'], $description, $version);
+        $this->writeRendered($rendered, $formatter, $params->description ?? '', $outputOpt, $output);
 
-        // ── Write output ──────────────────────────────────────────────────────
-        $outputOpt = $input->getOption('output');
+        return true;
+    }
 
+    /**
+     * Persist $rendered to disk — either a map of fileName → content
+     * (multi-file formats like Flyway) or a single string.
+     */
+    private function writeRendered(
+        array|string $rendered,
+        object       $formatter,
+        string       $description,
+        ?string      $outputOpt,
+        OutputInterface $output
+    ): void {
         if (is_array($rendered)) {
             $dir = $outputOpt ? rtrim($outputOpt, '/') : getcwd();
             foreach ($rendered as $fileName => $content) {
@@ -165,24 +199,22 @@ class DiffCommand extends Command
                 file_put_contents($path, $content);
                 $output->writeln("<info>Written:</info> {$path}");
             }
-        } else {
-            $ext  = $formatter->getExtension();
-            $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
-            $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
-            file_put_contents($path, $rendered);
-            $output->writeln("<info>Written:</info> {$path}");
+            return;
         }
 
-        return Command::SUCCESS;
+        $ext  = $formatter->getExtension();
+        $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
+        $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
+        file_put_contents($path, $rendered);
+        $output->writeln("<info>Written:</info> {$path}");
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     /**
-     * Parse --server1-url / --server2-url DSN values into params and auto-build
-     * the `input` structure from the database names in the URLs.
+     * Parse --server1-url / --server2-url DSN values into $params.
+     * Mutates $params with driver, server1, server2, and optionally sslmode.
      *
-     * @return array{0: DefaultParams, 1: array}  [$params, $autoInput]
+     * @return array  Auto-built `input` structure derived from the DB names in the URLs.
+     * @throws \InvalidArgumentException when either URL is missing.
      */
     private function applyServerUrls(DefaultParams $params, ?string $s1url, ?string $s2url): array
     {
@@ -204,16 +236,11 @@ class DiffCommand extends Command
             $params->sslmode = $p1['sslmode'];
         }
 
-        $db1 = $p1['db'];
-        $db2 = $p2['db'];
-
-        $autoInput = [
+        return [
             'kind'   => 'db',
-            'source' => ['server' => 'server1', 'db' => $db1],
-            'target' => ['server' => 'server2', 'db' => $db2],
+            'source' => ['server' => 'server1', 'db' => $p1['db']],
+            'target' => ['server' => 'server2', 'db' => $p2['db']],
         ];
-
-        return [$params, $autoInput];
     }
 
     private function parseInput(string $input): array

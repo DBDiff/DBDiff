@@ -18,6 +18,8 @@ use Illuminate\Database\Connection;
  */
 class MigrationHistory
 {
+    private const DATE_FORMAT = 'Y-m-d H:i:s';
+
     private Connection $connection;
     private string     $table;
 
@@ -155,7 +157,7 @@ class MigrationHistory
             'version'      => $file->version,
             'description'  => $file->description,
             'checksum'     => $file->getChecksum(),
-            'applied_on'   => date('Y-m-d H:i:s'),
+            'applied_on'   => date(self::DATE_FORMAT),
             'execution_ms' => $executionMs,
             'applied_by'   => get_current_user(),
             'success'      => true,
@@ -174,7 +176,7 @@ class MigrationHistory
             $this->connection->table($this->table)
                 ->where('version', $file->version)
                 ->update([
-                    'applied_on'   => date('Y-m-d H:i:s'),
+                    'applied_on'   => date(self::DATE_FORMAT),
                     'execution_ms' => $executionMs,
                     'success'      => false,
                 ]);
@@ -183,7 +185,7 @@ class MigrationHistory
                 'version'      => $file->version,
                 'description'  => $file->description,
                 'checksum'     => $file->getChecksum(),
-                'applied_on'   => date('Y-m-d H:i:s'),
+                'applied_on'   => date(self::DATE_FORMAT),
                 'execution_ms' => $executionMs,
                 'applied_by'   => get_current_user(),
                 'success'      => false,
@@ -220,7 +222,7 @@ class MigrationHistory
             'version'      => $version,
             'description'  => $description,
             'checksum'     => null,
-            'applied_on'   => date('Y-m-d H:i:s'),
+            'applied_on'   => date(self::DATE_FORMAT),
             'execution_ms' => 0,
             'applied_by'   => get_current_user(),
             'success'      => true,

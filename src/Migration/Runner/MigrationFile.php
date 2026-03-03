@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Migration\Runner;
 
+use DBDiff\Migration\Exceptions\MigrationException;
+
 /**
  * Represents a single migration unit on disk — a matching pair of:
  *   {version}_{description}.up.sql    (required)
@@ -45,7 +47,7 @@ class MigrationFile
     public function getUpSql(): string
     {
         if (!file_exists($this->upPath)) {
-            throw new \RuntimeException("UP file not found: {$this->upPath}");
+            throw new MigrationException("UP file not found: {$this->upPath}");
         }
 
         return file_get_contents($this->upPath);
@@ -122,15 +124,13 @@ class MigrationFile
         $upPath      = "{$dir}/{$baseName}.up.sql";
         $downPath    = "{$dir}/{$baseName}.down.sql";
 
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true)) {
-                throw new \RuntimeException("Cannot create migrations directory: {$dir}");
-            }
+        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+            throw new MigrationException("Cannot create migrations directory: {$dir}");
         }
 
         foreach ([$upPath, $downPath] as $path) {
             if (file_exists($path)) {
-                throw new \RuntimeException("Migration file already exists: {$path}");
+                throw new MigrationException("Migration file already exists: {$path}");
             }
         }
 
