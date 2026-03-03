@@ -26,6 +26,14 @@ use Symfony\Component\Yaml\Exception\ParseException;
  *   out_of_order: false                 # allow applying older versions after newer
  * ─────────────────────────────
  *
+ * You may also supply a full DSN URL instead of individual fields:
+ *   database:
+ *     url: postgres://user:pass@db.xyz.supabase.co:5432/postgres
+ *
+ * For Supabase, use either the direct connection URL or the session-mode
+ * pooler URL (port 6543).  SSL is enabled automatically when a Supabase host
+ * is detected.
+ *
  * For SQLite, omit host/port/user/password and use `path` instead of `name`:
  *   database:
  *     driver: sqlite
@@ -46,6 +54,13 @@ class MigrationConfig
     public string $password      = '';
     public string $sslMode       = '';
 
+    /**
+     * Whether to configure the connection for pgbouncer / connection-pooler mode.
+     * Automatically set to true when a Supabase pooler URL (port 6543) is used.
+     * In pooler mode, server-side prepared statements are disabled.
+     */
+    public bool   $pgbouncer     = false;
+
     // ── Migrations ───────────────────────────────────────────────────────────
 
     public string $migrationsDir   = './migrations';
@@ -59,9 +74,10 @@ class MigrationConfig
      *                                 Pass null to auto-detect dbdiff.yml in cwd.
      * @param array       $overrides   Key-value pairs that override file settings.
      *                                 Keys mirror the YAML structure flattened:
+     *                                 'db_url'          — full DSN URL (highest precedence)
      *                                 'driver', 'host', 'port', 'name', 'path',
-     *                                 'user', 'password', 'migrations_dir',
-     *                                 'history_table', 'out_of_order'
+     *                                 'user', 'password', 'sslmode', 'pgbouncer',
+     *                                 'migrations_dir', 'history_table', 'out_of_order'
      */
     public function __construct(?string $configFile = null, array $overrides = [])
     {
@@ -104,6 +120,15 @@ class MigrationConfig
                 ];
                 if ($this->sslMode) {
                     $cfg['sslmode'] = $this->sslMode;
+                }
+                // pgbouncer (transaction-mode pooler) requires server-side
+                // prepared statements to be disabled.  Session-mode pooler
+                // (Supabase port 6543) works fine without this, but it's
+                // harmless to set in either case.
+                if ($this->pgbouncer) {
+                    $cfg['options'] = [
+                        \PDO::ATTR_EMULATE_PREPARES => true,
+                    ];
                 }
                 return $cfg;
 
@@ -167,14 +192,22 @@ class MigrationConfig
 
         // Populate database section
         $db = $this->raw['database'] ?? [];
-        $this->driver   = $db['driver']   ?? $this->driver;
-        $this->host     = $db['host']     ?? $this->host;
-        $this->port     = (int) ($db['port'] ?? $this->port);
-        $this->dbName   = $db['name']     ?? $this->dbName;
-        $this->dbPath   = $db['path']     ?? $this->dbPath;
-        $this->user     = $db['user']     ?? $this->user;
-        $this->password = $db['password'] ?? $this->password;
-        $this->sslMode  = $db['sslmode']  ?? $this->sslMode;
+
+        // A `url` key takes precedence over individual fields
+        if (!empty($db['url'])) {
+            $this->applyDsn($db['url']);
+        }
+
+        // Individual fields override URL-parsed values if both are present
+        $this->driver     = $db['driver']   ?? $this->driver;
+        $this->host       = $db['host']     ?? $this->host;
+        $this->port       = (int) ($db['port'] ?? $this->port);
+        $this->dbName     = $db['name']     ?? $this->dbName;
+        $this->dbPath     = $db['path']     ?? $this->dbPath;
+        $this->user       = $db['user']     ?? $this->user;
+        $this->password   = $db['password'] ?? $this->password;
+        $this->sslMode    = $db['sslmode']  ?? $this->sslMode;
+        $this->pgbouncer  = (bool) ($db['pgbouncer'] ?? $this->pgbouncer);
 
         // Populate migrations section
         $m = $this->raw['migrations'] ?? [];
@@ -183,8 +216,38 @@ class MigrationConfig
         $this->outOfOrder    = (bool) ($m['out_of_order'] ?? $this->outOfOrder);
     }
 
+    /**
+     * Parse a DSN URL and populate connection properties from it.
+     * Calls DsnParser::parse() internally — see that class for supported URL formats.
+     */
+    private function applyDsn(string $url): void
+    {
+        $parsed         = DsnParser::parse($url);
+        $this->driver   = $parsed['driver'];
+        $this->host     = $parsed['host'];
+        $this->port     = $parsed['port'];
+        $this->dbName   = $parsed['name'];
+        $this->dbPath   = $parsed['path'];
+        $this->user     = $parsed['user'];
+        $this->password = $parsed['password'];
+
+        if (!empty($parsed['sslmode'])) {
+            $this->sslMode = $parsed['sslmode'];
+        }
+
+        if ($parsed['pgbouncer']) {
+            $this->pgbouncer = true;
+        }
+    }
+
     private function applyOverrides(array $overrides): void
     {
+        // A db_url in overrides (e.g. from --db-url CLI flag) wins over everything
+        if (!empty($overrides['db_url'])) {
+            $this->applyDsn($overrides['db_url']);
+            unset($overrides['db_url']);
+        }
+
         $map = [
             'driver'          => 'driver',
             'host'            => 'host',
@@ -194,6 +257,7 @@ class MigrationConfig
             'user'            => 'user',
             'password'        => 'password',
             'sslmode'         => 'sslMode',
+            'pgbouncer'       => 'pgbouncer',
             'migrations_dir'  => 'migrationsDir',
             'history_table'   => 'historyTable',
             'out_of_order'    => 'outOfOrder',

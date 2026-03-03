@@ -30,6 +30,7 @@ class MigrationNewCommand extends Command
             ->addArgument('name', InputArgument::REQUIRED, 'Short description for the migration (e.g. "create_users_table")')
             ->addOption('migrations-dir', null, InputOption::VALUE_REQUIRED, 'Override the migrations directory')
             ->addOption('config',         null, InputOption::VALUE_REQUIRED, 'Path to dbdiff.yml');
+        $this->addDbUrlOption();
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

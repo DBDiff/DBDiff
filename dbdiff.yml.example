@@ -46,3 +46,36 @@ migrations:
 # include: up         # up | down | both
 # nocomments: false
 # format: native      # native | flyway | liquibase-xml | liquibase-yaml | laravel
+
+# ── Supabase (Postgres) ───────────────────────────────────────────────────────
+# Option A — paste a connection string directly (simplest):
+#
+# database:
+#   url: postgres://postgres.PROJREF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
+#
+# The `url` key overrides individual host/user/password/port values.
+# SSL is automatically enabled when a Supabase hostname is detected.
+#
+# Option B — session-mode connection pooler (port 6543, pgbouncer):
+#
+# database:
+#   url: postgres://postgres.PROJREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+#
+# pgbouncer mode is auto-enabled on port 6543 (sets PDO emulate_prepares = true).
+#
+# Option C — explicit fields (equivalent to Option A without URL parsing):
+#
+# database:
+#   driver: pgsql
+#   host: db.PROJREF.supabase.co
+#   port: 5432
+#   name: postgres
+#   user: postgres
+#   password: your-db-password
+#   sslmode: require
+#
+# Diff against two Supabase projects on the command line (no config file needed):
+#
+#   dbdiff diff \
+#     --server1-url postgres://postgres.ABC:PASS@aws-0-us-east-1.pooler.supabase.com:5432/postgres \
+#     --server2-url postgres://postgres.XYZ:PASS@aws-0-us-east-1.pooler.supabase.com:5432/staging
