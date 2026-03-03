@@ -232,7 +232,7 @@ class PostgresAdapter implements DBAdapterInterface {
         } elseif (str_starts_with($dataType, 'timestamp')) {
             $p      = $col['datetime_precision'];
             $base   = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
-            $result = ($p && $p > 0) ? "$base($p)" : $base;
+            $result = ($p > 0) ? "$base($p)" : $base;
         }
 
         return $result;
