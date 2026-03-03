@@ -21,6 +21,17 @@ class SQLiteDialect implements SQLDialectInterface {
         return "DROP INDEX $k;";
     }
 
+    public function addColumn(string $table, string $colDef): string {
+        $t = $this->quote($table);
+        return "ALTER TABLE $t ADD COLUMN $colDef;";
+    }
+
+    public function dropColumn(string $table, string $col): string {
+        $t = $this->quote($table);
+        $c = $this->quote($col);
+        return "ALTER TABLE $t DROP COLUMN $c;";
+    }
+
     public function changeColumn(string $table, string $col, string $newDef): string {
         // SQLite supports ALTER TABLE ... RENAME COLUMN (v3.25+) and
         // ALTER TABLE ... DROP COLUMN (v3.35+), but not type changes in a

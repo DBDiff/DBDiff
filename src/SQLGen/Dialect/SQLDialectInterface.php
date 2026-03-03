@@ -24,6 +24,26 @@ interface SQLDialectInterface {
     public function dropIndex(string $table, string $key): string;
 
     /**
+     * ADD COLUMN statement.
+     * $colDef is the full column DDL fragment (already quoted), e.g.
+     *   MySQL:         `col` varchar(255) NOT NULL
+     *   Postgres/SQLite: "col" varchar(255) NOT NULL
+     *
+     * MySQL omits the COLUMN keyword for backwards-compat with existing baselines.
+     * Postgres and SQLite always include COLUMN.
+     */
+    public function addColumn(string $table, string $colDef): string;
+
+    /**
+     * DROP COLUMN statement.
+     * $col is the bare (unquoted) column name.
+     *
+     * MySQL omits the COLUMN keyword for backwards-compat with existing baselines.
+     * Postgres and SQLite always include COLUMN.
+     */
+    public function dropColumn(string $table, string $col): string;
+
+    /**
      * ALTER COLUMN / CHANGE COLUMN.
      * $col is the bare column name.
      * $newDef is the full column DDL fragment produced by the adapter,

@@ -21,6 +21,22 @@ class MySQLDialect implements SQLDialectInterface {
         return "ALTER TABLE $t DROP INDEX $k;";
     }
 
+    /**
+     * MySQL uses ADD without the COLUMN keyword for backwards-compat.
+     * Both forms are valid MySQL SQL; the shorter form matches pre-existing
+     * migration baselines and expected test files.
+     */
+    public function addColumn(string $table, string $colDef): string {
+        $t = $this->quote($table);
+        return "ALTER TABLE $t ADD $colDef;";
+    }
+
+    public function dropColumn(string $table, string $col): string {
+        $t = $this->quote($table);
+        $c = $this->quote($col);
+        return "ALTER TABLE $t DROP $c;";
+    }
+
     public function changeColumn(string $table, string $col, string $newDef): string {
         $t = $this->quote($table);
         $c = $this->quote($col);

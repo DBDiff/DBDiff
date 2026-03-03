@@ -94,6 +94,9 @@ fi
 if [ -n "$POSTGRES_HOST" ]; then
     echo "🐘 PostgreSQL host: $POSTGRES_HOST"
     export DB_HOST_POSTGRES="$POSTGRES_HOST"
+    # Limit the run to the Postgres e2e test so this mode works in CI
+    # environments that have no MySQL service available.
+    SPECIFIC_TEST="End2EndPostgresTest"
 fi
 
 if [ "$SQLITE_ONLY" = "true" ]; then

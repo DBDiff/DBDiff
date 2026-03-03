@@ -7,6 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
+  # ── MySQL matrix ────────────────────────────────────────────────────────────
   test:
     name: PHP ${{ matrix.php-version }} / MySQL ${{ matrix.mysql-version }}
     runs-on: ubuntu-latest
@@ -47,7 +48,7 @@ jobs:
       uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
       with:
         php-version: ${{ matrix.php-version }}
-        extensions: pdo, pdo_mysql, mysqli, json
+        extensions: pdo, pdo_mysql, pdo_sqlite, mysqli, json
         coverage: none
 
     - name: Install dependencies
@@ -55,3 +56,86 @@ jobs:
 
     - name: Run comprehensive tests
       run: ./scripts/run-tests.sh
+      # End2EndSQLiteTest  → skips when baseline not yet committed (own job below)
+      # End2EndPostgresTest → skips because DB_HOST_POSTGRES is unset
+
+  # ── SQLite standalone (no DB service needed) ─────────────────────────────────
+  test-sqlite:
+    name: PHP ${{ matrix.php-version }} / SQLite e2e
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.3', '8.4']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_sqlite, pdo_mysql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Record SQLite baseline
+      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --sqlite
+
+    - name: Verify SQLite baseline determinism
+      run: ./scripts/run-tests.sh --sqlite
+
+  # ── PostgreSQL matrix ────────────────────────────────────────────────────────
+  test-postgres:
+    name: PHP ${{ matrix.php-version }} / PostgreSQL ${{ matrix.postgres-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.3', '8.4']
+        postgres-version: ['16']
+
+    env:
+      DB_HOST_POSTGRES: 127.0.0.1
+      DB_PORT_POSTGRES: 5432
+      DB_ROOT_PASSWORD: rootpass
+      DB_USER: dbdiff
+      DB_PASSWORD: dbdiff
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: dbdiff
+          POSTGRES_DB: diff1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dbdiff"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_pgsql, pdo_mysql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Record PostgreSQL baseline
+      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --postgres 127.0.0.1
+
+    - name: Verify PostgreSQL baseline determinism
+      run: ./scripts/run-tests.sh --postgres 127.0.0.1

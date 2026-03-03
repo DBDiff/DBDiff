@@ -21,6 +21,17 @@ class PostgresDialect implements SQLDialectInterface {
         return "DROP INDEX $k;";
     }
 
+    public function addColumn(string $table, string $colDef): string {
+        $t = $this->quote($table);
+        return "ALTER TABLE $t ADD COLUMN $colDef;";
+    }
+
+    public function dropColumn(string $table, string $col): string {
+        $t = $this->quote($table);
+        $c = $this->quote($col);
+        return "ALTER TABLE $t DROP COLUMN $c;";
+    }
+
     public function changeColumn(string $table, string $col, string $newDef): string {
         $t = $this->quote($table);
         $c = $this->quote($col);
