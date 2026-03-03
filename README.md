@@ -33,12 +33,11 @@
 ## Pre-requisites
 1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
 2. You will need to have git installed
-3. You will need to have PHP installed (version 7.4.x, 8.3.x, 8.4.x, or 8.5.x)
+3. You will need to have PHP installed (version 8.3.x, 8.4.x, or 8.5.x)
 4. You will need to have Composer installed
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
 
-* PHP 7.4.x
 * PHP 8.3.x
 * PHP 8.4.x
 * PHP 8.5.x
@@ -132,7 +131,7 @@ Please ensure you have one of the following installed locally, as well as a down
 
 _Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
 
-### Docker Standalone DBDiff CLI with PHP 7.3
+### Docker Standalone DBDiff CLI
 
 ```bash
 # Build DBDiff CLI Image

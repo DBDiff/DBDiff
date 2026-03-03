@@ -77,7 +77,6 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 ## Available Configurations
 
 ### PHP Versions
-- PHP 7.4
 - PHP 8.3
 - PHP 8.4
 - PHP 8.5
@@ -94,9 +93,6 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 ## Services
 
 ### CLI Services (for running DBDiff)
-- `cli-php74-mysql80` - PHP 7.4 with MySQL 8.0
-- `cli-php74-mysql84` - PHP 7.4 with MySQL 8.4
-- `cli-php74-mysql93` - PHP 7.4 with MySQL 9.3
 - `cli-php83-mysql80` - PHP 8.3 with MySQL 8.0
 - `cli-php83-mysql84` - PHP 8.3 with MySQL 8.4
 - `cli-php83-mysql93` - PHP 8.3 with MySQL 9.3
@@ -133,9 +129,6 @@ docker-compose up -d db-mysql93 phpmyadmin-mysql93
 
 ### Run DBDiff with specific PHP/MySQL combination
 ```bash
-# PHP 7.4 with MySQL 8.0
-docker-compose run --rm cli-php74-mysql80 server1.php server2.php database1 database2
-
 # PHP 8.3 with MySQL 8.0
 docker-compose run --rm cli-php83-mysql80 server1.php server2.php database1 database2
 
@@ -160,9 +153,6 @@ docker-compose run --rm cli-php83-postgres16 \
 
 ### Run PHPUnit tests with specific combination
 ```bash
-# Run tests with PHP 7.4 and MySQL 8.0
-docker-compose run --rm cli-php74-mysql80 phpunit
-
 # Run tests with PHP 8.3 and MySQL 8.0
 docker-compose run --rm cli-php83-mysql80 phpunit
 
@@ -293,7 +283,7 @@ Default MySQL credentials (configurable via `.env`):
 The project uses GitHub Actions to ensure full compatibility across all supported versions on every pull request.
 
 **Matrix Grid:**
-- **PHP**: 7.4, 8.3, 8.4, 8.5
+- **PHP**: 8.3, 8.4, 8.5
 - **MySQL**: 8.0, 8.4, 9.3, 9.6
 - **PostgreSQL**: 16
 - **SQLite**: bundled (runs in every MySQL CLI container via `pdo_sqlite`)
