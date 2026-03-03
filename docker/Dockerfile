@@ -1,5 +1,5 @@
 ARG PHP_VERSION=8.3
-FROM php:${PHP_VERSION}-cli
+FROM docker.io/library/php:${PHP_VERSION}-cli
 
 # Set working directory
 WORKDIR /usr/src/dbdiff

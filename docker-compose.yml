@@ -261,7 +261,7 @@ services:
 
   # Database services
   db-mysql80:
-    image: mysql:${MYSQL_VERSION_80}
+    image: docker.io/library/mysql:${MYSQL_VERSION_80}
     restart: always
     ports:
       - '${DB_PORT_MYSQL80}:3306'
@@ -279,7 +279,7 @@ services:
       start_period: 40s
 
   db-mysql84:
-    image: mysql:${MYSQL_VERSION_84}
+    image: docker.io/library/mysql:${MYSQL_VERSION_84}
     restart: always
     ports:
       - '${DB_PORT_MYSQL84}:3306'
@@ -296,7 +296,7 @@ services:
       start_period: 40s
 
   db-mysql93:
-    image: mysql:${MYSQL_VERSION_93}
+    image: docker.io/library/mysql:${MYSQL_VERSION_93}
     restart: always
     ports:
       - '${DB_PORT_MYSQL93}:3306'
@@ -313,7 +313,7 @@ services:
       start_period: 40s
 
   db-mysql96:
-    image: mysql:${MYSQL_VERSION_96}
+    image: docker.io/library/mysql:${MYSQL_VERSION_96}
     restart: always
     ports:
       - '${DB_PORT_MYSQL96}:3306'
@@ -334,7 +334,7 @@ services:
     depends_on:
       db-mysql80:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL80}:80
@@ -346,7 +346,7 @@ services:
     depends_on:
       db-mysql84:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL84}:80
@@ -358,7 +358,7 @@ services:
     depends_on:
       db-mysql93:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL93}:80
@@ -370,7 +370,7 @@ services:
     depends_on:
       db-mysql96:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL96}:80
@@ -413,7 +413,7 @@ services:
 
   # PostgreSQL database service
   db-postgres16:
-    image: postgres:${POSTGRES_VERSION_16}
+    image: docker.io/library/postgres:${POSTGRES_VERSION_16}
     restart: always
     ports:
       - '${DB_PORT_POSTGRES16}:5432'

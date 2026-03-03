@@ -22,7 +22,10 @@ class ParamsFactory {
 
         $params = self::merge($params, $paramsCLI);
         
-        if (empty($params->server1)) {
+        // SQLite is file-based: the DB path is embedded in the input argument,
+        // so no --server1 connection block is required or meaningful.
+        $driver = $params->driver ?? 'mysql';
+        if ($driver !== 'sqlite' && empty($params->server1)) {
             throw new CLIException("A server is required");
         }
         return $params;
