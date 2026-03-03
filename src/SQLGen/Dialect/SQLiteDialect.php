@@ -1,49 +1,23 @@
 <?php namespace DBDiff\SQLGen\Dialect;
 
-
-class SQLiteDialect implements SQLDialectInterface {
-
-    public function quote(string $name): string {
-        return '"' . str_replace('"', '""', $name) . '"';
-    }
+/**
+ * SQLite dialect.
+ *
+ * Identifier quoting, ANSI ADD/DROP COLUMN syntax, and schema-level
+ * DROP INDEX are all inherited from AbstractAnsiDialect.
+ *
+ * SQLite supports ALTER TABLE … DROP COLUMN only from v3.35+ and does
+ * not support type changes at all, so the base-class DROP + ADD
+ * approach is correct.  The warning comment is overridden here to
+ * surface that SQLite-specific constraint to the DBA.
+ */
+class SQLiteDialect extends AbstractAnsiDialect {
 
     public function getDriver(): string {
         return 'sqlite';
     }
 
-    public function isMySQLOnly(): bool {
-        return false;
-    }
-
-    public function dropIndex(string $table, string $key): string {
-        // SQLite: DROP INDEX "name" (no ALTER TABLE qualifier)
-        $k = $this->quote($key);
-        return "DROP INDEX $k;";
-    }
-
-    public function addColumn(string $table, string $colDef): string {
-        $t = $this->quote($table);
-        return "ALTER TABLE $t ADD COLUMN $colDef;";
-    }
-
-    public function dropColumn(string $table, string $col): string {
-        $t = $this->quote($table);
-        $c = $this->quote($col);
-        return "ALTER TABLE $t DROP COLUMN $c;";
-    }
-
-    public function changeColumn(string $table, string $col, string $newDef): string {
-        // SQLite supports ALTER TABLE ... RENAME COLUMN (v3.25+) and
-        // ALTER TABLE ... DROP COLUMN (v3.35+), but not type changes in a
-        // single statement.  The safest universal approach is recreate the
-        // column with a DROP + ADD pair and warn about potential data loss.
-        $t = $this->quote($table);
-        $c = $this->quote($col);
-
-        $lines   = [];
-        $lines[] = "-- WARNING: column \"$col\" changed. SQLite requires DROP + ADD (data may be lost).";
-        $lines[] = "ALTER TABLE $t DROP COLUMN $c;";
-        $lines[] = "ALTER TABLE $t ADD COLUMN $newDef;";
-        return implode("\n", $lines);
+    protected function changeColumnWarning(string $col): string {
+        return "-- WARNING: column \"$col\" changed. SQLite requires DROP + ADD (data may be lost).";
     }
 }

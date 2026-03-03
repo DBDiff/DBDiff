@@ -33,7 +33,7 @@
 ## Pre-requisites
 1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
 2. You will need to have git installed
-3. You will need to have PHP installed (version 7.4.x, 8.3.x, or 8.4.x)
+3. You will need to have PHP installed (version 7.4.x, 8.3.x, 8.4.x, or 8.5.x)
 4. You will need to have Composer installed
 
 _Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
@@ -41,6 +41,7 @@ _Note: Make a note of where `composer.phar` is installed as we will need it late
 * PHP 7.4.x
 * PHP 8.3.x
 * PHP 8.4.x
+* PHP 8.5.x
 
 ## Supported Databases
 
@@ -53,7 +54,11 @@ _Other versions may work but are not actively supported. Feel free to contribute
 * MySQL 9.6.x (Innovation)
 
 ### PostgreSQL
-* PostgreSQL 16.x
+* PostgreSQL 14.x
+* PostgreSQL 15.x
+* PostgreSQL 16.x (LTS)
+* PostgreSQL 17.x
+* PostgreSQL 18.x
 
 Use `--driver=pgsql` (or pass `driver: pgsql` in your `.dbdiff` config file).
 
@@ -152,9 +157,11 @@ You can easily test DBDiff against any combination of PHP and MySQL using the pr
 # Run tests for a specific combination
 ./start.sh 8.3 8.0
 
-# Run all 9 version combinations in parallel (3x speedup)
+# Run all 16 version combinations in parallel (4x speedup)
 ./start.sh all all --parallel
 ```
+
+The CI matrix mirrors this locally: **4 PHP versions × 4 MySQL versions = 16 jobs**, plus dedicated jobs for SQLite (4 PHP versions) and PostgreSQL (4 PHP × 5 Postgres versions = 20 jobs).
 
 See the [DOCKER.md](DOCKER.md) file for extensive documentation on the Dockerized test runner, including flags for **fast restarts**, **recording fixtures**, and **automated CI**.
 
