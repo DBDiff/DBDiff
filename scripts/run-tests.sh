@@ -48,6 +48,10 @@ while [[ $# -gt 0 ]]; do
                 shift
             fi
             ;;
+        --unit)
+            TESTSUITE="Unit"
+            shift
+            ;;
         --sqlite)
             SQLITE_ONLY="true"
             shift
@@ -60,6 +64,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --record                Run in record mode to capture expected outputs"
             echo "  --specific <test>       Run specific test method"
+            echo "  --unit                  Run only unit tests (no database required)"
             echo "  --mysql <version>       Test with specific MySQL version (8.0, 8.4, 9.3)"
             echo "  --postgres [host]       Enable PostgreSQL tests (end-to-end + comprehensive)"
             echo "                          Available hosts: db-postgres14, db-postgres15,"
@@ -68,6 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples:"
             echo "  $0                                       # Run all tests (MySQL)"
+            echo "  $0 --unit                               # Run unit tests only (no DB needed)"
             echo "  $0 --record                             # Record expected outputs"
             echo "  $0 --specific testSchemaOnlyDiff        # Run specific test"
             echo "  $0 --mysql 8.4                          # Test with MySQL 8.4"
@@ -103,6 +109,10 @@ fi
 if [ "$SQLITE_ONLY" = "true" ]; then
     echo "🗂️  Running SQLite tests (end-to-end + comprehensive)"
     TESTSUITE="SQLite"
+fi
+
+if [ "$TESTSUITE" = "Unit" ]; then
+    echo "🔬 Running unit tests (no database required)"
 fi
 
 if [ -n "$SPECIFIC_TEST" ]; then
