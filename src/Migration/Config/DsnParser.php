@@ -46,29 +46,16 @@ class DsnParser
         // strip a leading "env(" wrapper if someone passes the literal config value.
         $url = trim($url);
 
-        $parsed = parse_url($url);
+        // ── SQLite early-exit ─────────────────────────────────────────────────
+        // PHP's parse_url() returns false for sqlite:///absolute/path because
+        // the empty authority (the third slash) is treated as a malformed URL.
+        // Handle SQLite ourselves to avoid that bug entirely.
+        if (preg_match('/^sqlite:(\/\/)?(.*)$/i', $url, $m)) {
+            $rawPath = $m[2];
 
-        if ($parsed === false || empty($parsed['scheme'])) {
-            throw new \InvalidArgumentException("Cannot parse database URL: {$url}");
-        }
-
-        $scheme = strtolower($parsed['scheme']);
-
-        if (!isset(self::$SCHEME_MAP[$scheme])) {
-            throw new \InvalidArgumentException(
-                "Unsupported scheme '{$scheme}'. Supported: " . implode(', ', array_keys(self::$SCHEME_MAP))
-            );
-        }
-
-        $driver = self::$SCHEME_MAP[$scheme];
-
-        // ── SQLite ────────────────────────────────────────────────────────────
-        if ($driver === 'sqlite') {
-            // parse_url gives us 'path' for sqlite:///abs/path or sqlite://./rel
-            $rawPath = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
-
-            // sqlite:///absolute  → /absolute
-            // sqlite://./relative → ./relative
+            // sqlite:///abs/path  → rawPath = /abs/path   (starts with /)
+            // sqlite://./rel/path → rawPath = ./rel/path  (starts with .)
+            // sqlite://rel/path   → rawPath = rel/path    (treat as absolute)
             if (str_starts_with($rawPath, '/')) {
                 $filePath = $rawPath;
             } elseif (str_starts_with($rawPath, '.')) {
@@ -89,6 +76,22 @@ class DsnParser
                 'pgbouncer' => false,
             ];
         }
+
+        $parsed = parse_url($url);
+
+        if ($parsed === false || empty($parsed['scheme'])) {
+            throw new \InvalidArgumentException("Cannot parse database URL: {$url}");
+        }
+
+        $scheme = strtolower($parsed['scheme']);
+
+        if (!isset(self::$SCHEME_MAP[$scheme])) {
+            throw new \InvalidArgumentException(
+                "Unsupported scheme '{$scheme}'. Supported: " . implode(', ', array_keys(self::$SCHEME_MAP))
+            );
+        }
+
+        $driver = self::$SCHEME_MAP[$scheme];
 
         // ── MySQL / Postgres ──────────────────────────────────────────────────
         $host     = $parsed['host']     ?? 'localhost';
