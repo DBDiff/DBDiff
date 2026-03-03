@@ -20,6 +20,18 @@ if [ -f .env ]; then
     done < .env
 fi
 
+# Compose command: prefer COMPOSE_CMD env var, then docker-compose, then podman-compose
+if [ -z "${COMPOSE_CMD:-}" ]; then
+    if command -v docker-compose &>/dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif command -v podman-compose &>/dev/null; then
+        COMPOSE_CMD="podman-compose"
+    else
+        echo "❌ Neither docker-compose nor podman-compose found. Please install one."
+        exit 1
+    fi
+fi
+
 # Set defaults for environment variables if not set (or if .env is missing/partial)
 # PHP Versions
 export PHP_VERSION_74=${PHP_VERSION_74:-7.4}
@@ -60,7 +72,7 @@ cleanup_on_exit() {
     if [ "$NO_TEARDOWN" = "true" ]; then
         echo ""
         echo "🔄 No teardown mode - containers and resources left running"
-        echo "💡 Use 'docker-compose down' or run stop.sh to cleanup manually"
+        echo "💡 Use 'docker-compose down / podman-compose down' or run stop.sh to cleanup manually"
         return 0
     fi
     
@@ -82,7 +94,7 @@ cleanup_on_interrupt() {
     
     if [ "$NO_TEARDOWN" = "true" ]; then
         echo "🔄 No teardown mode - keeping containers and resources running"
-        echo "💡 Use 'docker-compose down' or run stop.sh to cleanup manually"
+        echo "💡 Use 'docker-compose down / podman-compose down' or run stop.sh to cleanup manually"
     else
         echo "🧹 Force cleaning up..."
         cleanup_docker
@@ -253,7 +265,7 @@ cleanup_docker() {
     
     # Stop and remove containers
     echo "Stopping containers..."
-    if docker-compose down --remove-orphans --volumes 2>/dev/null; then
+    if $COMPOSE_CMD down --remove-orphans --volumes 2>/dev/null; then
         echo "✅ Containers stopped"
     else
         echo "⚠️  Failed to stop containers"
@@ -310,7 +322,7 @@ show_docker_disk_usage() {
     echo ""
 }
 
-# Function to run docker-compose with timeout and progress monitoring
+# Function to run $COMPOSE_CMD with timeout and progress monitoring
 run_docker_compose_with_timeout() {
     local timeout=$1
     local description=$2
@@ -330,7 +342,7 @@ run_docker_compose_with_timeout() {
     # Start the command in background and capture its PID
     (
         trap 'echo "Subprocess interrupted"; exit 130' INT TERM
-        docker-compose "${cmd[@]}" 2>/dev/null
+        $COMPOSE_CMD "${cmd[@]}" 2>/dev/null
         echo $? > "$temp_file"
     ) &
     local pid=$!
@@ -397,15 +409,15 @@ show_progress() {
     done
 }
 
-# Function to get appropriate docker-compose run flags
+# Function to get appropriate $COMPOSE_CMD run flags
 get_docker_run_flags() {
     local flags="--rm"
     
     # Always use non-TTY mode for better script compatibility
-    # Check which flag is supported by testing docker-compose version
-    if docker-compose run --help | grep -q "\-\-no-TTY"; then
+    # Check which flag is supported by testing $COMPOSE_CMD version
+    if $COMPOSE_CMD run --help | grep -q "\-\-no-TTY"; then
         flags="$flags --no-TTY"
-    elif docker-compose run --help | grep -q "\-T"; then
+    elif $COMPOSE_CMD run --help | grep -q "\-T"; then
         flags="$flags -T"
     fi
     
@@ -438,12 +450,12 @@ test_combination() {
     local interval=5
     
     while [ $elapsed -lt $timeout ]; do
-        if docker-compose ps --format json $db_service | grep -q '"Health":"healthy"'; then
+        if $COMPOSE_CMD ps --format json $db_service | grep -q '"Health":"healthy"'; then
             echo "✅ Database $db_service is healthy!"
             break
-        elif docker-compose ps --format json $db_service | grep -q '"Health":"unhealthy"'; then
+        elif $COMPOSE_CMD ps --format json $db_service | grep -q '"Health":"unhealthy"'; then
             echo "❌ Database $db_service is unhealthy. Checking logs..."
-            docker-compose logs --tail=20 $db_service
+            $COMPOSE_CMD logs --tail=20 $db_service
             return 1
         fi
         
@@ -452,7 +464,7 @@ test_combination() {
     done
      if [ $elapsed -ge $timeout ]; then
         echo "❌ Database $db_service failed to become healthy within ${timeout}s"
-        docker-compose logs --tail=30 $db_service
+        $COMPOSE_CMD logs --tail=30 $db_service
         return 1
     fi
 
@@ -516,7 +528,7 @@ test_combination() {
         
         # Show container logs for debugging
         echo "--- Database Logs ---"
-        docker-compose logs --tail=20 $db_service
+        $COMPOSE_CMD logs --tail=20 $db_service
         echo "--- End Logs ---"
         
         return 1
@@ -531,7 +543,7 @@ test_combination() {
         
         if is_docker_available; then
             # Stop all containers
-            docker-compose down --remove-orphans --volumes >/dev/null 2>&1
+            $COMPOSE_CMD down --remove-orphans --volumes >/dev/null 2>&1
             
             # Remove project containers
             docker container ls -a --filter "name=dbdiff" --format "{{.ID}}" | xargs -r docker rm -f >/dev/null 2>&1
@@ -577,14 +589,14 @@ force_cleanup_before_start() {
         return 0
     fi
     
-    # Kill any existing docker-compose processes
-    echo "Killing existing docker-compose processes..."
+    # Kill any existing $COMPOSE_CMD processes
+    echo "Killing existing $COMPOSE_CMD processes..."
     pkill -9 -f "docker-compose" 2>/dev/null || true
     pkill -9 -f "docker.*build" 2>/dev/null || true
     
     # Stop all containers related to this project
     echo "Stopping project containers..."
-    docker-compose down --remove-orphans --volumes 2>/dev/null || true
+    $COMPOSE_CMD down --remove-orphans --volumes 2>/dev/null || true
     
     # Remove any hanging containers
     echo "Removing hanging containers..."
@@ -784,7 +796,7 @@ show_running_services() {
     echo "================================="
     
     # Check if any containers are running
-    local running_containers=$(docker-compose ps --format table 2>/dev/null | grep -v "Name\|----" | grep -E "(Up|running)" || true)
+    local running_containers=$($COMPOSE_CMD ps --format table 2>/dev/null | grep -v "Name\|----" | grep -E "(Up|running)" || true)
     
     if [ -z "$running_containers" ]; then
         echo "ℹ️  No containers are currently running"
@@ -792,7 +804,7 @@ show_running_services() {
     fi
     
     # Get list of running service names
-    local running_services=$(docker-compose ps --services --filter status=running 2>/dev/null || true)
+    local running_services=$($COMPOSE_CMD ps --services --filter status=running 2>/dev/null || true)
     
     # Database services
     echo "📊 Database Services:"
@@ -841,69 +853,69 @@ show_running_services() {
     
     # CLI services
     local has_cli=false
-    echo "💻 PHP CLI Services (use docker-compose exec):"
+    echo "💻 PHP CLI Services (use $COMPOSE_CMD exec):"
     if echo "$running_services" | grep -q "cli-php74-mysql80"; then
-        echo "  • php74-mysql80: docker-compose exec cli-php74-mysql80 bash"
+        echo "  • php74-mysql80: $COMPOSE_CMD exec cli-php74-mysql80 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php74-mysql84"; then
-        echo "  • php74-mysql84: docker-compose exec cli-php74-mysql84 bash"
+        echo "  • php74-mysql84: $COMPOSE_CMD exec cli-php74-mysql84 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php74-mysql93"; then
-        echo "  • php74-mysql93: docker-compose exec cli-php74-mysql93 bash"
+        echo "  • php74-mysql93: $COMPOSE_CMD exec cli-php74-mysql93 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php74-mysql96"; then
-        echo "  • php74-mysql96: docker-compose exec cli-php74-mysql96 bash"
+        echo "  • php74-mysql96: $COMPOSE_CMD exec cli-php74-mysql96 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php83-mysql80"; then
-        echo "  • php83-mysql80: docker-compose exec cli-php83-mysql80 bash"
+        echo "  • php83-mysql80: $COMPOSE_CMD exec cli-php83-mysql80 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php83-mysql84"; then
-        echo "  • php83-mysql84: docker-compose exec cli-php83-mysql84 bash"
+        echo "  • php83-mysql84: $COMPOSE_CMD exec cli-php83-mysql84 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php83-mysql93"; then
-        echo "  • php83-mysql93: docker-compose exec cli-php83-mysql93 bash"
+        echo "  • php83-mysql93: $COMPOSE_CMD exec cli-php83-mysql93 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php83-mysql96"; then
-        echo "  • php83-mysql96: docker-compose exec cli-php83-mysql96 bash"
+        echo "  • php83-mysql96: $COMPOSE_CMD exec cli-php83-mysql96 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php84-mysql80"; then
-        echo "  • php84-mysql80: docker-compose exec cli-php84-mysql80 bash"
+        echo "  • php84-mysql80: $COMPOSE_CMD exec cli-php84-mysql80 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php84-mysql84"; then
-        echo "  • php84-mysql84: docker-compose exec cli-php84-mysql84 bash"
+        echo "  • php84-mysql84: $COMPOSE_CMD exec cli-php84-mysql84 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php84-mysql93"; then
-        echo "  • php84-mysql93: docker-compose exec cli-php84-mysql93 bash"
+        echo "  • php84-mysql93: $COMPOSE_CMD exec cli-php84-mysql93 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php84-mysql96"; then
-        echo "  • php84-mysql96: docker-compose exec cli-php84-mysql96 bash"
+        echo "  • php84-mysql96: $COMPOSE_CMD exec cli-php84-mysql96 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php85-mysql80"; then
-        echo "  • php85-mysql80: docker-compose exec cli-php85-mysql80 bash"
+        echo "  • php85-mysql80: $COMPOSE_CMD exec cli-php85-mysql80 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php85-mysql84"; then
-        echo "  • php85-mysql84: docker-compose exec cli-php85-mysql84 bash"
+        echo "  • php85-mysql84: $COMPOSE_CMD exec cli-php85-mysql84 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php85-mysql93"; then
-        echo "  • php85-mysql93: docker-compose exec cli-php85-mysql93 bash"
+        echo "  • php85-mysql93: $COMPOSE_CMD exec cli-php85-mysql93 bash"
         has_cli=true
     fi
     if echo "$running_services" | grep -q "cli-php85-mysql96"; then
-        echo "  • php85-mysql96: docker-compose exec cli-php85-mysql96 bash"
+        echo "  • php85-mysql96: $COMPOSE_CMD exec cli-php85-mysql96 bash"
         has_cli=true
     fi
     
@@ -914,7 +926,7 @@ show_running_services() {
     
     # Show actual running containers
     echo "🐳 Currently Running Containers:"
-    docker-compose ps --format table 2>/dev/null | grep -E "(Name|Up|running|----)" || echo "Unable to fetch container status"
+    $COMPOSE_CMD ps --format table 2>/dev/null | grep -E "(Name|Up|running|----)" || echo "Unable to fetch container status"
     echo ""
 }
 
@@ -936,11 +948,11 @@ start_watchdog() {
     (
         sleep 60  # Wait 60 seconds
         while true; do
-            # Check if any docker-compose run commands have been running too long
-            local long_running=$(ps aux | grep "docker-compose.*run" | grep -v grep | awk '$10 > 120 {print $2}')
+            # Check if any $COMPOSE_CMD run commands have been running too long
+            local long_running=$(ps aux | grep "$COMPOSE_CMD.*run" | grep -v grep | awk '$10 > 120 {print $2}')
             if [ -n "$long_running" ]; then
                 echo ""
-                echo "⚠️  WATCHDOG: Detected long-running docker-compose processes"
+                echo "⚠️  WATCHDOG: Detected long-running $COMPOSE_CMD processes"
                 echo "PIDs: $long_running"
                 echo "💡 If the script seems stuck, press Ctrl+C or run: kill -9 $long_running"
                 echo ""
@@ -960,20 +972,20 @@ stop_watchdog() {
     fi
 }
 
-# Function to debug docker-compose run issues
+# Function to debug $COMPOSE_CMD run issues
 debug_docker_run() {
     local service_name=$1
-    echo "🔍 Debugging docker-compose run for service: $service_name"
+    echo "🔍 Debugging $COMPOSE_CMD run for service: $service_name"
     echo "Docker-compose version:"
-    docker-compose --version
+    $COMPOSE_CMD --version
     echo ""
-    echo "Available docker-compose run flags:"
-    docker-compose run --help | grep -E "(-T|--no-TTY|--no-tty)" || echo "No TTY flags found"
+    echo "Available $COMPOSE_CMD run flags:"
+    $COMPOSE_CMD run --help | grep -E "(-T|--no-TTY|--no-tty)" || echo "No TTY flags found"
     echo ""
     echo "Testing simple command:"
     local run_flags=$(get_docker_run_flags)
     echo "Using flags: $run_flags"
-    docker-compose run $run_flags --entrypoint="" $service_name echo "Test successful"
+    $COMPOSE_CMD run $run_flags --entrypoint="" $service_name echo "Test successful"
 }
 
 # Function to convert service name back to human-readable MySQL version
@@ -1302,7 +1314,7 @@ else
         echo "📋 Services are now active and ready for manual use:"
         show_running_services
         echo "🔄 No teardown mode: Containers will remain running"
-        echo "💡 Use 'docker-compose down' or run stop.sh to cleanup manually"
+        echo "💡 Use 'docker-compose down / podman-compose down' or run stop.sh to cleanup manually"
     else
         # Show running services before cleanup (user has a few seconds to see them)
         echo "📋 Services that were running during tests:"

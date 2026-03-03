@@ -1,24 +1,29 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class AlterTableDropConstraintSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
-    }
-    
-    public function getUp() {
-        $table = $this->obj->table;
-        $name = $this->obj->name;
-        return "ALTER TABLE `$table` DROP CONSTRAINT `$name`;";
+    protected SQLDialectInterface $dialect;
+
+    public function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
+    public function getUp(): string {
+        $t    = $this->dialect->quote($this->obj->table);
+        $name = $this->dialect->quote($this->obj->name);
+        return "ALTER TABLE $t DROP CONSTRAINT $name;";
+    }
+
+    public function getDown(): string {
+        $t      = $this->dialect->quote($this->obj->table);
         $schema = $this->obj->diff->getOldValue();
-        return "ALTER TABLE `$table` ADD $schema;";
+        return "ALTER TABLE $t ADD $schema;";
     }
 
 }

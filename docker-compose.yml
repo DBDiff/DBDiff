@@ -261,7 +261,7 @@ services:
 
   # Database services
   db-mysql80:
-    image: mysql:${MYSQL_VERSION_80}
+    image: docker.io/library/mysql:${MYSQL_VERSION_80}
     restart: always
     ports:
       - '${DB_PORT_MYSQL80}:3306'
@@ -279,7 +279,7 @@ services:
       start_period: 40s
 
   db-mysql84:
-    image: mysql:${MYSQL_VERSION_84}
+    image: docker.io/library/mysql:${MYSQL_VERSION_84}
     restart: always
     ports:
       - '${DB_PORT_MYSQL84}:3306'
@@ -296,7 +296,7 @@ services:
       start_period: 40s
 
   db-mysql93:
-    image: mysql:${MYSQL_VERSION_93}
+    image: docker.io/library/mysql:${MYSQL_VERSION_93}
     restart: always
     ports:
       - '${DB_PORT_MYSQL93}:3306'
@@ -313,7 +313,7 @@ services:
       start_period: 40s
 
   db-mysql96:
-    image: mysql:${MYSQL_VERSION_96}
+    image: docker.io/library/mysql:${MYSQL_VERSION_96}
     restart: always
     ports:
       - '${DB_PORT_MYSQL96}:3306'
@@ -334,7 +334,7 @@ services:
     depends_on:
       db-mysql80:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL80}:80
@@ -346,7 +346,7 @@ services:
     depends_on:
       db-mysql84:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL84}:80
@@ -358,7 +358,7 @@ services:
     depends_on:
       db-mysql93:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL93}:80
@@ -370,10 +370,255 @@ services:
     depends_on:
       db-mysql96:
         condition: service_healthy
-    image: phpmyadmin/phpmyadmin:5.2
+    image: docker.io/phpmyadmin/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL96}:80
     environment:
       PMA_HOST: db-mysql96
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+  # PHP × PostgreSQL CLI services (used for Postgres end-to-end tests)
+  cli-php83-postgres16:
+    depends_on:
+      db-postgres16:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres16
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres16:
+    depends_on:
+      db-postgres16:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres16
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  # PostgreSQL database service
+  db-postgres16:
+    image: docker.io/library/postgres:${POSTGRES_VERSION_16}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES16}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s
+
+  # ── Additional PostgreSQL versions for multi-version local testing ─────────
+
+  db-postgres14:
+    image: docker.io/library/postgres:${POSTGRES_VERSION_14}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES14}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s
+
+  cli-php83-postgres14:
+    depends_on:
+      db-postgres14:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres14
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres14:
+    depends_on:
+      db-postgres14:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres14
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  db-postgres15:
+    image: docker.io/library/postgres:${POSTGRES_VERSION_15}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES15}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s
+
+  cli-php83-postgres15:
+    depends_on:
+      db-postgres15:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres15
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres15:
+    depends_on:
+      db-postgres15:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres15
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  db-postgres17:
+    image: docker.io/library/postgres:${POSTGRES_VERSION_17}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES17}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s
+
+  cli-php83-postgres17:
+    depends_on:
+      db-postgres17:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres17
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres17:
+    depends_on:
+      db-postgres17:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres17
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  db-postgres18:
+    image: docker.io/library/postgres:${POSTGRES_VERSION_18}
+    restart: always
+    ports:
+      - '${DB_PORT_POSTGRES18}:5432'
+    environment:
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+      start_period: 30s
+
+  cli-php83-postgres18:
+    depends_on:
+      db-postgres18:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres18
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-postgres18:
+    depends_on:
+      db-postgres18:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST_POSTGRES=db-postgres18
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+

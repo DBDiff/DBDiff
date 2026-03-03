@@ -1,0 +1,18 @@
+#---------- UP ----------
+-- WARNING: column "status" changed; data may be lost.
+ALTER TABLE "users" DROP COLUMN "status";
+ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'active'::character varying;
+ALTER TABLE "posts" DROP COLUMN "published_at";
+ALTER TABLE "users" DROP COLUMN "phone";
+ALTER TABLE "users" DROP COLUMN "updated_at";
+DROP INDEX "posts_published_idx";
+DROP INDEX "users_status_idx";
+#---------- DOWN ----------
+-- WARNING: column "status" changed; data may be lost.
+ALTER TABLE "users" DROP COLUMN "status";
+ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'pending'::character varying;
+ALTER TABLE "posts" ADD COLUMN "published_at" timestamp(6);
+ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;
+ALTER TABLE "users" ADD COLUMN "updated_at" timestamp(6) DEFAULT '2024-01-01 00:00:00'::timestamp without time zone;
+CREATE INDEX posts_published_idx ON public.posts USING btree (published);
+CREATE INDEX users_status_idx ON public.users USING btree (status);

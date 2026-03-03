@@ -1,23 +1,26 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
 use DBDiff\SQLGen\SQLGenInterface;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
 class AddTableSQL implements SQLGenInterface {
 
-    function __construct($obj) {
-        $this->obj = $obj;
+    protected SQLDialectInterface $dialect;
+
+    public function __construct($obj, SQLDialectInterface $dialect = null) {
+        $this->obj     = $obj;
+        $this->dialect = $dialect ?? DialectRegistry::get();
     }
     
-    public function getUp() {
+    public function getUp(): string {
         $table = $this->obj->table;
-        $connection = $this->obj->connection;
-        $res = $connection->select("SHOW CREATE TABLE `$table`");
-        return $res[0]['Create Table'].';';
+        return $this->obj->manager->getCreateStatement($this->obj->connectionName, $table) . ';';
     }
 
-    public function getDown() {
-        $table = $this->obj->table;
-        return "DROP TABLE `$table`;";
+    public function getDown(): string {
+        $t = $this->dialect->quote($this->obj->table);
+        return "DROP TABLE $t;";
     }
 }

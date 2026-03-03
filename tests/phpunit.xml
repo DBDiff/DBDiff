@@ -16,7 +16,16 @@
 >
     <testsuites>
         <testsuite name="DBDiff">
-            <directory>./</directory>
+            <file>./DBDiffComprehensiveTest.php</file>
+            <file>./End2EndTest.php</file>
+        </testsuite>
+        <testsuite name="Postgres">
+            <file>./End2EndPostgresTest.php</file>
+            <file>./DBDiffComprehensivePostgresTest.php</file>
+        </testsuite>
+        <testsuite name="SQLite">
+            <file>./End2EndSQLiteTest.php</file>
+            <file>./DBDiffComprehensiveSQLiteTest.php</file>
         </testsuite>
     </testsuites>
     <source>

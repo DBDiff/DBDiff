@@ -10,8 +10,13 @@ class AddTable {
     public $source;
     public $target;
 
-    function __construct($table, $connection) {
-        $this->table = $table;
-        $this->connection = $connection;
+    /** @var \DBDiff\DB\DBManager */
+    public $manager;
+    public $connectionName;
+
+    public function __construct($table, $manager, string $connectionName = 'source') {
+        $this->table          = $table;
+        $this->manager        = $manager;
+        $this->connectionName = $connectionName;
     }
 }

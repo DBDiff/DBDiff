@@ -19,22 +19,25 @@ class DBSchema {
     
     function getDiff() {
         $params = ParamsFactory::get();
+        $driver = $this->manager->getDriver();
 
         $diffs = [];
 
-        // Collation
-        $dbName = $this->manager->getDB('target')->getDatabaseName();
-        $sourceCollation = $this->getDBVariable('source', 'collation_database');
-        $targetCollation = $this->getDBVariable('target', 'collation_database');
-        if ($sourceCollation !== $targetCollation) {
-            $diffs[] = new SetDBCollation($dbName, $sourceCollation, $targetCollation);
-        }
+        // Collation & Charset — MySQL only
+        if ($driver === 'mysql') {
+            $dbName = $this->manager->getDB('target')->getDatabaseName();
 
-        // Charset
-        $sourceCharset = $this->getDBVariable('source', 'character_set_database');
-        $targetCharset = $this->getDBVariable('target', 'character_set_database');
-        if ($sourceCharset !== $targetCharset) {
-            $diffs[] = new SetDBCharset($dbName, $sourceCharset, $targetCharset);
+            $sourceCollation = $this->manager->getDBVariable('source', 'collation_database');
+            $targetCollation = $this->manager->getDBVariable('target', 'collation_database');
+            if ($sourceCollation !== $targetCollation) {
+                $diffs[] = new SetDBCollation($dbName, $sourceCollation, $targetCollation);
+            }
+
+            $sourceCharset = $this->manager->getDBVariable('source', 'character_set_database');
+            $targetCharset = $this->manager->getDBVariable('target', 'character_set_database');
+            if ($sourceCharset !== $targetCharset) {
+                $diffs[] = new SetDBCharset($dbName, $sourceCharset, $targetCharset);
+            }
         }
         
         // Tables
@@ -50,7 +53,7 @@ class DBSchema {
 
         $addedTables = array_diff($sourceTables, $targetTables);
         foreach ($addedTables as $table) {
-            $diffs[] = new AddTable($table, $this->manager->getDB('source'));
+            $diffs[] = new AddTable($table, $this->manager, 'source');
         }
 
         $commonTables = array_intersect($sourceTables, $targetTables);
@@ -61,15 +64,10 @@ class DBSchema {
 
         $deletedTables = array_diff($targetTables, $sourceTables);
         foreach ($deletedTables as $table) {
-            $diffs[] = new DropTable($table, $this->manager->getDB('target'));
+            $diffs[] = new DropTable($table, $this->manager, 'target');
         }
 
         return $diffs;
     }
-
-    protected function getDBVariable($connection, $var) {
-        $result = $this->manager->getDB($connection)->select("show variables like '$var'");
-        return $result[0]['Value'];
-    }
-
 }
+

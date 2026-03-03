@@ -4,6 +4,7 @@ use DBDiff\DB\Schema\DBSchema;
 use DBDiff\DB\Schema\TableSchema;
 use DBDiff\DB\Data\DBData;
 use DBDiff\DB\Data\TableData;
+use DBDiff\SQLGen\Dialect\DialectRegistry;
 
 
 class DiffCalculator {
@@ -17,6 +18,10 @@ class DiffCalculator {
         // Connect and test accessibility
         $this->manager->connect($params);
         $this->manager->testResources($params);
+
+        // Initialise the SQL dialect for this run so all DiffToSQL classes
+        // generate correctly-quoted SQL for the target driver.
+        DialectRegistry::setForDriver($this->manager->getDriver());
 
         // Schema diff
         $schemaDiff = [];

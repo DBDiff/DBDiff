@@ -1,0 +1,53 @@
+SQL_UP = u"""
+CREATE TABLE cc (
+    id INTEGER NOT NULL,
+    PRIMARY KEY (id)
+);
+DELETE FROM "zz" WHERE "id" = '1' AND "name" = 'name';
+DROP TABLE "zz";
+ALTER TABLE "aa" ADD COLUMN "as" integer NOT NULL;
+ALTER TABLE "aa" ADD COLUMN "qw" integer NOT NULL;
+ALTER TABLE "bb" ADD COLUMN "jj" integer NOT NULL;
+-- WARNING: column "name" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "aa" DROP COLUMN "name";
+ALTER TABLE "aa" ADD COLUMN "name" text NOT NULL;
+-- WARNING: column "pass" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "aa" DROP COLUMN "pass";
+ALTER TABLE "aa" ADD COLUMN "pass" text DEFAULT NULL;
+-- WARNING: column "id" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "bb" DROP COLUMN "id";
+ALTER TABLE "bb" ADD COLUMN "id" integer PRIMARY KEY NOT NULL;
+ALTER TABLE "aa" DROP COLUMN "zx";
+CREATE UNIQUE INDEX "sqlite_autoindex_aa_1" ON "aa" ("name");
+DROP INDEX "sqlite_autoindex_aa_2";
+DROP INDEX "sqlite_autoindex_aa_3";
+INSERT INTO "cc" VALUES('11');
+"""
+SQL_DOWN = u"""
+DELETE FROM "cc" WHERE "id" = '11';
+DROP TABLE "cc";
+CREATE TABLE zz (
+    id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT 'lol',
+    bool INTEGER NOT NULL,
+    PRIMARY KEY (id, name),
+    UNIQUE (name)
+);
+ALTER TABLE "aa" DROP COLUMN "as";
+ALTER TABLE "aa" DROP COLUMN "qw";
+ALTER TABLE "bb" DROP COLUMN "jj";
+-- WARNING: column "name" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "aa" DROP COLUMN "name";
+ALTER TABLE "aa" ADD COLUMN "name" text NOT NULL DEFAULT 'aa';
+-- WARNING: column "pass" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "aa" DROP COLUMN "pass";
+ALTER TABLE "aa" ADD COLUMN "pass" text NOT NULL;
+-- WARNING: column "id" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "bb" DROP COLUMN "id";
+ALTER TABLE "bb" ADD COLUMN "id" integer NOT NULL;
+ALTER TABLE "aa" ADD COLUMN "zx" integer NOT NULL;
+DROP INDEX "sqlite_autoindex_aa_1";
+CREATE UNIQUE INDEX "sqlite_autoindex_aa_2" ON "aa" ("pass");
+CREATE UNIQUE INDEX "sqlite_autoindex_aa_3" ON "aa" ("name", "pass", "zx");
+INSERT INTO "zz" VALUES('1','name','1');
+"""

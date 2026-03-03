@@ -1,0 +1,56 @@
+SQL_UP = u"""
+CREATE TABLE "cc" (
+  "id" integer NOT NULL,
+  PRIMARY KEY ("id")
+);
+DELETE FROM "zz" WHERE "id" = '1' AND "name" = 'name';
+DROP TABLE "zz";
+ALTER TABLE "aa" ADD COLUMN "as" integer NOT NULL;
+ALTER TABLE "aa" ADD COLUMN "qw" integer NOT NULL;
+ALTER TABLE "bb" ADD COLUMN "jj" integer NOT NULL;
+-- WARNING: column "name" changed; data may be lost.
+ALTER TABLE "aa" DROP COLUMN "name";
+ALTER TABLE "aa" ADD COLUMN "name" varchar(255) NOT NULL;
+-- WARNING: column "pass" changed; data may be lost.
+ALTER TABLE "aa" DROP COLUMN "pass";
+ALTER TABLE "aa" ADD COLUMN "pass" varchar(255) DEFAULT NULL::character varying;
+ALTER TABLE "aa" DROP COLUMN "zx";
+CREATE UNIQUE INDEX aa_name_key ON public.aa USING btree (name);
+DROP INDEX "aa_name_pass_zx_key";
+DROP INDEX "aa_pass_key";
+ALTER TABLE "aa" ADD CONSTRAINT "aa_name_key" UNIQUE ("name");
+ALTER TABLE "aa" ADD CONSTRAINT "fk_aa_bb" FOREIGN KEY ("as") REFERENCES "bb" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
+ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
+INSERT INTO "cc" VALUES('11');
+"""
+SQL_DOWN = u"""
+DELETE FROM "cc" WHERE "id" = '11';
+DROP TABLE "cc";
+CREATE TABLE "zz" (
+  "id" integer NOT NULL,
+  "name" varchar(13) NOT NULL DEFAULT 'lol'::character varying,
+  "bool" boolean NOT NULL,
+  PRIMARY KEY ("id", "name"),
+  CONSTRAINT "zz_name_key" UNIQUE ("name")
+);
+CREATE UNIQUE INDEX zz_name_key ON public.zz USING btree (name);
+ALTER TABLE "aa" DROP COLUMN "as";
+ALTER TABLE "aa" DROP COLUMN "qw";
+ALTER TABLE "bb" DROP COLUMN "jj";
+-- WARNING: column "name" changed; data may be lost.
+ALTER TABLE "aa" DROP COLUMN "name";
+ALTER TABLE "aa" ADD COLUMN "name" varchar(255) NOT NULL DEFAULT 'aa'::character varying;
+-- WARNING: column "pass" changed; data may be lost.
+ALTER TABLE "aa" DROP COLUMN "pass";
+ALTER TABLE "aa" ADD COLUMN "pass" varchar(255) NOT NULL;
+ALTER TABLE "aa" ADD COLUMN "zx" integer NOT NULL;
+DROP INDEX "aa_name_key";
+CREATE UNIQUE INDEX aa_name_pass_zx_key ON public.aa USING btree (name, pass, zx);
+CREATE UNIQUE INDEX aa_pass_key ON public.aa USING btree (pass);
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_key";
+ALTER TABLE "aa" DROP CONSTRAINT "fk_aa_bb";
+ALTER TABLE "aa" ADD CONSTRAINT "aa_name_pass_zx_key" UNIQUE ("name", "pass", "zx");
+ALTER TABLE "aa" ADD CONSTRAINT "aa_pass_key" UNIQUE ("pass");
+INSERT INTO "zz" VALUES('1','name','1');
+"""
