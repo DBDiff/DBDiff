@@ -17,7 +17,7 @@
     },
     "prefer-stable": true,
     "require": {
-        "php": ">=7.3",
+        "php": ">=8.0",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
         "symfony/console": "^5.4|^6.0|^7.0",
