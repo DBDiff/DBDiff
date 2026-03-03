@@ -14,6 +14,8 @@ use Illuminate\Support\Str;
 
 class LocalTableData {
 
+    private const SQL_AND = ' AND ';
+
     function __construct($manager) {
         $this->manager = $manager;
         $this->source  = $this->manager->getDB('source');
@@ -72,12 +74,12 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        $keyCols  = implode(' AND ', array_map(
+        $keyCols  = implode(self::SQL_AND, array_map(
             fn($el) => "\"a\".\"$el\" = \"b\".\"$el\"",
             $key
         ));
-        $keyNullsSrc = implode(' AND ', array_map(fn($el) => "\"a\".\"$el\" IS NULL", $key));
-        $keyNullsTgt = implode(' AND ', array_map(fn($el) => "\"b\".\"$el\" IS NULL", $key));
+        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\".\"$el\" IS NULL", $key));
+        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\".\"$el\" IS NULL", $key));
 
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
         $colsA   = implode(',', array_map(fn($el) => "\"a\".\"$el\" AS \"$el\"", $columns1));
@@ -141,33 +143,35 @@ class LocalTableData {
             ]);
         }
         foreach ($result3 as $row) {
-            $diff = [];
-            $keys = [];
-            foreach ($row as $k => $value) {
-                if (Str::startsWith($k, 's_')) {
-                    $theKey      = substr($k, 2);
-                    $targetKey   = 't_' . $theKey;
-                    $sourceValue = $value;
-
-                    if (in_array($theKey, $key)) {
-                        $keys[$theKey] = $value;
-                    }
-
-                    $targetValue = $row[$targetKey] ?? null;
-                    if ((string) $sourceValue !== (string) $targetValue) {
-                        $diff[$theKey] = new \Diff\DiffOp\DiffOpChange($targetValue, $sourceValue);
-                    }
-                }
-            }
-            if (!empty($diff)) {
-                $diffSequence[] = new UpdateData($table, [
-                    'keys' => $keys,
-                    'diff' => $diff,
-                ]);
+            $update = $this->buildUpdateFromRow($table, $row, $key);
+            if ($update !== null) {
+                $diffSequence[] = $update;
             }
         }
 
         return $diffSequence;
+    }
+
+    private function buildUpdateFromRow(string $table, array $row, array $key): ?UpdateData
+    {
+        $diff = [];
+        $keys = [];
+        foreach ($row as $k => $value) {
+            if (!Str::startsWith($k, 's_')) {
+                continue;
+            }
+            $theKey      = substr($k, 2);
+            $targetKey   = 't_' . $theKey;
+            $sourceValue = $value;
+            if (in_array($theKey, $key)) {
+                $keys[$theKey] = $value;
+            }
+            $targetValue = $row[$targetKey] ?? null;
+            if ((string) $sourceValue !== (string) $targetValue) {
+                $diff[$theKey] = new \Diff\DiffOp\DiffOpChange($targetValue, $sourceValue);
+            }
+        }
+        return empty($diff) ? null : new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
     }
 
     // ── PostgreSQL path ───────────────────────────────────────────────────
@@ -188,71 +192,87 @@ class LocalTableData {
         $quotedCols2 = implode(', ', array_map(fn($c) => "\"$c\"", $columns2));
 
         // Fetch all rows, keyed by primary-key composite string for fast lookup
-        $srcRows = $this->fetchIndexed($this->source, $table, $quotedCols1, $columns1, $key);
-        $tgtRows = $this->fetchIndexed($this->target, $table, $quotedCols2, $columns2, $key);
+        $srcRows = $this->fetchIndexed($this->source, $table, $quotedCols1, $key);
+        $tgtRows = $this->fetchIndexed($this->target, $table, $quotedCols2, $key);
 
         $commonCols = array_values(array_intersect($columns1, $columns2));
         if (isset($params->fieldsToIgnore[$table])) {
             $commonCols = array_values(array_diff($commonCols, $params->fieldsToIgnore[$table]));
         }
 
-        $diffSequence = [];
+        return array_merge(
+            $this->buildPgsqlInserts($table, $key, $srcRows, $tgtRows),
+            $this->buildPgsqlDeletes($table, $key, $srcRows, $tgtRows),
+            empty($commonCols) ? [] : $this->buildPgsqlUpdates($table, $key, $commonCols, $srcRows, $tgtRows)
+        );
+    }
 
-        // Rows only in source → INSERT (UP) / DELETE (DOWN)
+    private function buildPgsqlInserts(string $table, array $key, array $srcRows, array $tgtRows): array
+    {
+        $result = [];
         foreach ($srcRows as $pk => $row) {
             if (!array_key_exists($pk, $tgtRows)) {
-                $diffSequence[] = new InsertData($table, [
+                $result[] = new InsertData($table, [
                     'keys' => Arr::only($row, $key),
                     'diff' => new \Diff\DiffOp\DiffOpAdd(Arr::except($row, '_connection')),
                 ]);
             }
         }
+        return $result;
+    }
 
-        // Rows only in target → DELETE (UP) / INSERT (DOWN)
+    private function buildPgsqlDeletes(string $table, array $key, array $srcRows, array $tgtRows): array
+    {
+        $result = [];
         foreach ($tgtRows as $pk => $row) {
             if (!array_key_exists($pk, $srcRows)) {
-                $diffSequence[] = new DeleteData($table, [
+                $result[] = new DeleteData($table, [
                     'keys' => Arr::only($row, $key),
                     'diff' => new \Diff\DiffOp\DiffOpRemove(Arr::except($row, '_connection')),
                 ]);
             }
         }
+        return $result;
+    }
 
-        // Rows in both → compare non-key columns for changes → UPDATE
-        if (!empty($commonCols)) {
-            foreach ($srcRows as $pk => $srcRow) {
-                if (!array_key_exists($pk, $tgtRows)) {
-                    continue; // already handled above
-                }
-                $tgtRow = $tgtRows[$pk];
-                $diff   = [];
-                $keys   = [];
-                foreach ($commonCols as $col) {
-                    if (in_array($col, $key)) {
-                        $keys[$col] = $srcRow[$col];
-                    }
-                    $sv = (string) ($srcRow[$col] ?? '');
-                    $tv = (string) ($tgtRow[$col] ?? '');
-                    if ($sv !== $tv) {
-                        $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
-                    }
-                }
-                if (!empty($diff)) {
-                    // Ensure key columns are populated even when not in $commonCols
-                    foreach ($key as $k) {
-                        if (!isset($keys[$k])) {
-                            $keys[$k] = $srcRow[$k];
-                        }
-                    }
-                    $diffSequence[] = new UpdateData($table, [
-                        'keys' => $keys,
-                        'diff' => $diff,
-                    ]);
-                }
+    private function buildPgsqlUpdates(string $table, array $key, array $commonCols, array $srcRows, array $tgtRows): array
+    {
+        $result = [];
+        foreach ($srcRows as $pk => $srcRow) {
+            if (!array_key_exists($pk, $tgtRows)) {
+                continue;
+            }
+            $update = $this->buildPgsqlUpdateForRow($table, $key, $commonCols, $srcRow, $tgtRows[$pk]);
+            if ($update !== null) {
+                $result[] = $update;
             }
         }
+        return $result;
+    }
 
-        return $diffSequence;
+    private function buildPgsqlUpdateForRow(string $table, array $key, array $commonCols, array $srcRow, array $tgtRow): ?UpdateData
+    {
+        $diff = [];
+        $keys = [];
+        foreach ($commonCols as $col) {
+            if (in_array($col, $key)) {
+                $keys[$col] = $srcRow[$col];
+            }
+            $sv = (string) ($srcRow[$col] ?? '');
+            $tv = (string) ($tgtRow[$col] ?? '');
+            if ($sv !== $tv) {
+                $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
+            }
+        }
+        if (empty($diff)) {
+            return null;
+        }
+        foreach ($key as $k) {
+            if (!isset($keys[$k])) {
+                $keys[$k] = $srcRow[$k];
+            }
+        }
+        return new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
     }
 
     /**
@@ -262,11 +282,10 @@ class LocalTableData {
      * @param  \Illuminate\Database\Connection $conn
      * @param  string   $table      Table name (unquoted)
      * @param  string   $selectExpr Already-quoted SELECT column list
-     * @param  string[] $columns    Column names (for array access)
      * @param  string[] $key        Primary-key column names
      * @return array<string, array>
      */
-    private function fetchIndexed($conn, string $table, string $selectExpr, array $columns, array $key): array
+    private function fetchIndexed($conn, string $table, string $selectExpr, array $key): array
     {
         $rows   = $conn->select("SELECT $selectExpr FROM \"$table\"");
         $indexed = [];
@@ -300,7 +319,7 @@ class LocalTableData {
         $columnsAUtf = implode(',', $wrapConvert($columns1, 'a'));
         $columnsBUtf = implode(',', $wrapConvert($columns2, 'b'));
 
-        $keyCols = implode(' AND ', array_map(function($el) {
+        $keyCols = implode(self::SQL_AND, array_map(function($el) {
             return "`a`.`{$el}` = `b`.`{$el}`";
         }, $key));
 
@@ -309,8 +328,8 @@ class LocalTableData {
                 return "`{$p}`.`{$el}` IS NULL";
             }, $arr);
         };
-        $keyNulls1 = implode(' AND ', $keyNull($key, 'a'));
-        $keyNulls2 = implode(' AND ', $keyNull($key, 'b'));
+        $keyNulls1 = implode(self::SQL_AND, $keyNull($key, 'a'));
+        $keyNulls2 = implode(self::SQL_AND, $keyNull($key, 'b'));
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result1 = $this->source->select(
@@ -372,7 +391,7 @@ class LocalTableData {
         $columnsBas = implode(',', $wrapAs($columns2, 'b', 't_'));
         $columnsB   = implode(',', $wrapCast($columns2, 'b'));
         
-        $keyCols = implode(' AND ', array_map(function($el) {
+        $keyCols = implode(self::SQL_AND, array_map(function($el) {
             return "a.{$el} = b.{$el}";
         }, $key));
 
