@@ -14,7 +14,7 @@ class AddTable {
     public $manager;
     public $connectionName;
 
-    function __construct($table, $manager, string $connectionName = 'source') {
+    public function __construct($table, $manager, string $connectionName = 'source') {
         $this->table          = $table;
         $this->manager        = $manager;
         $this->connectionName = $connectionName;

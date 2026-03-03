@@ -14,7 +14,7 @@ class DropTable {
     public $manager;
     public $connectionName;
 
-    function __construct($table, $manager, string $connectionName = 'target') {
+    public function __construct($table, $manager, string $connectionName = 'target') {
         $this->table          = $table;
         $this->manager        = $manager;
         $this->connectionName = $connectionName;

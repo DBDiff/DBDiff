@@ -7,7 +7,7 @@ use Illuminate\Support\Arr;
 class PostgresAdapter implements DBAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
-        $config = [
+        return [
             'driver'   => 'pgsql',
             'host'     => $server['host'] ?? 'localhost',
             'port'     => $server['port'] ?? '5432',
@@ -18,7 +18,6 @@ class PostgresAdapter implements DBAdapterInterface {
             'schema'   => 'public',
             'sslmode'  => $server['sslmode'] ?? 'prefer',
         ];
-        return $config;
     }
 
     public function getTables(Connection $connection): array {
@@ -205,46 +204,37 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     private function buildColumnType(array $col): string {
+        $simpleMap = [
+            'time without time zone' => 'time',
+            'time with time zone'    => 'timetz',
+            'double precision'       => 'double precision',
+            'ARRAY'                  => $col['udt_name'],
+        ];
+        return $simpleMap[$col['data_type']] ?? $this->resolveParameterisedType($col);
+    }
+
+    /**
+     * Resolve column types that carry length, precision, or scale parameters.
+     * All other types fall through to $dataType unchanged.
+     */
+    private function resolveParameterisedType(array $col): string {
         $dataType = $col['data_type'];
+        $result   = $dataType;
 
-        switch ($dataType) {
-            case 'character varying':
-                $len = $col['character_maximum_length'];
-                return $len ? "varchar($len)" : 'varchar';
-
-            case 'character':
-                $len = $col['character_maximum_length'];
-                return $len ? "char($len)" : 'char';
-
-            case 'numeric':
-            case 'decimal':
-                $p = $col['numeric_precision'];
-                $s = $col['numeric_scale'];
-                return ($p !== null) ? "$dataType($p,$s)" : $dataType;
-
-            case 'timestamp without time zone':
-                $p = $col['datetime_precision'];
-                return ($p && $p > 0) ? "timestamp($p)" : 'timestamp';
-
-            case 'timestamp with time zone':
-                $p = $col['datetime_precision'];
-                return ($p && $p > 0) ? "timestamptz($p)" : 'timestamptz';
-
-            case 'time without time zone':
-                return 'time';
-
-            case 'time with time zone':
-                return 'timetz';
-
-            case 'double precision':
-                return 'double precision';
-
-            case 'ARRAY':
-                // use udt_name which includes the underscore prefix, e.g. _int4
-                return $col['udt_name'];
-
-            default:
-                return $dataType;
+        if ($dataType === 'character varying' || $dataType === 'character') {
+            $len    = $col['character_maximum_length'];
+            $base   = $dataType === 'character varying' ? 'varchar' : 'char';
+            $result = $len ? "$base($len)" : $base;
+        } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
+            $p      = $col['numeric_precision'];
+            $s      = $col['numeric_scale'];
+            $result = ($p !== null) ? "$dataType($p,$s)" : $dataType;
+        } elseif (str_starts_with($dataType, 'timestamp')) {
+            $p      = $col['datetime_precision'];
+            $base   = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
+            $result = ($p && $p > 0) ? "$base($p)" : $base;
         }
+
+        return $result;
     }
 }

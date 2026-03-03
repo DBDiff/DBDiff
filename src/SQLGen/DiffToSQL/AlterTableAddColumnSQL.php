@@ -9,7 +9,7 @@ class AlterTableAddColumnSQL implements SQLGenInterface {
 
     protected SQLDialectInterface $dialect;
 
-    function __construct($obj, SQLDialectInterface $dialect = null) {
+    public function __construct($obj, SQLDialectInterface $dialect = null) {
         $this->obj     = $obj;
         $this->dialect = $dialect ?? DialectRegistry::get();
     }

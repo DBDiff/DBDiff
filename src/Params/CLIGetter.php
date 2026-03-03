@@ -26,28 +26,39 @@ class CLIGetter implements ParamsGetter {
             $params->input = $this->parseInput($input);
         } else throw new CLIException("Missing input");
 
-        if ($getopt->get('--server1'))
+        if ($getopt->get('--server1')) {
             $params->server1 = $this->parseServer($getopt->get('--server1'));
-        if ($getopt->get('--server2'))
+        }
+        if ($getopt->get('--server2')) {
             $params->server2 = $this->parseServer($getopt->get('--server2'));
-        if ($getopt->get('--format'))
+        }
+        if ($getopt->get('--format')) {
             $params->format = $getopt->get('--format');
-        if ($getopt->get('--template'))
+        }
+        if ($getopt->get('--template')) {
             $params->template = $getopt->get('--template');
-        if ($getopt->get('--type'))
+        }
+        if ($getopt->get('--type')) {
             $params->type = $getopt->get('--type');
-        if ($getopt->get('--include'))
+        }
+        if ($getopt->get('--include')) {
             $params->include = $getopt->get('--include');
-        if ($getopt->get('--nocomments'))
+        }
+        if ($getopt->get('--nocomments')) {
             $params->nocomments = $getopt->get('--nocomments');
-        if ($getopt->get('--config'))
+        }
+        if ($getopt->get('--config')) {
             $params->config = $getopt->get('--config');
-        if ($getopt->get('--output'))
+        }
+        if ($getopt->get('--output')) {
             $params->output = $getopt->get('--output');
-        if ($getopt->get('--debug'))
+        }
+        if ($getopt->get('--debug')) {
             $params->debug = $getopt->get('--debug');
-        if ($getopt->get('--driver'))
+        }
+        if ($getopt->get('--driver')) {
             $params->driver = strtolower($getopt->get('--driver'));
+        }
         if ($getopt->get('--supabase')) {
             // --supabase is a convenience alias for --driver=pgsql that also
             // enables SSL (Supabase requires an encrypted connection).
