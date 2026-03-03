@@ -7,6 +7,32 @@ on:
     branches: [ master ]
 
 jobs:
+  # ── Unit tests (no DB needed — fast feedback) ────────────────────────────────
+  unit-tests:
+    name: Unit / PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.0', '8.3', '8.4', '8.5']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_sqlite, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run unit tests
+      run: ./scripts/run-tests.sh --unit
+
   # ── MySQL matrix ────────────────────────────────────────────────────────────
   test:
     name: PHP ${{ matrix.php-version }} / MySQL ${{ matrix.mysql-version }}
@@ -15,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.3', '8.4', '8.5']
+        php-version: ['8.3', '8.4', '8.5']
         mysql-version: ['8.0', '8.4', '9.3', '9.6']
 
     env:
@@ -67,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.3', '8.4', '8.5']
+        php-version: ['8.3', '8.4', '8.5']
 
     steps:
     - uses: actions/checkout@v4
@@ -96,7 +122,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.3', '8.4', '8.5']
+        php-version: ['8.3', '8.4', '8.5']
         postgres-version: ['14', '15', '16', '17', '18']
 
     env:
