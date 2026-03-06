@@ -2,7 +2,15 @@
 
 # DBDiff Local Release Helper
 # Usage: ./release.sh [version]
-# Example: ./release.sh v1.1.0
+# Example: ./release.sh v2.1.0
+#
+# This script builds the PHAR using box-project/box and tags the release.
+# The actual platform binary builds and npm publishes are handled by the
+# GitHub Actions workflow (.github/workflows/release.yml).
+#
+# Requirements:
+#   - PHP >= 8.0 in PATH
+#   - Composer dependencies installed (including box/box in dev)
 
 set -e
 
@@ -10,7 +18,7 @@ VERSION=$1
 
 if [ -z "$VERSION" ]; then
     echo "Usage: $0 [version]"
-    echo "Example: $0 v1.1.0"
+    echo "Example: $0 v2.1.0"
     exit 1
 fi
 
@@ -20,42 +28,56 @@ cd "$SCRIPT_DIR/.."
 
 # Ensure we are on the main branch or current PR branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo "🚀 Preparing release $VERSION from branch $CURRENT_BRANCH..."
+echo "Preparing release $VERSION from branch $CURRENT_BRANCH..."
 
 # 1. Check for uncommitted changes
 if [ -n "$(git status --porcelain)" ]; then
-    echo "❌ Error: You have uncommitted changes. Please commit or stash them first."
+    echo "Error: You have uncommitted changes. Please commit or stash them first."
     exit 1
 fi
 
-# 2. Update dependencies
-echo "📦 Updating dependencies..."
-composer install --no-dev --optimize-autoloader
+# 2. Update dependencies (production + dev for box)
+echo "Updating dependencies..."
+composer install --optimize-autoloader
 
-# 3. Build the PHAR
-echo "🔨 Building PHAR..."
-if [ "$(php -r 'echo ini_get("phar.readonly");')" == "1" ]; then
-    echo "⚠️  Phar readonly is ON. Attempting build with -dphar.readonly=0"
-    php -dphar.readonly=0 scripts/build
-else
-    php scripts/build
+# 3. Ensure box is available
+if [ ! -f "vendor/bin/box" ]; then
+    echo "Error: vendor/bin/box not found."
+    echo "Install with: composer require --dev box/box"
+    exit 1
 fi
 
-# 4. Verify build artifacts
+# 4. Build the PHAR with Box
+echo "Building PHAR with Box..."
+mkdir -p dist
+vendor/bin/box compile
+
+# 5. Verify build artifacts
 if [ ! -f "dist/dbdiff.phar" ]; then
-    echo "❌ Error: dist/dbdiff.phar was not created."
+    echo "Error: dist/dbdiff.phar was not created."
     exit 1
 fi
 
-# 5. Tag and Push
-echo "🏷️  Tagging version $VERSION..."
+PHAR_SIZE=$(du -sh dist/dbdiff.phar | cut -f1)
+echo "PHAR built: dist/dbdiff.phar (${PHAR_SIZE})"
+
+# 6. Quick smoke test — ensure the PHAR runs and reports the right version
+echo "Smoke-testing PHAR..."
+PHAR_VERSION=$(php dist/dbdiff.phar --version 2>&1 || true)
+echo "  ${PHAR_VERSION}"
+
+# 7. Tag and Push
+echo "Tagging version $VERSION..."
 git tag -a "$VERSION" -m "Release $VERSION"
 
-echo "✅ Ready to release!"
-echo "Next steps:"
-echo "  1. git push origin $VERSION"
-echo "  2. Go to https://github.com/DBDiff/DBDiff/releases and upload the files from the dist/ folder."
-echo "  3. Packagist will update automatically once the tag is pushed."
 echo ""
-echo "Files ready in dist/:"
-ls -lh dist/dbdiff.phar*
+echo "Done. To complete the release:"
+echo "  1. git push origin $VERSION"
+echo "  2. Trigger the GitHub Actions 'Release DBDiff' workflow with version: ${VERSION#v}"
+echo "     (This builds platform binaries, publishes to npm, and creates the GitHub Release)"
+echo ""
+echo "Or use the manual one-off binary builder:"
+echo "  scripts/release-binaries.sh ${VERSION#v}"
+echo ""
+echo "Artifacts:"
+ls -lh dist/dbdiff.phar

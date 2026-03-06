@@ -1,0 +1,17 @@
+{
+  "name": "@dbdiff/cli-win32-x64",
+  "version": "2.0.0",
+  "description": "DBDiff CLI binary for Windows x64",
+  "homepage": "https://github.com/DBDiff/DBDiff",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DBDiff/DBDiff.git"
+  },
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["dbdiff.exe"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

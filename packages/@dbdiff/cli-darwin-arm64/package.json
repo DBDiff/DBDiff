@@ -1,0 +1,17 @@
+{
+  "name": "@dbdiff/cli-darwin-arm64",
+  "version": "2.0.0",
+  "description": "DBDiff CLI binary for macOS Apple Silicon (arm64)",
+  "homepage": "https://github.com/DBDiff/DBDiff",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DBDiff/DBDiff.git"
+  },
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["dbdiff"],
+  "publishConfig": {
+    "access": "public"
+  }
+}

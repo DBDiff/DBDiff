@@ -1,0 +1,97 @@
+#!/usr/bin/env node
+'use strict';
+
+// This is the only JavaScript in the entire @dbdiff/cli distribution.
+// It detects the current platform, resolves the matching pre-built binary
+// from the appropriate optional-dependency package, and executes it.
+//
+// Pattern mirrors @biomejs/biome and @tailwindcss/oxide — no PHP required.
+
+const { execFileSync } = require('child_process');
+const path = require('path');
+
+const PLATFORM_PACKAGES = {
+  'linux-x64':        '@dbdiff/cli-linux-x64',
+  'linux-arm64':      '@dbdiff/cli-linux-arm64',
+  'linux-x64-musl':   '@dbdiff/cli-linux-x64-musl',
+  'linux-arm64-musl': '@dbdiff/cli-linux-arm64-musl',
+  'darwin-x64':       '@dbdiff/cli-darwin-x64',
+  'darwin-arm64':     '@dbdiff/cli-darwin-arm64',
+  'win32-x64':        '@dbdiff/cli-win32-x64',
+  'win32-arm64':      '@dbdiff/cli-win32-arm64',
+};
+
+/**
+ * Returns true when the current Linux system is musl-based (e.g. Alpine).
+ * Checks /proc/version and ldd output — both are available on Alpine.
+ */
+function isMusl() {
+  // Fast path: check /proc/version which contains "musl" on Alpine kernels
+  try {
+    const fs = require('fs');
+    const procVersion = fs.readFileSync('/proc/version', 'utf8');
+    if (procVersion.toLowerCase().includes('musl')) return true;
+  } catch {
+    // /proc/version may be absent in some minimal environments
+  }
+
+  // Fallback: ask ldd
+  try {
+    const { execSync } = require('child_process');
+    const ldd = execSync('ldd --version 2>&1', { encoding: 'utf8', timeout: 2000 });
+    return ldd.toLowerCase().includes('musl');
+  } catch {
+    return false;
+  }
+}
+
+function getPlatformKey() {
+  const platform = process.platform; // 'linux', 'darwin', 'win32'
+  const arch = process.arch;         // 'x64', 'arm64'
+  let key = `${platform}-${arch}`;
+
+  // On Linux, distinguish musl (Alpine) from glibc (Ubuntu/Debian/RHEL)
+  if (platform === 'linux' && isMusl()) {
+    key = `linux-${arch}-musl`;
+  }
+
+  return key;
+}
+
+function getBinaryPath(pkg) {
+  const binaryName = process.platform === 'win32' ? 'dbdiff.exe' : 'dbdiff';
+  try {
+    const pkgDir = path.dirname(require.resolve(`${pkg}/package.json`));
+    return path.join(pkgDir, binaryName);
+  } catch {
+    return null;
+  }
+}
+
+const key = getPlatformKey();
+const pkg = PLATFORM_PACKAGES[key] ?? null;
+
+if (!pkg) {
+  process.stderr.write(
+    `@dbdiff/cli: Unsupported platform: ${process.platform}-${process.arch}\n` +
+    `Please open an issue at https://github.com/DBDiff/DBDiff/issues\n`
+  );
+  process.exit(1);
+}
+
+const binaryPath = getBinaryPath(pkg);
+
+if (!binaryPath) {
+  process.stderr.write(
+    `@dbdiff/cli: Could not locate the binary for ${process.platform}-${process.arch}.\n` +
+    `The platform-specific package '${pkg}' may not have been installed.\n` +
+    `Try reinstalling: npm install -g @dbdiff/cli\n`
+  );
+  process.exit(1);
+}
+
+try {
+  execFileSync(binaryPath, process.argv.slice(2), { stdio: 'inherit' });
+} catch (err) {
+  process.exit(err.status ?? 1);
+}

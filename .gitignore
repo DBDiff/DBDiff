@@ -8,6 +8,14 @@ dist
 .idea
 .phpunit.result.cache
 .phpunit.cache
+
+# Platform binary files built by CI or release-binaries.sh.
+# The package.json files ARE tracked; only the compiled binaries are ignored.
+packages/@dbdiff/cli-*/dbdiff
+packages/@dbdiff/cli-*/dbdiff.exe
+
+# Node modules (if anyone runs npm install inside the packages directory)
+packages/@dbdiff/cli/node_modules/
 tests/logs/
 .env
 docs/
