@@ -182,6 +182,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # Run doctor first (mirrors Unix behaviour) so SPC sets up its working
+          # directories and any missing prerequisites are auto-installed.
+          .\spc.exe doctor --auto-fix
+          # Pre-create the source tree that SPC extracts PHP into.
+          # SPC v2.8.2 uses `7za -so | tar -C source\<name>` which requires the
+          # target directory to already exist — failing otherwise with
+          # "The system cannot find the path specified."
+          New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro
 
@@ -212,10 +220,21 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # JOB 3 — Publish to npm + create GitHub Release
+  #
+  # This job depends on BOTH build-phar (required) and build-binary (best-effort).
+  # It runs as long as:
+  #   • The workflow was not cancelled, AND
+  #   • The PHAR was built successfully.
+  # Individual binary build failures do NOT block publishing: the PHAR and any
+  # successfully built binaries are still released, and platform npm packages
+  # that are missing their binary are skipped with a warning.
   # ═══════════════════════════════════════════════════════════════════════════
   publish:
     name: Publish (npm + GitHub Release)
-    needs: build-binary
+    needs: [build-phar, build-binary]
+    # Run whenever the PHAR succeeded, even if some platform binaries failed.
+    # The !cancelled() guard prevents this job from running after a manual cancel.
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -227,7 +246,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Download all 8 platform binaries + the PHAR into binaries/
+      # Download all available artifacts (PHAR + whatever binaries succeeded).
+      # Artifacts from failed binary jobs simply won't be present in binaries/.
       - uses: actions/download-artifact@v4
         with:
           path: binaries/
@@ -252,17 +272,27 @@ jobs:
             "
           done
 
-      # Copy each platform binary into its npm package directory
+      # Copy each platform binary into its npm package directory.
+      # Missing binaries (from failed builds) are skipped with a warning rather
+      # than aborting the whole publish job.
       - name: Copy binaries into platform packages
         run: |
-          cp binaries/dbdiff-linux-x64/dbdiff          packages/@dbdiff/cli-linux-x64/dbdiff
-          cp binaries/dbdiff-linux-arm64/dbdiff         packages/@dbdiff/cli-linux-arm64/dbdiff
-          cp binaries/dbdiff-linux-x64-musl/dbdiff      packages/@dbdiff/cli-linux-x64-musl/dbdiff
-          cp binaries/dbdiff-linux-arm64-musl/dbdiff    packages/@dbdiff/cli-linux-arm64-musl/dbdiff
-          cp binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
-          cp binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
-          cp binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
-          cp binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
+          copy_binary() {
+            local src="$1" dst="$2"
+            if [ -f "$src" ]; then
+              cp "$src" "$dst"
+            else
+              echo "::warning::Binary not found: $src — skipping npm package for this platform"
+            fi
+          }
+          copy_binary binaries/dbdiff-linux-x64/dbdiff          packages/@dbdiff/cli-linux-x64/dbdiff
+          copy_binary binaries/dbdiff-linux-arm64/dbdiff         packages/@dbdiff/cli-linux-arm64/dbdiff
+          copy_binary binaries/dbdiff-linux-x64-musl/dbdiff      packages/@dbdiff/cli-linux-x64-musl/dbdiff
+          copy_binary binaries/dbdiff-linux-arm64-musl/dbdiff    packages/@dbdiff/cli-linux-arm64-musl/dbdiff
+          copy_binary binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
+          copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
+          copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
+          copy_binary binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
       - uses: actions/setup-node@v4
@@ -270,15 +300,20 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      # Publish the 8 platform packages first so the root package's
-      # optionalDependencies resolve immediately on install.
-      # Skips any package whose exact version is already on the registry
+      # Publish the platform packages that have a binary present.
+      # Packages without a binary are skipped with a warning.
+      # Packages already on the registry at this version are also skipped
       # (safe to re-run against an already-published release).
       - name: Publish platform packages to npm
         run: |
           VERSION="${{ github.event.inputs.version }}"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
+            # Skip packages whose binary was not produced (checks both Unix and Windows names)
+            if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
+              echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
+              continue
+            fi
             if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
             else
@@ -316,6 +351,9 @@ jobs:
 
       # softprops/action-gh-release updates the release in-place when one
       # already exists for the tag, so this step is safe to re-run.
+      # Glob patterns match only the binaries that were actually produced;
+      # missing platform binaries (already warned about in the copy step above)
+      # are silently omitted from the release assets rather than failing the job.
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -324,14 +362,8 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            binaries/dbdiff-linux-x64/dbdiff
-            binaries/dbdiff-linux-arm64/dbdiff
-            binaries/dbdiff-linux-x64-musl/dbdiff
-            binaries/dbdiff-linux-arm64-musl/dbdiff
-            binaries/dbdiff-darwin-x64/dbdiff
-            binaries/dbdiff-darwin-arm64/dbdiff
-            binaries/dbdiff-win32-x64/dbdiff.exe
-            binaries/dbdiff-win32-arm64/dbdiff.exe
+            binaries/dbdiff-*/dbdiff
+            binaries/dbdiff-*/dbdiff.exe
             binaries/dbdiff-phar/dbdiff.phar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
