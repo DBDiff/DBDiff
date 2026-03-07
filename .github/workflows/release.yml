@@ -22,7 +22,9 @@ env:
   # libiconv-win; the bare names download the Unix source archives instead and
   # the build then fails with "not downloaded or not locked".
   # ncurses and libedit are Unix-only and must be omitted.
-  SPC_WINDOWS_LIBS: "libiconv-win,libxml2,postgresql-win,sqlite"
+  # zlib must be listed explicitly on Windows (no system zlib; SPC won't add it
+  # automatically just because the zlib PHP extension is requested).
+  SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -67,7 +69,8 @@ jobs:
   # linux-x64 / linux-arm64           → native Ubuntu runner, glibc binary
   # linux-x64-musl / linux-arm64-musl → same runners, build inside Alpine container
   # darwin-x64 / darwin-arm64         → native macOS runners
-  # win32-x64 / win32-arm64           → native Windows runners
+  # win32-x64                          → native Windows x64 runner
+  #   (win32-arm64 is excluded — see matrix comment below)
   # ═══════════════════════════════════════════════════════════════════════════
   build-binary:
     name: Binary — ${{ matrix.target }}
@@ -114,15 +117,14 @@ jobs:
             artifact: dbdiff-darwin-arm64
 
           # ── Windows ───────────────────────────────────────────────────────
+          # win32-arm64 excluded: SPC v2.8.2 hard-codes phpsdk-vs17-x64.bat
+          # which passes "x64_amd64" to vcvarsall.bat — invalid on ARM64 hosts.
+          # It also always downloads postgresql-16-windows-x64-binaries.zip
+          # regardless of runner arch.  Re-add once SPC gains ARM64 support.
           - target:   win32-x64
             os:       windows-latest
             musl:     false
             artifact: dbdiff-win32-x64
-
-          - target:   win32-arm64
-            os:       windows-11-arm     # GitHub ARM Windows runner
-            musl:     false
-            artifact: dbdiff-win32-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -309,7 +311,7 @@ jobs:
           copy_binary binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
           copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
           copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
-          copy_binary binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
+          # win32-arm64 omitted — not built (SPC Windows ARM64 toolchain bug)
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
       - uses: actions/setup-node@v4
