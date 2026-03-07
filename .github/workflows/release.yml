@@ -325,19 +325,28 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      # Publish the platform packages that have a binary present.
-      # Packages without a binary are skipped with a warning.
+      # Publish the platform packages that have a binary present, plus any
+      # intentionally binary-free packages (PHAR_FALLBACK_PKGS) that rely on
+      # the dbdiff.phar fallback bundled in @dbdiff/cli.
       # Packages already on the registry at this version are also skipped
       # (safe to re-run against an already-published release).
       - name: Publish platform packages to npm
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          # Packages published without a native binary — bin/dbdiff.js falls
+          # back to running the bundled dbdiff.phar with system PHP for these.
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
-            # Skip packages whose binary was not produced (checks both Unix and Windows names)
+            # Skip packages whose binary was not produced, unless they are in
+            # the known PHAR-fallback list (intentionally published without a binary).
             if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
-              echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
-              continue
+              if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
+                echo "  No binary for ${pkg_name} — publishing as PHAR-fallback skeleton"
+              else
+                echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
+                continue
+              fi
             fi
             if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
