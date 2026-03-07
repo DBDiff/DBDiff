@@ -77,6 +77,8 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 ## Available Configurations
 
 ### PHP Versions
+- PHP 8.1
+- PHP 8.2
 - PHP 8.3
 - PHP 8.4
 - PHP 8.5
@@ -93,6 +95,14 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 ## Services
 
 ### CLI Services (for running DBDiff)
+- `cli-php81-mysql80` - PHP 8.1 with MySQL 8.0
+- `cli-php81-mysql84` - PHP 8.1 with MySQL 8.4
+- `cli-php81-mysql93` - PHP 8.1 with MySQL 9.3
+- `cli-php81-mysql96` - PHP 8.1 with MySQL 9.6
+- `cli-php82-mysql80` - PHP 8.2 with MySQL 8.0
+- `cli-php82-mysql84` - PHP 8.2 with MySQL 8.4
+- `cli-php82-mysql93` - PHP 8.2 with MySQL 9.3
+- `cli-php82-mysql96` - PHP 8.2 with MySQL 9.6
 - `cli-php83-mysql80` - PHP 8.3 with MySQL 8.0
 - `cli-php83-mysql84` - PHP 8.3 with MySQL 8.4
 - `cli-php83-mysql93` - PHP 8.3 with MySQL 9.3
