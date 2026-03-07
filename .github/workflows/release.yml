@@ -368,11 +368,27 @@ jobs:
             git push origin "$TAG"
           fi
 
+      # Rename each binary to include its platform so every GitHub Release asset
+      # has a unique name (dbdiff-linux-x64, dbdiff-darwin-arm64, dbdiff-win32-x64.exe …).
+      # Without this all six Unix binaries share the basename 'dbdiff', causing
+      # softprops/action-gh-release to upload colliding assets and then fail with
+      # 404 'Not Found' when trying to delete stale duplicates on re-runs.
+      - name: Rename binaries to include platform in filename
+        run: |
+          for dir in binaries/dbdiff-*/; do
+            platform="${dir#binaries/dbdiff-}"
+            platform="${platform%/}"
+            if [ -f "${dir}dbdiff" ]; then
+              mv "${dir}dbdiff" "${dir}dbdiff-${platform}"
+            elif [ -f "${dir}dbdiff.exe" ]; then
+              mv "${dir}dbdiff.exe" "${dir}dbdiff-${platform}.exe"
+            fi
+          done
+
       # softprops/action-gh-release updates the release in-place when one
       # already exists for the tag, so this step is safe to re-run.
       # Glob patterns match only the binaries that were actually produced;
-      # missing platform binaries (already warned about in the copy step above)
-      # are silently omitted from the release assets rather than failing the job.
+      # missing platform binaries are silently omitted rather than failing.
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -381,8 +397,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            binaries/dbdiff-*/dbdiff
-            binaries/dbdiff-*/dbdiff.exe
+            binaries/dbdiff-*/dbdiff-*
             binaries/dbdiff-phar/dbdiff.phar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
