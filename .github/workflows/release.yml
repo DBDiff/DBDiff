@@ -15,8 +15,11 @@ env:
   # Extensions compiled into the static PHP binary.
   # yaml is pure-PHP via symfony/yaml so it is excluded here.
   SPC_EXTENSIONS: "phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
-  # Native C library sources SPC must download alongside the extensions
+  # Native C library sources SPC must download alongside the extensions (Unix)
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
+  # Windows-specific library names (ncurses/libedit are Unix-only; SPC maps
+  # postgresql → postgresql-win and libiconv → libiconv-win automatically)
+  SPC_WINDOWS_LIBS: "libiconv,libxml2,postgresql,sqlite"
   SPC_PHP_VERSION: "8.3"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -98,7 +101,7 @@ jobs:
 
           # ── macOS ─────────────────────────────────────────────────────────
           - target:   darwin-x64
-            os:       macos-13           # GitHub Intel runner
+            os:       macos-15-intel     # GitHub Intel (x64) runner — macos-13 was retired
             musl:     false
             artifact: dbdiff-darwin-x64
 
@@ -155,6 +158,11 @@ jobs:
       # ── Build static PHP micro SAPI (all Unix targets) ────────────────────
       - name: Build static PHP binary (Unix)
         if: runner.os != 'Windows'
+        env:
+          # Authenticated token prevents GitHub API 403 rate-limit errors that
+          # occur on macOS runners after doctor --auto-fix makes many brew/API
+          # calls before the spc download step runs.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./spc doctor --auto-fix
           ./spc download \
@@ -190,7 +198,7 @@ jobs:
           # target directory to already exist — failing otherwise with
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
-          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro
 
       - name: Combine PHP + PHAR → binary (Windows)
