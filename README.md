@@ -467,7 +467,7 @@ Test DBDiff locally against any combination of PHP and MySQL:
 ./start.sh all all --parallel
 ```
 
-The CI matrix: **4 PHP × 4 MySQL = 16 jobs**, plus dedicated jobs for SQLite and PostgreSQL.
+The CI matrix: **6 PHP × 4 MySQL = 24 jobs**, plus dedicated jobs for SQLite and PostgreSQL.
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
 

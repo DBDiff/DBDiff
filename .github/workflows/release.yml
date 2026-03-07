@@ -17,9 +17,12 @@ env:
   SPC_EXTENSIONS: "phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
   # Native C library sources SPC must download alongside the extensions (Unix)
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
-  # Windows-specific library names (ncurses/libedit are Unix-only; SPC maps
-  # postgresql → postgresql-win and libiconv → libiconv-win automatically)
-  SPC_WINDOWS_LIBS: "libiconv,libxml2,postgresql,sqlite"
+  # Windows-specific library names. SPC uses pre-built Visual C++ packages for
+  # postgresql and libiconv — they must be requested as postgresql-win and
+  # libiconv-win; the bare names download the Unix source archives instead and
+  # the build then fails with "not downloaded or not locked".
+  # ncurses and libedit are Unix-only and must be omitted.
+  SPC_WINDOWS_LIBS: "libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -256,9 +259,15 @@ jobs:
 
       # Download all available artifacts (PHAR + whatever binaries succeeded).
       # Artifacts from failed binary jobs simply won't be present in binaries/.
+      # The pattern filter is required to exclude Docker build-cache artifacts
+      # (DBDiff~DBDiff~*.dockerbuild) that share the same run — downloading
+      # those fails with "Artifact download failed after 5 retries" and aborts
+      # the entire publish job.
       - uses: actions/download-artifact@v4
         with:
           path: binaries/
+          pattern: dbdiff-*
+          merge-multiple: false
 
       # Stamp the version into every package.json (root + 8 platform packages)
       - name: Inject version into package.json files
