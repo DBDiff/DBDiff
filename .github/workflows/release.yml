@@ -149,7 +149,8 @@ jobs:
       # SPC doctor needs sudo on Linux to install the musl cross-compiler
       - name: Allow sudo for SPC doctor (Linux)
         if: runner.os == 'Linux'
-        run: echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
+        run: |
+          echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
 
       # ── Build static PHP micro SAPI (all Unix targets) ────────────────────
       - name: Build static PHP binary (Unix)
