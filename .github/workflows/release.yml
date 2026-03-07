@@ -335,7 +335,9 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           # Packages published without a native binary — bin/dbdiff.js falls
           # back to running the bundled dbdiff.phar with system PHP for these.
-          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
+          # win32-x64:   SPC v2.8.2 fails to link zlibstatic.lib into micro SAPI
+          # win32-arm64: SPC hard-codes phpsdk-vs17-x64.bat, invalid on ARM64 hosts
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-x64 @dbdiff/cli-win32-arm64"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
             # Skip packages whose binary was not produced, unless they are in
