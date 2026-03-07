@@ -1,0 +1,26 @@
+name: Lint GitHub Actions workflows
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/**.yml'
+      - '.github/workflows/**.yaml'
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/**.yml'
+      - '.github/workflows/**.yaml'
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1
+        with:
+          # Treat all warnings as errors; surface shellcheck + pyflakes issues too
+          flags: '-color'
