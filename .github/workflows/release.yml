@@ -314,24 +314,39 @@ jobs:
           # win32-arm64 omitted — not built (SPC Windows ARM64 toolchain bug)
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
+      # Bundle the PHAR into @dbdiff/cli itself so bin/dbdiff.js can fall back to
+      # running it with system PHP on platforms that have no native binary
+      # (currently win32-x64 and win32-arm64 until SPC Windows support matures).
+      - name: Bundle PHAR into @dbdiff/cli for PHP fallback
+        run: cp binaries/dbdiff-phar/dbdiff.phar packages/@dbdiff/cli/dbdiff.phar
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      # Publish the platform packages that have a binary present.
-      # Packages without a binary are skipped with a warning.
+      # Publish the platform packages that have a binary present, plus any
+      # intentionally binary-free packages (PHAR_FALLBACK_PKGS) that rely on
+      # the dbdiff.phar fallback bundled in @dbdiff/cli.
       # Packages already on the registry at this version are also skipped
       # (safe to re-run against an already-published release).
       - name: Publish platform packages to npm
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          # Packages published without a native binary — bin/dbdiff.js falls
+          # back to running the bundled dbdiff.phar with system PHP for these.
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
-            # Skip packages whose binary was not produced (checks both Unix and Windows names)
+            # Skip packages whose binary was not produced, unless they are in
+            # the known PHAR-fallback list (intentionally published without a binary).
             if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
-              echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
-              continue
+              if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
+                echo "  No binary for ${pkg_name} — publishing as PHAR-fallback skeleton"
+              else
+                echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
+                continue
+              fi
             fi
             if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
@@ -368,11 +383,27 @@ jobs:
             git push origin "$TAG"
           fi
 
+      # Rename each binary to include its platform so every GitHub Release asset
+      # has a unique name (dbdiff-linux-x64, dbdiff-darwin-arm64, dbdiff-win32-x64.exe …).
+      # Without this all six Unix binaries share the basename 'dbdiff', causing
+      # softprops/action-gh-release to upload colliding assets and then fail with
+      # 404 'Not Found' when trying to delete stale duplicates on re-runs.
+      - name: Rename binaries to include platform in filename
+        run: |
+          for dir in binaries/dbdiff-*/; do
+            platform="${dir#binaries/dbdiff-}"
+            platform="${platform%/}"
+            if [ -f "${dir}dbdiff" ]; then
+              mv "${dir}dbdiff" "${dir}dbdiff-${platform}"
+            elif [ -f "${dir}dbdiff.exe" ]; then
+              mv "${dir}dbdiff.exe" "${dir}dbdiff-${platform}.exe"
+            fi
+          done
+
       # softprops/action-gh-release updates the release in-place when one
       # already exists for the tag, so this step is safe to re-run.
       # Glob patterns match only the binaries that were actually produced;
-      # missing platform binaries (already warned about in the copy step above)
-      # are silently omitted from the release assets rather than failing the job.
+      # missing platform binaries are silently omitted rather than failing.
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -381,8 +412,7 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            binaries/dbdiff-*/dbdiff
-            binaries/dbdiff-*/dbdiff.exe
+            binaries/dbdiff-*/dbdiff-*
             binaries/dbdiff-phar/dbdiff.phar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

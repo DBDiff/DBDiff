@@ -84,17 +84,42 @@ if (!pkg) {
 
 const binaryPath = getBinaryPath(pkg);
 
+// If no native binary is available, fall back to the PHAR bundled in this
+// package and run it with system PHP.  DBDiff targets PHP developers so php
+// is expected to be in PATH on any machine where it isn't available natively
+// (e.g. win32-x64 while the Windows static build is being stabilised).
 if (!binaryPath) {
-  process.stderr.write(
-    `@dbdiff/cli: Could not locate the binary for ${process.platform}-${process.arch}.\n` +
-    `The platform-specific package '${pkg}' may not have been installed.\n` +
-    `Try reinstalling: npm install -g @dbdiff/cli\n`
-  );
-  process.exit(1);
-}
+  const fs = require('fs');
+  const pharPath = path.join(__dirname, '..', 'dbdiff.phar');
 
-try {
-  execFileSync(binaryPath, process.argv.slice(2), { stdio: 'inherit' });
-} catch (err) {
-  process.exit(err.status ?? 1);
+  if (fs.existsSync(pharPath)) {
+    const phpExe = process.platform === 'win32' ? 'php.exe' : 'php';
+    try {
+      execFileSync(phpExe, [pharPath, ...process.argv.slice(2)], { stdio: 'inherit' });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        process.stderr.write(
+          `@dbdiff/cli: No native binary is available for ${process.platform}-${process.arch}.\n` +
+          `Attempted PHAR fallback but 'php' was not found in PATH.\n` +
+          `Install PHP 8.1+ from https://www.php.net/downloads and add it to your PATH,\n` +
+          `or open an issue at https://github.com/DBDiff/DBDiff/issues\n`
+        );
+        process.exit(1);
+      }
+      process.exit(err.status ?? 1);
+    }
+  } else {
+    process.stderr.write(
+      `@dbdiff/cli: Could not locate the binary for ${process.platform}-${process.arch}.\n` +
+      `The platform-specific package '${pkg}' may not have been installed.\n` +
+      `Try reinstalling: npm install -g @dbdiff/cli\n`
+    );
+    process.exit(1);
+  }
+} else {
+  try {
+    execFileSync(binaryPath, process.argv.slice(2), { stdio: 'inherit' });
+  } catch (err) {
+    process.exit(err.status ?? 1);
+  }
 }
