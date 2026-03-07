@@ -202,7 +202,7 @@ jobs:
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
-          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro
+          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
 
       - name: Combine PHP + PHAR → binary (Windows)
         if: runner.os == 'Windows'

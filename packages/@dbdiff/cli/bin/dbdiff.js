@@ -62,7 +62,10 @@ function getBinaryPath(pkg) {
   const binaryName = process.platform === 'win32' ? 'dbdiff.exe' : 'dbdiff';
   try {
     const pkgDir = path.dirname(require.resolve(`${pkg}/package.json`));
-    return path.join(pkgDir, binaryName);
+    const binPath = path.join(pkgDir, binaryName);
+    // Return null when the platform package is installed but contains no binary
+    // (can happen if a platform build failed during release).
+    return require('fs').existsSync(binPath) ? binPath : null;
   } catch {
     return null;
   }
