@@ -273,7 +273,7 @@ jobs:
       - name: Inject version into package.json files
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          for pkg_dir in packages/@dbdiff/cli packages/@dbdiff/cli-*/; do
+          for pkg_dir in packages/@dbdiff/cli/ packages/@dbdiff/cli-*/; do
             node -e "
               const fs = require('fs');
               const p = '${pkg_dir}package.json';
