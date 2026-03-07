@@ -342,9 +342,7 @@ jobs:
   #   slim  → docker/Dockerfile.slim  — PHAR + PHP Alpine (~120 MB)
   #   full  → docker/Dockerfile       — Composer source install (~600 MB)
   #
-  # Registries:
-  #   Docker Hub  docker.io/dbdiff/dbdiff   (requires DOCKERHUB_USERNAME + DOCKERHUB_TOKEN secrets)
-  #   GHCR        ghcr.io/dbdiff/dbdiff     (uses GITHUB_TOKEN — no extra secrets needed)
+  # Registry: GHCR — ghcr.io/dbdiff/dbdiff  (uses GITHUB_TOKEN, no extra secrets needed)
   #
   # Tags (slim):  latest, {version}, slim-{version}
   # Tags (full):  full, full-{version}
@@ -390,16 +388,7 @@ jobs:
         with:
           driver-opts: image=moby/buildkit:latest
 
-      # ── Registry logins (independent — a missing secret won't block the other) ──
-      - name: Log in to Docker Hub
-        id: login-dockerhub
-        continue-on-error: true
-        uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
+      # ── Registry login ────────────────────────────────────────────────────
       - name: Log in to GHCR
         id: login-ghcr
         continue-on-error: true
@@ -409,48 +398,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Report login results
+      - name: Report login result
         run: |
-          echo "::group::Registry login summary"
-          if [ "${{ steps.login-dockerhub.outcome }}" = "success" ]; then
-            echo "✅ Docker Hub login succeeded"
-          else
-            echo "::warning::❌ Docker Hub login failed — set DOCKERHUB_USERNAME + DOCKERHUB_TOKEN secrets to enable DockerHub pushes"
-          fi
           if [ "${{ steps.login-ghcr.outcome }}" = "success" ]; then
             echo "✅ GHCR login succeeded"
           else
             echo "::warning::❌ GHCR login failed"
           fi
-          echo "::endgroup::"
 
       # ── Slim image (PHAR + PHP Alpine) ────────────────────────────────────
       # Tags: latest, {version}, slim-{version}
-      # docker pull dbdiff/dbdiff  →  this image
-      - name: Build and push slim image to Docker Hub
-        id: push-slim-dockerhub
-        if: steps.login-dockerhub.outcome == 'success'
-        continue-on-error: true
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.slim
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            docker.io/dbdiff/dbdiff:latest
-            docker.io/dbdiff/dbdiff:${{ github.event.inputs.version }}
-            docker.io/dbdiff/dbdiff:slim-${{ github.event.inputs.version }}
-          labels: |
-            org.opencontainers.image.title=DBDiff
-            org.opencontainers.image.description=Database schema and data diff tool — slim (PHAR) image
-            org.opencontainers.image.version=${{ github.event.inputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=https://github.com/DBDiff/DBDiff
-            org.opencontainers.image.url=https://hub.docker.com/r/dbdiff/dbdiff
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Build and push slim image to GHCR
         id: push-slim-ghcr
         if: steps.login-ghcr.outcome == 'success'
@@ -477,29 +434,6 @@ jobs:
       # ── Full image (Composer + source) ────────────────────────────────────
       # Tags: full, full-{version}
       # Intended for local development and cross-version testing (start.sh)
-      - name: Build and push full image to Docker Hub
-        id: push-full-dockerhub
-        if: steps.login-dockerhub.outcome == 'success'
-        continue-on-error: true
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            docker.io/dbdiff/dbdiff:full
-            docker.io/dbdiff/dbdiff:full-${{ github.event.inputs.version }}
-          labels: |
-            org.opencontainers.image.title=DBDiff
-            org.opencontainers.image.description=Database schema and data diff tool — full (source) image
-            org.opencontainers.image.version=${{ github.event.inputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=https://github.com/DBDiff/DBDiff
-            org.opencontainers.image.url=https://hub.docker.com/r/dbdiff/dbdiff
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Build and push full image to GHCR
         id: push-full-ghcr
         if: steps.login-ghcr.outcome == 'success'
@@ -526,30 +460,25 @@ jobs:
       - name: Docker publish summary
         if: always()
         run: |
-          echo "::group::Docker publish results"
-          echo ""
-          echo "  Slim image (latest / ${VERSION}):"
           VERSION="${{ github.event.inputs.version }}"
           report() {
             local label="$1" outcome="$2"
             if [ "$outcome" = "success" ]; then
-              echo "    ✅ $label"
+              echo "  ✅ $label"
             elif [ "$outcome" = "skipped" ]; then
-              echo "    ⏭️  $label (skipped — login failed or secret not set)"
+              echo "  ⏭️  $label (skipped — login failed)"
             else
-              echo "    ❌ $label (FAILED)"
+              echo "  ❌ $label (FAILED)"
             fi
           }
+          echo "::group::Docker publish results"
           echo ""
           echo "  Slim image (latest / ${VERSION} / slim-${VERSION}):"
-          report "Docker Hub  docker.io/dbdiff/dbdiff:latest"    "${{ steps.push-slim-dockerhub.outcome }}"
-          report "GHCR        ghcr.io/dbdiff/dbdiff:latest"      "${{ steps.push-slim-ghcr.outcome }}"
+          report "ghcr.io/dbdiff/dbdiff:latest"     "${{ steps.push-slim-ghcr.outcome }}"
           echo ""
           echo "  Full image (full / full-${VERSION}):"
-          report "Docker Hub  docker.io/dbdiff/dbdiff:full"      "${{ steps.push-full-dockerhub.outcome }}"
-          report "GHCR        ghcr.io/dbdiff/dbdiff:full"        "${{ steps.push-full-ghcr.outcome }}"
+          report "ghcr.io/dbdiff/dbdiff:full"       "${{ steps.push-full-ghcr.outcome }}"
           echo ""
-          echo "  Pull commands:"
-          echo "    docker pull dbdiff/dbdiff:${VERSION}          # slim (Docker Hub)"
-          echo "    docker pull ghcr.io/dbdiff/dbdiff:${VERSION}  # slim (GHCR)"
+          echo "  Pull command:"
+          echo "    docker pull ghcr.io/dbdiff/dbdiff:${VERSION}"
           echo "::endgroup::"

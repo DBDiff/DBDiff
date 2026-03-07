@@ -188,27 +188,23 @@ To build a PHAR locally from source, see [Building a PHAR](#building-a-phar).
 
 ## Docker
 
-Pre-built multi-arch images (linux/amd64 + linux/arm64) are published to Docker Hub and GHCR on every release.
+Pre-built multi-arch images (linux/amd64 + linux/arm64) are published to GHCR on every release.
 
 ### Pull and run (no build required)
 
 ```bash
-# Docker Hub (slim image — recommended)
-docker pull dbdiff/dbdiff
-docker run --rm dbdiff/dbdiff --version
-docker run --rm dbdiff/dbdiff --driver=mysql \
-  --server1=user:pass@host:3306 server1.mydb:server1.mydb
-
-# GHCR
 docker pull ghcr.io/dbdiff/dbdiff
+docker run --rm ghcr.io/dbdiff/dbdiff --version
+docker run --rm ghcr.io/dbdiff/dbdiff --driver=mysql \
+  --server1=user:pass@host:3306 server1.mydb:server1.mydb
 ```
 
 ### Image variants
 
 | Tag pattern | Registry | Description |
 |---|---|---|
-| `latest`, `{version}`, `slim-{version}` | Docker Hub + GHCR | **Slim** — PHAR + PHP Alpine (~120 MB). For production use / CI. |
-| `full`, `full-{version}` | Docker Hub + GHCR | **Full** — Composer source install (~600 MB). For development and cross-version testing. |
+| `latest`, `{version}`, `slim-{version}` | GHCR | **Slim** — PHAR + PHP Alpine (~120 MB). For production use / CI. |
+| `full`, `full-{version}` | GHCR | **Full** — Composer source install (~600 MB). For development and cross-version testing. |
 
 ### Build locally
 
