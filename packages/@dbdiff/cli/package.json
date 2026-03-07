@@ -1,0 +1,36 @@
+{
+  "name": "@dbdiff/cli",
+  "version": "2.0.0",
+  "description": "Compare MySQL, Postgres or SQLite databases & automatically create schema & data change migrations",
+  "homepage": "https://github.com/DBDiff/DBDiff",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DBDiff/DBDiff.git",
+    "directory": "packages/@dbdiff/cli"
+  },
+  "license": "MIT",
+  "bin": {
+    "dbdiff": "bin/dbdiff.js"
+  },
+  "files": [
+    "bin/dbdiff.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "optionalDependencies": {
+    "@dbdiff/cli-linux-x64":        "2.0.0",
+    "@dbdiff/cli-linux-arm64":      "2.0.0",
+    "@dbdiff/cli-linux-x64-musl":   "2.0.0",
+    "@dbdiff/cli-linux-arm64-musl": "2.0.0",
+    "@dbdiff/cli-darwin-x64":       "2.0.0",
+    "@dbdiff/cli-darwin-arm64":     "2.0.0",
+    "@dbdiff/cli-win32-x64":        "2.0.0",
+    "@dbdiff/cli-win32-arm64":      "2.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

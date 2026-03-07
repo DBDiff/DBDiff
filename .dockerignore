@@ -5,7 +5,9 @@
 .phpunit.cache
 
 # Exclude build and local artifacts
+# dist/dbdiff.phar is re-included below for Dockerfile.slim (which copies the PHAR directly)
 dist/
+!dist/dbdiff.phar
 images/
 reports/
 

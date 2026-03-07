@@ -1,56 +1,484 @@
 name: Release DBDiff
 
+# ─── Trigger ────────────────────────────────────────────────────────────────
+# Run this workflow manually from the GitHub UI.
+# The version input MUST NOT have a "v" prefix (e.g.  2.0.1  not  v2.0.1).
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer version to release (e.g. v1.1.0, v2.0.0)'
+        description: 'SemVer version — no "v" prefix (e.g. 2.1.0)'
         required: true
-        default: 'v1.1.0'
 
+# ─── Constants ──────────────────────────────────────────────────────────────
+env:
+  # Extensions compiled into the static PHP binary.
+  # yaml is pure-PHP via symfony/yaml so it is excluded here.
+  SPC_EXTENSIONS: "phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+  # Native C library sources SPC must download alongside the extensions
+  SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
+  SPC_PHP_VERSION: "8.3"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 1 — Build the PHAR once (fast, shared across all platform build jobs)
+# ═══════════════════════════════════════════════════════════════════════════
 jobs:
-  release:
-    name: Create Release
+  build-phar:
+    name: Build PHAR (Box)
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for @git-version@ placeholder in box.json
 
-    - name: Setup PHP
-      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
-      with:
-        php-version: '8.3'
-        extensions: phar, openssl, zlib
-        tools: composer
-        ini-values: phar.readonly=0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.SPC_PHP_VERSION }}
+          extensions: phar, openssl, zlib
+          tools: composer
+          # Box compiles the PHAR in a subprocess that overrides phar.readonly
+          ini-values: phar.readonly=0
 
-    - name: Install dependencies
-      run: composer install --no-dev --optimize-autoloader
+      - name: Install Composer dependencies (with humbug/box)
+        run: composer install --optimize-autoloader
 
-    - name: Build PHAR
-      run: |
-        chmod +x scripts/build
-        php scripts/build
+      - name: Build PHAR with Box
+        run: vendor/bin/box compile
 
-    - name: Create Tag
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git tag -a ${{ github.event.inputs.version }} -m "Release ${{ github.event.inputs.version }}"
-        git push origin ${{ github.event.inputs.version }}
+      - name: Smoke-test PHAR
+        run: php dist/dbdiff.phar --version
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
-      with:
-        tag_name: ${{ github.event.inputs.version }}
-        name: Release ${{ github.event.inputs.version }}
-        files: |
-          dist/dbdiff.phar
-          dist/dbdiff.phar.gz
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbdiff-phar
+          path: dist/dbdiff.phar
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Platform binary matrix
+  #
+  # linux-x64 / linux-arm64           → native Ubuntu runner, glibc binary
+  # linux-x64-musl / linux-arm64-musl → same runners, build inside Alpine container
+  # darwin-x64 / darwin-arm64         → native macOS runners
+  # win32-x64 / win32-arm64           → native Windows runners
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-binary:
+    name: Binary — ${{ matrix.target }}
+    needs: build-phar
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux glibc ───────────────────────────────────────────────────
+          - target:   linux-x64
+            os:       ubuntu-latest
+            musl:     false
+            artifact: dbdiff-linux-x64
+
+          - target:   linux-arm64
+            os:       ubuntu-24.04-arm
+            musl:     false
+            artifact: dbdiff-linux-arm64
+
+          # ── Linux musl (Alpine) ───────────────────────────────────────────
+          # The build runs inside an Alpine Docker container so the resulting
+          # binary is musl-linked.  The host OS still needs to be the right
+          # architecture so that `docker run alpine` uses the correct image.
+          - target:   linux-x64-musl
+            os:       ubuntu-latest
+            musl:     true
+            artifact: dbdiff-linux-x64-musl
+
+          - target:   linux-arm64-musl
+            os:       ubuntu-24.04-arm
+            musl:     true
+            artifact: dbdiff-linux-arm64-musl
+
+          # ── macOS ─────────────────────────────────────────────────────────
+          - target:   darwin-x64
+            os:       macos-13           # GitHub Intel runner
+            musl:     false
+            artifact: dbdiff-darwin-x64
+
+          - target:   darwin-arm64
+            os:       macos-latest       # GitHub ARM64/Apple-Silicon runner
+            musl:     false
+            artifact: dbdiff-darwin-arm64
+
+          # ── Windows ───────────────────────────────────────────────────────
+          - target:   win32-x64
+            os:       windows-latest
+            musl:     false
+            artifact: dbdiff-win32-x64
+
+          - target:   win32-arm64
+            os:       windows-11-arm     # GitHub ARM Windows runner
+            musl:     false
+            artifact: dbdiff-win32-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-phar
+          path: dist/
+
+      # ── Download static-php-cli (SPC) — Unix (Linux + macOS) ────────────────
+      # Note: SPC on Linux always uses its own musl cross-compiler toolchain, so
+      # the resulting binary is fully static (no glibc/musl dependency at runtime).
+      # Both the glibc and musl npm packages receive the identical binary.
+      - name: Download SPC (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64)    SPC_TARBALL="spc-linux-x86_64.tar.gz" ;;
+            Linux-ARM64)  SPC_TARBALL="spc-linux-aarch64.tar.gz" ;;
+            macOS-X64)    SPC_TARBALL="spc-macos-x86_64.tar.gz" ;;
+            macOS-ARM64)  SPC_TARBALL="spc-macos-aarch64.tar.gz" ;;
+          esac
+          curl -fsSL \
+            "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/${SPC_TARBALL}" \
+            | tar xz
+          chmod +x spc
+
+      # SPC doctor needs sudo on Linux to install the musl cross-compiler
+      - name: Allow sudo for SPC doctor (Linux)
+        if: runner.os == 'Linux'
+        run: echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
+
+      # ── Build static PHP micro SAPI (all Unix targets) ────────────────────
+      - name: Build static PHP binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./spc doctor --auto-fix
+          ./spc download \
+            "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
+            --with-php="${{ env.SPC_PHP_VERSION }}"
+          ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
+
+      # ── Combine static micro SAPI + PHAR → single binary (Unix) ──────────
+      - name: Combine PHP + PHAR → binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cat buildroot/bin/micro.sfx dist/dbdiff.phar > dbdiff
+          chmod +x dbdiff
+
+      # ── Windows: download SPC, build static PHP, combine ───────────────────
+      - name: Download SPC (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Windows SPC is a plain .exe (no tarball)
+          $url = "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-windows-x64.exe"
+          Invoke-WebRequest -Uri $url -OutFile spc.exe
+
+      - name: Build static PHP binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro
+
+      - name: Combine PHP + PHAR → binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $phpBytes  = [IO.File]::ReadAllBytes("buildroot\bin\micro.sfx.exe")
+          $pharBytes = [IO.File]::ReadAllBytes("dist\dbdiff.phar")
+          [IO.File]::WriteAllBytes("dbdiff.exe", $phpBytes + $pharBytes)
+
+      # ── Smoke-test the combined binary ──────────────────────────────────────
+      - name: Smoke-test binary (Unix)
+        if: runner.os != 'Windows'
+        run: ./dbdiff --version
+
+      - name: Smoke-test binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\dbdiff.exe --version
+
+      # ── Upload platform artifact ────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dbdiff${{ startsWith(matrix.target, 'win32') && '.exe' || '' }}
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Publish to npm + create GitHub Release
+  # ═══════════════════════════════════════════════════════════════════════════
+  publish:
+    name: Publish (npm + GitHub Release)
+    needs: build-binary
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write   # required for npm --provenance
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Download all 8 platform binaries + the PHAR into binaries/
+      - uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+
+      # Stamp the version into every package.json (root + 8 platform packages)
+      - name: Inject version into package.json files
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          for pkg_dir in packages/@dbdiff/cli packages/@dbdiff/cli-*/; do
+            node -e "
+              const fs = require('fs');
+              const p = '${pkg_dir}package.json';
+              const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+              j.version = '${VERSION}';
+              if (j.optionalDependencies) {
+                for (const k of Object.keys(j.optionalDependencies)) {
+                  j.optionalDependencies[k] = '${VERSION}';
+                }
+              }
+              fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+              console.log('Updated', p, 'to version', '${VERSION}');
+            "
+          done
+
+      # Copy each platform binary into its npm package directory
+      - name: Copy binaries into platform packages
+        run: |
+          cp binaries/dbdiff-linux-x64/dbdiff          packages/@dbdiff/cli-linux-x64/dbdiff
+          cp binaries/dbdiff-linux-arm64/dbdiff         packages/@dbdiff/cli-linux-arm64/dbdiff
+          cp binaries/dbdiff-linux-x64-musl/dbdiff      packages/@dbdiff/cli-linux-x64-musl/dbdiff
+          cp binaries/dbdiff-linux-arm64-musl/dbdiff    packages/@dbdiff/cli-linux-arm64-musl/dbdiff
+          cp binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
+          cp binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
+          cp binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
+          cp binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
+          chmod +x packages/@dbdiff/cli-*/dbdiff || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Publish the 8 platform packages first so the root package's
+      # optionalDependencies resolve immediately on install.
+      # Skips any package whose exact version is already on the registry
+      # (safe to re-run against an already-published release).
+      - name: Publish platform packages to npm
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          for pkg_dir in packages/@dbdiff/cli-*/; do
+            pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
+            if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
+              echo "  ${pkg_name}@${VERSION} already on registry — skipping"
+            else
+              echo "Publishing ${pkg_dir} ..."
+              npm publish "${pkg_dir}" --access public --provenance
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish root @dbdiff/cli to npm
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if npm view "@dbdiff/cli@${VERSION}" version &>/dev/null; then
+            echo "@dbdiff/cli@${VERSION} already on registry — skipping"
+          else
+            npm publish packages/@dbdiff/cli --access public --provenance
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Tag the release commit (idempotent — skips push if the tag already
+      # exists, which is the case when updating an already-published release)
+      - name: Create git tag
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists on origin — skipping"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+      # softprops/action-gh-release updates the release in-place when one
+      # already exists for the tag, so this step is safe to re-run.
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:  v${{ github.event.inputs.version }}
+          name:      v${{ github.event.inputs.version }}
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            binaries/dbdiff-linux-x64/dbdiff
+            binaries/dbdiff-linux-arm64/dbdiff
+            binaries/dbdiff-linux-x64-musl/dbdiff
+            binaries/dbdiff-linux-arm64-musl/dbdiff
+            binaries/dbdiff-darwin-x64/dbdiff
+            binaries/dbdiff-darwin-arm64/dbdiff
+            binaries/dbdiff-win32-x64/dbdiff.exe
+            binaries/dbdiff-win32-arm64/dbdiff.exe
+            binaries/dbdiff-phar/dbdiff.phar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4 — Build and push Docker images
+  #
+  # Two images per release:
+  #   slim  → docker/Dockerfile.slim  — PHAR + PHP Alpine (~120 MB)
+  #   full  → docker/Dockerfile       — Composer source install (~600 MB)
+  #
+  # Registry: GHCR — ghcr.io/dbdiff/dbdiff  (uses GITHUB_TOKEN, no extra secrets needed)
+  #
+  # Tags (slim):  latest, {version}, slim-{version}
+  # Tags (full):  full, full-{version}
+  #
+  # Platforms: linux/amd64 + linux/arm64 (via QEMU for cross-build)
+  #
+  # Each push step is independent (continue-on-error) so a Docker Hub outage
+  # or missing secret does not block GHCR, and vice versa.
+  # ═══════════════════════════════════════════════════════════════════════════
+  publish-docker:
+    name: Publish Docker images
+    # Only needs the PHAR — can run in parallel with binary builds
+    needs: build-phar
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # Required to push to GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download PHAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-phar
+          path: dist/
+
+      - name: Verify PHAR
+        run: |
+          echo "::group::PHAR details"
+          ls -lh dist/dbdiff.phar
+          file dist/dbdiff.phar
+          echo "::endgroup::"
+
+      # ── Build infrastructure ──────────────────────────────────────────────
+      - name: Set up QEMU (enables arm64 cross-build on amd64 runner)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:latest
+
+      # ── Registry login ────────────────────────────────────────────────────
+      - name: Log in to GHCR
+        id: login-ghcr
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report login result
+        run: |
+          if [ "${{ steps.login-ghcr.outcome }}" = "success" ]; then
+            echo "✅ GHCR login succeeded"
+          else
+            echo "::warning::❌ GHCR login failed"
+          fi
+
+      # ── Slim image (PHAR + PHP Alpine) ────────────────────────────────────
+      # Tags: latest, {version}, slim-{version}
+      - name: Build and push slim image to GHCR
+        id: push-slim-ghcr
+        if: steps.login-ghcr.outcome == 'success'
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.slim
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/dbdiff/dbdiff:latest
+            ghcr.io/dbdiff/dbdiff:${{ github.event.inputs.version }}
+            ghcr.io/dbdiff/dbdiff:slim-${{ github.event.inputs.version }}
+          labels: |
+            org.opencontainers.image.title=DBDiff
+            org.opencontainers.image.description=Database schema and data diff tool — slim (PHAR) image
+            org.opencontainers.image.version=${{ github.event.inputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/DBDiff/DBDiff
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Full image (Composer + source) ────────────────────────────────────
+      # Tags: full, full-{version}
+      # Intended for local development and cross-version testing (start.sh)
+      - name: Build and push full image to GHCR
+        id: push-full-ghcr
+        if: steps.login-ghcr.outcome == 'success'
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/dbdiff/dbdiff:full
+            ghcr.io/dbdiff/dbdiff:full-${{ github.event.inputs.version }}
+          labels: |
+            org.opencontainers.image.title=DBDiff
+            org.opencontainers.image.description=Database schema and data diff tool — full (source) image
+            org.opencontainers.image.version=${{ github.event.inputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/DBDiff/DBDiff
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Final summary (always runs — even if individual pushes failed) ─────
+      - name: Docker publish summary
+        if: always()
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          report() {
+            local label="$1" outcome="$2"
+            if [ "$outcome" = "success" ]; then
+              echo "  ✅ $label"
+            elif [ "$outcome" = "skipped" ]; then
+              echo "  ⏭️  $label (skipped — login failed)"
+            else
+              echo "  ❌ $label (FAILED)"
+            fi
+          }
+          echo "::group::Docker publish results"
+          echo ""
+          echo "  Slim image (latest / ${VERSION} / slim-${VERSION}):"
+          report "ghcr.io/dbdiff/dbdiff:latest"     "${{ steps.push-slim-ghcr.outcome }}"
+          echo ""
+          echo "  Full image (full / full-${VERSION}):"
+          report "ghcr.io/dbdiff/dbdiff:full"       "${{ steps.push-full-ghcr.outcome }}"
+          echo ""
+          echo "  Pull command:"
+          echo "    docker pull ghcr.io/dbdiff/dbdiff:${VERSION}"
+          echo "::endgroup::"
