@@ -314,6 +314,12 @@ jobs:
           # win32-arm64 omitted — not built (SPC Windows ARM64 toolchain bug)
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
+      # Bundle the PHAR into @dbdiff/cli itself so bin/dbdiff.js can fall back to
+      # running it with system PHP on platforms that have no native binary
+      # (currently win32-x64 and win32-arm64 until SPC Windows support matures).
+      - name: Bundle PHAR into @dbdiff/cli for PHP fallback
+        run: cp binaries/dbdiff-phar/dbdiff.phar packages/@dbdiff/cli/dbdiff.phar
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

@@ -14,6 +14,7 @@
   },
   "files": [
     "bin/dbdiff.js",
+    "dbdiff.phar",
     "README.md",
     "LICENSE"
   ],
