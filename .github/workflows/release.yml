@@ -259,9 +259,15 @@ jobs:
 
       # Download all available artifacts (PHAR + whatever binaries succeeded).
       # Artifacts from failed binary jobs simply won't be present in binaries/.
+      # The pattern filter is required to exclude Docker build-cache artifacts
+      # (DBDiff~DBDiff~*.dockerbuild) that share the same run — downloading
+      # those fails with "Artifact download failed after 5 retries" and aborts
+      # the entire publish job.
       - uses: actions/download-artifact@v4
         with:
           path: binaries/
+          pattern: dbdiff-*
+          merge-multiple: false
 
       # Stamp the version into every package.json (root + 8 platform packages)
       - name: Inject version into package.json files
