@@ -18,95 +18,95 @@
 
 
 ## Features
--   Works on Windows, Linux & Mac command-line/Terminal because it has been developed in PHP
--   Connects to a source and target database to do the comparison diff, locally and remotely
--   Diffs can include changes to the schema and/or data, both in valid SQL to bring the target up-to-date with the source
--   **Deterministic Output**: SQL is generated in a stable, predictable order (tables, columns, and data), ensuring consistent migrations and test pass rates across different environments.
--   Some tables and/or fields can be ignored in the comparison with a YAML collection in the config file (see File Examples)
--   Diffs are SUPER fast and this tool has been tested with databases of multiple tables of millions of rows
--   Since this diff tool is being used for migrations, it provides up and down SQL in the same file
--   Works with existing migration tools like Flyway and Simple DB Migrate by specifying output template files/formats
--   Is Unicode aware, can work with UTF8 data, which includes foreign characters/symbols
--   **Multi-database support**: MySQL, PostgreSQL, and SQLite via the `--driver` flag
--   **Supabase-ready**: use `--supabase` as a one-flag shorthand for connecting to a Supabase PostgreSQL instance over SSL
 
-## Pre-requisites
-1. You will need to have access to the command-line (Terminal/CMD/PowerShell)
-2. You will need to have git installed
-3. You will need to have PHP installed (version 8.3.x, 8.4.x, or 8.5.x)
-4. You will need to have Composer installed
+- Compares two databases (local or remote) and generates SQL migrations automatically
+- Diffs schema changes, data changes, or both — with deterministic, predictable output
+- Up and down SQL generated in the same file
+- Supports MySQL, PostgreSQL, and SQLite via `--driver`
+- [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand
+- Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
+- Ignore specific tables or fields via a YAML config file
+- Unicode / UTF-8 aware
+- Fast — tested on databases with millions of rows
+- Runs on Windows, Linux and macOS (command-line / Terminal)
 
-_Note: Make a note of where `composer.phar` is installed as we will need it later on during Setup_
-
-* PHP 8.3.x
-* PHP 8.4.x
-* PHP 8.5.x
 
 ## Supported Databases
 
-_Other versions may work but are not actively supported. Feel free to contribute a PR to add official support._
+_Other versions may work but are not actively tested. PRs to add official support are welcome._
 
 ### MySQL
-* MySQL 8.0.x
-* MySQL 8.4.x (LTS)
-* MySQL 9.3.x (Innovation)
-* MySQL 9.6.x (Innovation)
+
+| Version | Status |
+|---|---|
+| MySQL 8.0.x | ✅ Supported |
+| MySQL 8.4.x (LTS) | ✅ Supported |
+| MySQL 9.3.x (Innovation) | ✅ Supported |
+| MySQL 9.6.x (Innovation) | ✅ Supported |
 
 ### PostgreSQL
-* PostgreSQL 14.x
-* PostgreSQL 15.x
-* PostgreSQL 16.x (LTS)
-* PostgreSQL 17.x
-* PostgreSQL 18.x
 
-Use `--driver=pgsql` (or pass `driver: pgsql` in your `.dbdiff` config file).
+Use `--driver=pgsql` (or `driver: pgsql` in your `.dbdiff` config).
+
+| Version | Status |
+|---|---|
+| PostgreSQL 14.x | ✅ Supported |
+| PostgreSQL 15.x | ✅ Supported |
+| PostgreSQL 16.x (LTS) | ✅ Supported |
+| PostgreSQL 17.x | ✅ Supported |
+| PostgreSQL 18.x | ✅ Supported |
 
 ### SQLite
-* SQLite 3.x (any version supported by the installed `pdo_sqlite` PHP extension)
 
-Use `--driver=sqlite`. For SQLite the comparison argument uses the file path as the database name:
+Use `--driver=sqlite`. The file path is passed as the database name:
+
 ```bash
 ./dbdiff --driver=sqlite server1./path/to/source.db:server1./path/to/target.db
 ```
 
+SQLite 3.x is supported (any version supported by the installed `pdo_sqlite` PHP extension).
+
 ### Supabase
-Use the `--supabase` shorthand flag — it sets `driver=pgsql` and enables SSL automatically:
+
+`--supabase` sets `driver=pgsql` and enables SSL automatically:
+
 ```bash
 ./dbdiff --supabase --server1=user:pass@db.xxx.supabase.co:5432 server1.mydb:server1.mydb
 ```
 
+
 ## Compatible Database Variants
 
-The databases below work with DBDiff's existing drivers with no code changes, because they speak standard MySQL or PostgreSQL wire protocols. **Unless otherwise noted, these have not been tested by the core team.** Feel free to open a PR to add official support.
+The databases below work with DBDiff's existing drivers with no code changes. **Unless otherwise noted, these have not been tested by the core team.** PRs to add official support are welcome.
 
-### MySQL-compatible — use `--driver=mysql` (the default)
+### MySQL-compatible — `--driver=mysql` (default)
 
-| Database | Connection | Notes |
-|---|---|---|
-| MariaDB 10.x / 11.x | `--server1=user:pass@host:3306` | MySQL wire protocol; minor DDL dialect differences |
-| AWS Aurora MySQL | `--server1=user:pass@cluster-endpoint:3306` | Standard MySQL protocol |
-| PlanetScale | `--server1=user:pass@host:3306` | MySQL-compatible SaaS |
-| Vitess / VTGate | `--server1=user:pass@vtgate-host:3306` | MySQL wire protocol via VTGate |
-| Percona XtraDB Cluster | `--server1=user:pass@host:3306` | MySQL-compatible; Galera replication metadata ignored |
-| TiDB | `--server1=user:pass@host:4000` | MySQL-compatible; default port 4000 |
+| Database | Notes |
+|---|---|
+| MariaDB 10.x / 11.x | MySQL wire protocol; minor DDL dialect differences |
+| AWS Aurora MySQL | Standard MySQL protocol |
+| PlanetScale | MySQL-compatible SaaS |
+| Vitess / VTGate | MySQL wire protocol via VTGate |
+| Percona XtraDB Cluster | MySQL-compatible; Galera replication metadata ignored |
+| TiDB | MySQL-compatible; default port 4000 |
 
-### PostgreSQL-compatible — use `--driver=pgsql`
+### PostgreSQL-compatible — `--driver=pgsql`
 
-| Database | Connection | Notes |
-|---|---|---|
-| AWS Aurora PostgreSQL | `--server1-url postgres://user:pass@cluster:5432/db` | Standard pgsql connection |
-| AWS RDS PostgreSQL | `--server1-url postgres://user:pass@host:5432/db` | Standard pgsql connection |
-| [Neon](https://neon.tech) | `--server1-url postgres://user:pass@host.neon.tech:5432/db` | Standard pgsql; see Neon Branching below |
-| AlloyDB (Google Cloud) | `--server1-url postgres://user:pass@host:5432/db` | Google's Postgres-compatible offering |
-| CockroachDB | `--server1-url postgresql://user:pass@host:26257/db` | Postgres wire protocol; some DDL differences |
-| YugabyteDB | `--server1-url postgres://user:pass@host:5433/db` | Postgres-compatible YSQL layer |
-| Multigres | `--server1-url postgres://user:pass@multigres-host:5432/db` | Transparent Postgres proxy; no changes needed |
-| TimescaleDB | `--driver=pgsql` as normal | Postgres extension; hypertable DDL diffs natively |
-| pgvector | `--driver=pgsql` as normal | `vector(N)` column types and HNSW/IVFFlat indexes diff natively |
+| Database | Notes |
+|---|---|
+| AWS Aurora PostgreSQL | Standard pgsql connection |
+| AWS RDS PostgreSQL | Standard pgsql connection |
+| [Neon](https://neon.tech) | Standard pgsql; supports branch diffing (see below) |
+| AlloyDB (Google Cloud) | Google's Postgres-compatible offering |
+| CockroachDB | Postgres wire protocol; some DDL differences |
+| YugabyteDB | Postgres-compatible YSQL layer |
+| Multigres | Transparent Postgres proxy; no changes needed |
+| TimescaleDB | Postgres extension; hypertable DDL diffs natively |
+| pgvector | `vector(N)` columns and HNSW/IVFFlat indexes diff natively |
 
 ### Neon Branching
 
-Neon's instant copy-on-write branching lets you diff any two branches directly — each branch is an independent PostgreSQL endpoint:
+Neon's copy-on-write branching lets you diff any two branches directly:
 
 ```bash
 ./dbdiff \
@@ -117,343 +117,388 @@ Neon's instant copy-on-write branching lets you diff any two branches directly �
 
 ### Dolt (Git for Databases)
 
-[Dolt](https://github.com/dolthub/dolt) is a MySQL-compatible database with full Git-style branching. DBDiff's MySQL adapter connects to a Dolt server directly — each Dolt branch is exposed as a separate database:
+[Dolt](https://github.com/dolthub/dolt) is a MySQL-compatible database with Git-style branching. Each branch is exposed as a separate database:
 
 ```bash
-# Start a Dolt server, then diff two branches
 ./dbdiff server1.main:server1.feature_add_users
 ```
 
+
 ## Installation
-On the command-line, use `git` to clone the ssh version:
 
-	git clone git@github.com:DBDiff/DBDiff.git
+The quickest way to get started is to download a pre-built release directly from [**GitHub Releases**](https://github.com/DBDiff/DBDiff/releases/latest) — no PHP, Node, or Composer required:
 
-**Or** use `git` to clone the https version:
+| Method | Available on Releases? | Best for |
+|---|---|---|
+| [Pre-built binary](#pre-built-binaries) | ✅ Yes | Quickest start — zero dependencies |
+| [PHAR](#phar) | ✅ Yes | Single portable file; requires PHP ≥ 8.1 |
+| [npm](#npm) | ✅ Yes (via registry) | Node.js projects or CI pipelines |
+| [Docker](#docker) | — | Isolated environments or testing |
+| [Composer (source)](#composer-source-install) | — | Contributing to DBDiff or PHP integration |
 
-	git clone https://github.com/DBDiff/DBDiff.git
+> **PHP requirement:** Pre-built binaries, npm packages, and Docker images bundle PHP 8.3 — no system PHP needed. The PHAR and Composer installs require **PHP ≥ 8.1** on your system.
 
-**Or** download the .zip archive and unzip it to a folder of your choosing e.g. dbdiff:
 
-	https://github.com/DBDiff/DBDiff/archive/master.zip
+## Pre-built Binaries
 
-**Or** use `composer` to include `DBDiff` as a project dependency:
+Download from [**GitHub Releases**](https://github.com/DBDiff/DBDiff/releases/latest). No PHP, Node, or Composer required.
 
-	php composer.phar require "dbdiff/dbdiff:@dev"
+| Platform | Asset |
+|---|---|
+| Linux x64 (glibc) | `dbdiff-linux-x64` |
+| Linux x64 (Alpine / musl) | `dbdiff-linux-x64-musl` |
+| Linux arm64 (glibc) | `dbdiff-linux-arm64` |
+| Linux arm64 (Alpine / musl) | `dbdiff-linux-arm64-musl` |
+| macOS Apple Silicon | `dbdiff-darwin-arm64` |
+| macOS Intel | `dbdiff-darwin-x64` |
+| Windows x64 | `dbdiff-win32-x64.exe` |
+| Windows arm64 | `dbdiff-win32-arm64.exe` |
 
-**Or** use `composer` to install `DBDiff` globally:
+After downloading, make it executable (Linux/macOS) and optionally move it to your `PATH`:
 
-	composer global require "dbdiff/dbdiff:@dev"
-
-## Create a PHAR build
-
-Please first ensure in your `php.ini` file the `phar.readonly` setting is set to `false` , for example:
-
-```ini
-[Phar]
-; http://php.net/phar.readonly
-phar.readonly = false
+```bash
+chmod +x dbdiff-linux-x64
+sudo mv dbdiff-linux-x64 /usr/local/bin/dbdiff
+dbdiff --version
 ```
 
-Then in the root of the dbdiff repository to produce a Phar build simply run:
 
+## npm
+
+```bash
+npm install -g @dbdiff/cli
+dbdiff --version
 ```
-$ ./scripts/build
+
+The correct platform binary is selected automatically at install time. Supported: Linux x64/arm64 (glibc + musl), macOS x64/arm64, Windows x64/arm64.
+
+
+## PHAR
+
+Download `dbdiff.phar` from [**GitHub Releases**](https://github.com/DBDiff/DBDiff/releases/latest). Requires PHP ≥ 8.1.
+
+```bash
+chmod +x dbdiff.phar
+sudo mv dbdiff.phar /usr/local/bin/dbdiff
+dbdiff --version
 ```
 
-A `dist` folder should be created containing the following files:
+To build a PHAR locally from source, see [Building a PHAR](#building-a-phar).
 
-* dbdiff.phar
-* dbdiff.phar.gz
-
-Feel free to rename `dbdiff.phar` to `dbdiff` and move it to `/usr/local/bin` or another directory of your choice.
-
-You can also add it to your system's path if you wish to make it globally available on your system as a utility.
 
 ## Docker
 
-You may now use `docker` / `docker-compose` **or Podman / podman-compose** to create a local environment for DBDiff (for testing or production), including a PHP server with a database and the DBDiff CLI available as a service.
+Pre-built multi-arch images (linux/amd64 + linux/arm64) are published to Docker Hub and GHCR on every release.
 
-Please ensure you have one of the following installed locally, as well as a download of the git repository, before continuing:
-- **Docker** + `docker-compose` (or Docker Desktop)
-- **Podman** + `podman-compose` — a daemonless, rootless Docker-compatible alternative (see [DOCKER.md](DOCKER.md) for setup details)
-
-_Note: Please run these commands from the root of the DBDiff folder. Also the commands may need to be prepended with `sudo` on some systems._
-
-### Docker Standalone DBDiff CLI
+### Pull and run (no build required)
 
 ```bash
-# Build DBDiff CLI Image
-docker build --tag "dbdiff:latest" --file "docker/Dockerfile" .
+# Docker Hub (slim image — recommended)
+docker pull dbdiff/dbdiff
+docker run --rm dbdiff/dbdiff --version
+docker run --rm dbdiff/dbdiff --driver=mysql \
+  --server1=user:pass@host:3306 server1.mydb:server1.mydb
+
+# GHCR
+docker pull ghcr.io/dbdiff/dbdiff
 ```
+
+### Image variants
+
+| Tag pattern | Registry | Description |
+|---|---|---|
+| `latest`, `{version}`, `slim-{version}` | Docker Hub + GHCR | **Slim** — PHAR + PHP Alpine (~120 MB). For production use / CI. |
+| `full`, `full-{version}` | Docker Hub + GHCR | **Full** — Composer source install (~600 MB). For development and cross-version testing. |
+
+### Build locally
 
 ```bash
-# Run DBDiff CLI Image as a Container
-docker run -i -t --ipc=host --shm-size="1g" "dbdiff:latest" <command>
+# Slim image (requires dist/dbdiff.phar — run `vendor/bin/box compile` first)
+docker build -f docker/Dockerfile.slim -t dbdiff:slim .
+docker run --rm dbdiff:slim --version
+
+# Full image (Composer install from source — no PHAR needed)
+docker build -f docker/Dockerfile -t dbdiff:full .
 ```
+
+See [DOCKER.md](DOCKER.md) for cross-version testing, Podman usage, and start.sh flags.
+
+
+## Composer Source Install
 
 ```bash
-# Remove DBDiff CLI Image
-docker image rm dbdiff:latest
+git clone https://github.com/DBDiff/DBDiff.git
+cd DBDiff
+composer install --optimize-autoloader
 ```
 
-### Cross-Version Testing
-
-You can easily test DBDiff against any combination of PHP and MySQL using the provided `start.sh` script.
+Or as a project dependency:
 
 ```bash
-# Run tests for a specific combination
-./start.sh 8.3 8.0
-
-# Run all 16 version combinations in parallel (4x speedup)
-./start.sh all all --parallel
+composer require "dbdiff/dbdiff:@dev"
 ```
 
-The CI matrix mirrors this locally: **4 PHP versions × 4 MySQL versions = 16 jobs**, plus dedicated jobs for SQLite (4 PHP versions) and PostgreSQL (4 PHP × 5 Postgres versions = 20 jobs).
-
-See the [DOCKER.md](DOCKER.md) file for extensive documentation on the Dockerized test runner, including flags for **fast restarts**, **recording fixtures**, and **automated CI**.
-
-### Removing Docker Compose DBDiff Environment
+Or globally:
 
 ```bash
-docker-compose down
+composer global require "dbdiff/dbdiff:@dev"
 ```
+
+After installing from source, continue with [Setup](#setup).
+
 
 ## Setup
 
-_Make sure you are in the root of your application for all the following steps, using 'cd' to navigate on the command line to where you have placed your "dbdiff" folder_
+_For source installs (git clone / Composer) only. Binaries, PHAR, npm, and Docker do not require these steps._
 
-_We are going to assume that `composer.phar` is installed inside your "dbdiff" folder. If it is installed elsewhere you will need to use it's exact path_
+1. Create a `.dbdiff` config file — see [File Examples](#file-examples)
+2. Run: `./dbdiff server1.db1:server1.db2`
 
-1. If you didn't install `DBDiff` with `composer`, install the dependencies of the project with: `php composer.phar install`
-2. Make a `.dbdiff` file by following the [File Examples](#file-examples) and place it in the root of your "dbdiff" directory
-3. Type `./dbdiff {dbdiff command here e.g. server1.db1:server1.db2}` to start the app! See [Command-Line API](#command-line-api) for more details on which commands you can run.
+Expected output:
 
-You should see something like...
+```
+ℹ Now calculating schema diff for table `foo`
+ℹ Now generating UP migration
+ℹ Writing migration file to /path/to/dbdiff/migration.sql
+✔ Completed
+```
 
-	ℹ Now calculating schema diff for table `foo`
-	ℹ Now calculating data diff for table `foo`
-	ℹ Now generating UP migration
-	ℹ Now generating DOWN migration
-	ℹ Writing migration file to /path/to/dbdiff/migration.sql
-	✔ Completed
-
-Congratulations you have installed and ran DBDiff!
 
 ## Command-Line API
 
-_Note: The command-line parameters will always override the settings in the `.dbdiff` config file_
+_Flags always override settings in `.dbdiff`._
 
--   **--server1=user:password@host1:port** - Specify the source db connection details. If there is only one server the --server1 flag can be omitted
--   **--server2=user:password@host2:port** - Specify the target db connection details (if it’s different to server1)-   **--driver=mysql|pgsql|sqlite** - Database driver to use. Defaults to `mysql`. Use `pgsql` for PostgreSQL (including Supabase), `sqlite` for file-based SQLite databases.
--   **--supabase** - Convenience shorthand: sets `--driver=pgsql` and enables SSL (`sslmode=require`). Designed for use with [Supabase](https://supabase.com/).-   **--template=templates/simple-db-migrate.tmpl** - Specifies the output template, if any. By default will be plain SQL
--   **--type=schema** or **data** or **all** - Specifies the type of diff to do either on the schema, data or both. schema is the default
--   **--include=up** or **down** or **all** - Specified whether to include the up, down or both data in the output. up is the default
--   **--nocomments=true** - By default automated comments starting with the hash (\#) character are included in the output file, which can be removed with this parameter
--   **--config=config.yaml** - By default, DBDiff will look for a `.dbdiff` file in the current directory which is valid YAML, which may also be overridden with a config file that lists the database host, user, port and password of the source and target DBs in YAML format (instead of using the command line for it), or any of the other settings e.g. the format, template, type, include, nocomments. Please note: a command-line parameter will always override any config file.
--   **server1.db1.table1:server2.db2.table3** or **server1.db1:server2.db2** - The penultimate parameter is what to compare. This tool can compare just one table or all tables (entire db) from the database
--   **--output=./output-dir/today-up-schema.sql** - The last parameter is an output file and/or directory to output the diff to, which by default will output to the same directory the command is run in if no directory is specified. If a directory is specified, it should exist, otherwise an error will be thrown. If this path is not specified, the default file name becomes migration.sql in the current directory
+| Flag | Description |
+|---|---|
+| `--server1=user:pass@host:port` | Source connection. Omit if using only one server. |
+| `--server2=user:pass@host:port` | Target connection (if different from server1). |
+| `--driver=mysql\|pgsql\|sqlite` | Database driver. Defaults to `mysql`. |
+| `--supabase` | Shorthand for `--driver=pgsql` + SSL. |
+| `--format=native\|flyway\|liquibase-xml\|liquibase-yaml\|laravel` | Output format. Defaults to `native`. |
+| `--description=<slug>` | Slug used in generated filenames. |
+| `--template=<path>` | Custom output template. |
+| `--type=schema\|data\|all` | What to diff. Defaults to `schema`. |
+| `--include=up\|down\|all` | Directions to include. Defaults to `up`. |
+| `--nocomments=true` | Strip comment headers from output. |
+| `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
+| `--output=<path>` | Output file path. Defaults to `migration.sql`. |
+| `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
+
 
 ## Usage Examples
 
-### Example 1 -- MySQL (default)
-`$ ./dbdiff server1.db1:server2.db2`
+### MySQL (default)
+```bash
+./dbdiff server1.db1:server2.db2
+```
 
-Looks for the `.dbdiff` config file for connection details and compares the schemas of `db1` and `db2`, outputting `migration.sql` in the current directory.
+### MySQL — data diff only
+```bash
+./dbdiff server1.dev.table1:server2.prod.table1 --nocomments=true --type=data
+```
 
-### Example 2 -- MySQL table data diff
-`$ ./dbdiff server1.development.table1:server2.production.table1 --nocomments=true --type=data`
+### MySQL — Flyway format with output path
+```bash
+./dbdiff --format=flyway --description=add_users --include=all \
+  server1.db1:server2.db2 --output=./sql/
+```
 
-Compares only the data of `table1` between the two databases; no comment headers in output.
+### PostgreSQL
+```bash
+./dbdiff --driver=pgsql --server1=user:pass@localhost:5432 server1.staging:server1.production
+```
 
-### Example 3 -- MySQL with template and full output
-`$ ./dbdiff --config=config.conf --template=templates/simple-db-migrate.tmpl --include=all server1.db1:server2.db2 --output=./sql/simple-schema.sql`
+### Supabase
+```bash
+./dbdiff --supabase --server1=postgres:pass@db.xxxx.supabase.co:5432 \
+  server1.staging:server1.production
+```
 
-Uses `config.conf` for connection settings, applies the simple-db-migrate template, and writes both up and down SQL to `./sql/simple-schema.sql`.
+### SQLite
+```bash
+./dbdiff --driver=sqlite server1./var/db/v1.db:server1./var/db/v2.db
+```
 
-### Example 4 -- PostgreSQL
-`$ ./dbdiff --driver=pgsql --server1=user:pass@localhost:5432 server1.staging:server1.production`
-
-Compares two PostgreSQL databases on the same server. Use `--driver=pgsql` or set `driver: pgsql` in your `.dbdiff` file.
-
-### Example 5 -- Supabase
-`$ ./dbdiff --supabase --server1=postgres:pass@db.xxxx.supabase.co:5432 server1.staging:server1.production`
-
-`--supabase` is equivalent to `--driver=pgsql` with SSL enabled. No extra config needed.
-
-### Example 6 -- SQLite
-`$ ./dbdiff --driver=sqlite server1./var/db/v1.db:server1./var/db/v2.db`
-
-Compares two SQLite files. No `--server1` flag is needed -- the file paths are embedded directly in the comparison argument. Paths must not contain dots other than in the filename extension.
 
 ## File Examples
 
-### .dbdiff
-	server1:
-		user: user
-		password: password
-		port: port # MySQL: 3306 | PostgreSQL: 5432
-		host: host1 # usually localhost or 127.0.0.1
-	server2:
-		user: user
-		password: password
-		port: port # MySQL: 3306 | PostgreSQL: 5432
-		host: host1 # usually localhost or 127.0.0.1
-	driver: mysql # mysql | pgsql | sqlite (default: mysql)
-	template: templates/simple-db-migrate.tmpl
-	type: all
-	include: all
-	nocomments: true
-	tablesToIgnore:
-	- table1
-	- table2
-	- table3
-	fieldsToIgnore:
-		table1:
-			- field1
-			- field2
-			- field3
-		table4:
-			- field1
-			- field4
+A single `dbdiff.yml` file in your project root configures both the diff command and the migration runner. Copy [`dbdiff.yml.example`](dbdiff.yml.example) to get started.
 
-### simple-db-migrate.tmpl
+Auto-detected filenames, in priority order:
 
-	SQL_UP = u"""
-	{{ $up }}
-	"""
-	SQL_DOWN = u"""
-	{{ $down }}
-	"""
+| Filename | Notes |
+|---|---|
+| `.dbdiff` | Legacy — still supported for backwards compatibility |
+| `dbdiff.yml` | **Recommended** — YAML syntax highlighting, single file for everything |
+| `.dbdiff.yml` | Hidden-file variant |
+| `dbdiff.yaml` | `.yaml` extension variant |
 
-## How Does the Diff Actually Work?
+You can also pass any filename explicitly: `./dbdiff --config=myconfig.yml server1.db:server2.db`
 
-The following comparisons run in exactly the following order:
+### `dbdiff.yml`
 
--   When comparing multiple tables: all comparisons should be run
--   When comparing just one table with another: only run the schema and data comparisons
+```yaml
+# ── Diff command (./dbdiff server1.db:server2.db) ─────────────────────────
+server1:
+  user: user
+  password: password
+  port: 3306      # MySQL: 3306 | PostgreSQL: 5432
+  host: localhost
+server2:
+  user: user
+  password: password
+  port: 3306
+  host: host2
+driver: mysql     # mysql | pgsql | sqlite
+type: all
+include: all
+nocomments: true
+tablesToIgnore:
+  - table1
+  - table2
+fieldsToIgnore:
+  table1:
+    - field1
+    - field2
 
-### Overall Comparison
--   Check both databases exist and are accessible, if not, throw an error
--   The database collation is then compared between the source and the target and any differences noted for the output
+# ── Migration runner (dbdiff migrate:up) ──────────────────────────────────
+database:
+  driver: mysql
+  host: localhost
+  port: 3306
+  name: mydb
+  user: root
+  password: secret
 
-### Schema Comparison
--   Looks to see if there are any differences in column numbers, name, type, collation or attributes
--   Any new columns in the source, which are not found in the target, are added
+migrations:
+  dir: ./migrations
+  history_table: _dbdiff_migrations
+```
 
-### Data Comparison
--   And then for each table, the table storage type (e.g. MyISAM, CSV), the collation (e.g. utf8\_general\_ci), and number of rows are compared, in that order. If there are any differences they are noted before moving onto the next test
--   Next, both changed rows as well as missing rows from each table are recorded
+
+## How Does the Diff Work?
+
+Comparisons run in this order:
+
+### Overall
+- Checks both databases exist and are accessible
+- Compares database collation between source and target
+
+### Schema
+- Detects differences in column count, name, type, collation or attributes
+- New columns in the source are added to the target
+
+### Data
+- Compares table storage engine, collation, and row count
+- Records changed rows and missing rows per table
+
 
 ## Compatible Migration Tools
 
-DBDiff supports multiple output formats via the `--format` flag. Add `--description=<slug>` to customise the generated file name.
+DBDiff supports multiple output formats via `--format`. Use `--description=<slug>` to customise generated filenames.
 
-| `--format` | Tool | Output file | `--include` support |
-|---|---|---|---|
-| `native` (default) | Plain SQL / any tool | `migration.sql` | `up`, `down`, `both` |
-| `flyway` | [Flyway](https://flywaydb.org) | `V{timestamp}__{desc}.sql` | `up` required; `down` adds `U{ts}__{desc}.sql` (Flyway Teams) |
-| `liquibase-xml` | [Liquibase](https://liquibase.com) | `changelog.xml` | Both directions in one file (`<sql>` + `<rollback>`) |
-| `liquibase-yaml` | [Liquibase](https://liquibase.com) | `changelog.yaml` | Both directions in one file |
-| `laravel` | [Laravel Migrations](https://laravel.com/docs/migrations) | `YYYY_MM_DD_HHMMSS_{desc}.php` | Both directions in one file (`up()`/`down()`) |
+| `--format` | Tool | Language | Output | Notes |
+|---|---|---|---|---|
+| `native` (default) | Plain SQL | Any | `migration.sql` | Up, down, or both |
+| `flyway` | [Flyway](https://flywaydb.org) | Java | `V{ts}__{desc}.sql` | Down adds `U{ts}__{desc}.sql` (Flyway Teams) |
+| `liquibase-xml` | [Liquibase](https://liquibase.com) | Java | `changelog.xml` | Both directions in one file |
+| `liquibase-yaml` | [Liquibase](https://liquibase.com) | Java | `changelog.yaml` | Both directions in one file |
+| `laravel` | [Laravel Migrations](https://laravel.com/docs/migrations) | PHP | `YYYY_MM_DD_HHMMSS_{desc}.php` | `up()`/`down()` methods |
+| _(template)_ | [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate) | Python | custom | Use `--template=templates/simple-db-migrate.tmpl` |
 
-### Flyway
+[Let us know](https://akalsoftware.com/) if you're using DBDiff with other tools so we can add them here.
 
-```bash
-./dbdiff --format=flyway --description=add_users server1.mydb:server2.mydb
-```
 
-Move the generated `V{timestamp}__add_users.sql` into your Flyway `sql/` migrations directory, then run `flyway migrate`.
+## Building a PHAR
 
-### Liquibase
+PHARs are built automatically and attached to every [GitHub Release](https://github.com/DBDiff/DBDiff/releases). To build locally from source:
 
 ```bash
-# XML
-./dbdiff --format=liquibase-xml --description=add_users server1.mydb:server2.mydb
-
-# YAML
-./dbdiff --format=liquibase-yaml --description=add_users server1.mydb:server2.mydb
+composer install
+vendor/bin/box compile
 ```
 
-Add the generated `changelog.xml` (or `.yaml`) to your Liquibase master changelog, then run `liquibase update`.
+Output: `dist/dbdiff.phar` — rename and move to `/usr/local/bin/dbdiff` if desired.
 
-### Laravel
+> `box.json` is pre-configured with GZ compression and `check-requirements: false` so the PHAR works correctly when stitched with the static micro SAPI runtime used in the pre-built binaries.
 
-```bash
-./dbdiff --format=laravel --description=add_users server1.mydb:server2.mydb
-```
-
-Move the generated `YYYY_MM_DD_HHMMSS_add_users.php` into `database/migrations/`, then run `php artisan migrate`.
-
-### Simple DB Migrate
-
-Use the bundled template with the legacy `--template` flag:
-
-```bash
-./dbdiff --template=templates/simple-db-migrate.tmpl server1.mydb:server2.mydb
-```
-
-| Project | Language | Description |
-|---|---|---|
-| [Flyway](https://github.com/flyway/flyway) | Java / Maven | Database migrations made easy |
-| [Liquibase](https://github.com/liquibase/liquibase) | Java / Maven | Database changelog and migration tool |
-| [Laravel Migrations](https://laravel.com/docs/migrations) | PHP / Composer | Schema migrations built into the Laravel framework |
-| [Simple DB Migrate](https://github.com/guilhermechapiewski/simple-db-migrate) | Python / PIP | Rails-inspired database migration tool |
-
-Please [let us know](https://akalsoftware.com/) if you're using DBDiff with other migration tools so we can add them here.
-
-## Questions & Support 💡
-
-* Create a new [issue](https://github.com/dbdiff/dbdiff/issues/new/choose) if you can't find yours [being addressed](https://github.com/dbdiff/dbdiff/issues)
-* Watch this space, as we're in the process of creating a discourse forum for all the DBDiff community
-- The documentation so far is what you see on this page, however this will slowly be expanded onto it's own website
-* If you are a company or organisation interested in commercial support packages for DBDiff please [get in touch](https://akalsoftware.com/)
-
-## Contributions 💖
-
-Please make sure to read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/master/.github/CONTRIBUTING.md) before making a pull request.
-
-Thank you to all the people who already contributed to DBDiff!
-
-<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
 
 ## Releasing 🚀
 
-DBDiff uses automated workflows for versioning and distribution:
+### Automated (recommended)
 
-### 1. Automated Release (Recommended)
-You can trigger a formal release directly from the **GitHub Actions** tab:
-- Select the **"Release DBDiff"** workflow.
-- Click **"Run workflow"** and specify the new version (e.g. `v2.0.0`).
-- This will automatically:
-    - Build the production PHAR using `scripts/build`.
-    - Create and push the Git tag.
-    - Create a GitHub Release with build assets attached.
-    - Notify Packagist to update the stable version.
+1. Go to **GitHub Actions → Release DBDiff → Run workflow**
+2. Enter the version number (e.g. `2.1.0` — no `v` prefix)
+3. The workflow will:
+   - Build the PHAR with Box
+   - Build self-contained binaries for all 8 platforms via static-php-cli
+   - Publish all `@dbdiff/cli-*` packages to npm (skips any already published)
+   - Create or update the GitHub Release with all assets
+   - Create the git tag (skipped if it already exists)
 
-### 2. Manual/Local Release
-If you need to tag a release locally:
+### Manual / local
+
 ```bash
-./scripts/release.sh v2.0.0
-git push origin v2.0.0
-```
-Then manually upload the files from the `dist/` folder to the GitHub Release page.
+# Build PHAR + tag
+scripts/release.sh v2.1.0
+git push origin v2.1.0
 
----
+# Build Linux binaries locally (requires Podman or Docker)
+SKIP_PHAR=1 scripts/release-binaries.sh 2.1.0
+
+# Upload assets to an existing GitHub Release
+gh release upload v2.1.0 --clobber \
+  dist/dbdiff.phar \
+  packages/@dbdiff/cli-linux-x64/dbdiff \
+  packages/@dbdiff/cli-linux-x64-musl/dbdiff \
+  packages/@dbdiff/cli-linux-arm64/dbdiff \
+  packages/@dbdiff/cli-linux-arm64-musl/dbdiff
+
+# Update the Homebrew tap formula
+scripts/update-homebrew-formula.sh 2.1.0 ../homebrew-dbdiff
+```
+
+
+## Cross-Version Testing
+
+Test DBDiff locally against any combination of PHP and MySQL:
+
+```bash
+# Single combination
+./start.sh 8.3 8.0
+
+# All 16 combinations in parallel
+./start.sh all all --parallel
+```
+
+The CI matrix: **4 PHP × 4 MySQL = 16 jobs**, plus dedicated jobs for SQLite and PostgreSQL.
+
+See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
+
+
+## Questions & Support 💡
+
+- Open a [new issue](https://github.com/dbdiff/dbdiff/issues/new/choose) or check [existing ones](https://github.com/dbdiff/dbdiff/issues)
+- For commercial support enquiries, [get in touch](https://akalsoftware.com/)
+
+
+## Contributions 💖
+
+Please read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/master/.github/CONTRIBUTING.md) before submitting a PR.
+
+<a href="https://github.com/dbdiff/dbdiff/graphs/contributors"><img src="https://img.shields.io/github/contributors/dbdiff/dbdiff.svg" /></a>
+
 
 ## Feedback 💬
 
-If you've made it down here, you're probably a fan 😉
-
-Could you please kindly spare 2 minutes to give us your feedback on DBDiff:
+Could you spare 2 minutes to share your feedback?
 
 https://forms.gle/gjdJxZxdVsz7BRxg7
 
-We read each and every suggestion that comes through.
 
 ## License
 
 [MIT](http://opensource.org/licenses/MIT)
 
-<p align="center">Made with 💖 by 
+<p align="center">Made with 💖 by<br>
 <a href="https://akalsoftware.com/" target="_blank" rel="noopener noreferrer"><img width="150" src="images/akal-logo.svg" alt="Akal Logo"></a></p>

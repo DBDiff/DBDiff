@@ -18,11 +18,11 @@
     "prefer-stable": true,
     "config": {
         "platform": {
-            "php": "8.0"
+            "php": "8.1"
         }
     },
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.1",
         "ext-json": "*",
         "aura/cli": "2.*@dev",
         "symfony/console": "^5.4|^6.0|^7.0",

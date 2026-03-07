@@ -1,14 +1,42 @@
 # dbdiff.yml — DBDiff configuration
 #
-# Copy this file to dbdiff.yml (or .dbdiff.yml) in your project root.
-# Rename individual values as needed.
+# This single file configures both the diff command and the migration runner.
+# Copy it to dbdiff.yml in your project root and fill in your values.
 #
-# Command-line flags always WIN over values in this file.
+# Auto-detected filenames (in priority order):
+#   .dbdiff        ← legacy plain-text YAML (no extension, no syntax highlighting)
+#   dbdiff.yml     ← recommended going forwards
+#   .dbdiff.yml
+#   dbdiff.yaml
+#
+# Command-line flags always override values in this file.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Diff command ──────────────────────────────────────────────────────────────
+# Used by:  ./dbdiff server1.db:server2.db
+# server1 / server2 can be the same host — just specify two database names.
+
+server1:
+  user: user
+  password: password
+  port: 3306             # MySQL: 3306 | PostgreSQL: 5432
+  host: 127.0.0.1
+
+server2:
+  user: user
+  password: password
+  port: 3306
+  host: 127.0.0.1
+
+driver: mysql            # mysql | pgsql | sqlite
+type: schema             # schema | data | all
+include: up              # up | down | both
+nocomments: false
+format: native           # native | flyway | liquibase-xml | liquibase-yaml | laravel
+
 # ── Database connection ───────────────────────────────────────────────────────
-# Used by migration:up / migration:down / migration:status (the runner commands).
-# The diff command uses --server1 / --server2 on the command line instead.
+# Used by:  dbdiff migrate:up / migrate:down / migrate:status
+# Typically this points to one database (the target you are migrating).
 
 database:
   driver: mysql          # mysql | pgsql | sqlite
@@ -25,27 +53,6 @@ migrations:
   dir: ./migrations                   # Where migration files are stored
   history_table: _dbdiff_migrations   # Tracking table (created automatically)
   out_of_order: false                 # Allow applying older versions after newer ones
-
-# ── Diff command defaults ─────────────────────────────────────────────────────
-# The values below are used by `dbdiff diff` when the corresponding flag is
-# not supplied on the command line.  They mirror the legacy .dbdiff file format.
-
-# server1:
-#   user: user
-#   password: password
-#   port: 3306
-#   host: 127.0.0.1
-
-# server2:
-#   user: user
-#   password: password
-#   port: 3306
-#   host: 127.0.0.1
-
-# type: schema        # schema | data | all
-# include: up         # up | down | both
-# nocomments: false
-# format: native      # native | flyway | liquibase-xml | liquibase-yaml | laravel
 
 # ── Supabase (Postgres) ───────────────────────────────────────────────────────
 # Option A — paste a connection string directly (simplest):

@@ -1,0 +1,49 @@
+# ── Dockerfile.slim ──────────────────────────────────────────────────────────
+# Minimal production image: the pre-built PHAR dropped into a PHP Alpine base.
+# No Composer, no source code, no build tools.
+#
+# Image size: ~120 MB  (vs ~600 MB for the full Dockerfile)
+#
+# Build (requires dist/dbdiff.phar to exist — built by `vendor/bin/box compile`):
+#   docker build -f docker/Dockerfile.slim -t dbdiff:slim .
+#
+# Run:
+#   docker run --rm dbdiff:slim --version
+#   docker run --rm dbdiff:slim --driver=mysql \
+#       --server1=user:pass@host:3306 server1.mydb:server1.mydb
+#
+# Pull from registries (built and pushed on every release):
+#   docker pull dbdiff/dbdiff:latest          # Docker Hub   (slim)
+#   docker pull ghcr.io/dbdiff/dbdiff:latest  # GHCR         (slim)
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG PHP_VERSION=8.3
+FROM php:${PHP_VERSION}-cli-alpine
+
+LABEL org.opencontainers.image.title="DBDiff" \
+      org.opencontainers.image.description="Database schema and data diff tool — slim (PHAR) image" \
+      org.opencontainers.image.url="https://github.com/DBDiff/DBDiff" \
+      org.opencontainers.image.source="https://github.com/DBDiff/DBDiff"
+
+# Install runtime libraries + PDO extensions.
+# .build-deps are removed from final layer to keep the image lean.
+RUN apk add --no-cache --virtual .build-deps \
+        libpq-dev sqlite-dev \
+    && apk add --no-cache \
+        libpq sqlite-libs \
+    && docker-php-ext-install -j"$(nproc)" \
+        pdo pdo_mysql pdo_pgsql pdo_sqlite \
+    && apk del .build-deps \
+    && rm -rf /var/cache/apk/* /tmp/*
+
+WORKDIR /work
+
+# Copy the pre-built PHAR (produced by `vendor/bin/box compile`)
+COPY dist/dbdiff.phar /usr/local/bin/dbdiff
+RUN chmod +x /usr/local/bin/dbdiff
+
+# Drop root — run as a dedicated non-privileged user
+RUN adduser -D -s /bin/sh dbdiff
+USER dbdiff
+
+ENTRYPOINT ["dbdiff"]

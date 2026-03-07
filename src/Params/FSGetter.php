@@ -37,8 +37,17 @@ class FSGetter implements ParamsGetter {
                 throw new FSException("Config file not found");
             }
         } else {
-            if (file_exists(getcwd() . '/.dbdiff')) {
-                $configFile = getcwd() . '/.dbdiff';
+            $candidates = [
+                getcwd() . '/.dbdiff',       // legacy — checked first for backwards compatibility
+                getcwd() . '/dbdiff.yml',     // recommended going forwards
+                getcwd() . '/.dbdiff.yml',
+                getcwd() . '/dbdiff.yaml',
+            ];
+            foreach ($candidates as $candidate) {
+                if (file_exists($candidate)) {
+                    $configFile = $candidate;
+                    break;
+                }
             }
         }
 
