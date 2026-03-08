@@ -9,6 +9,10 @@ on:
       version:
         description: 'SemVer version — no "v" prefix (e.g. 2.1.0)'
         required: true
+      ref:
+        description: 'Git ref to build from — tag, branch, or SHA (e.g. v2.0.1 or main). Defaults to the tag matching the version.'
+        required: false
+        default: ''
 
 # ─── Constants ──────────────────────────────────────────────────────────────
 env:
@@ -39,6 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # required for @git-version@ placeholder in box.json
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -130,6 +135,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -264,6 +271,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       # Download all available artifacts (PHAR + whatever binaries succeeded).
       # Artifacts from failed binary jobs simply won't be present in binaries/.
@@ -455,6 +463,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - name: Download PHAR artifact
         uses: actions/download-artifact@v4
