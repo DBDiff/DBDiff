@@ -204,6 +204,12 @@ jobs:
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          # Workaround for upstream SPC bug: nmake_micro_wrapper.bat omits zlibstatic.lib
+          # from LIBS_MICRO even when zlib is in the dependency list. SPC reads
+          # SPC_EXTRA_LIBS and appends it to both LIBS_MICRO and LIBS_CLI, so
+          # setting it here bridges the gap until the upstream fix lands.
+          # See: https://github.com/crazywhalecc/static-php-cli/issues/XXXX
+          $env:SPC_EXTRA_LIBS = "zlibstatic.lib"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
 
       - name: Combine PHP + PHAR → binary (Windows)
