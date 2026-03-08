@@ -215,7 +215,7 @@ jobs:
           # from LIBS_MICRO even when zlib is in the dependency list. SPC reads
           # SPC_EXTRA_LIBS and appends it to both LIBS_MICRO and LIBS_CLI, so
           # setting it here bridges the gap until the upstream fix lands.
-          # See: https://github.com/crazywhalecc/static-php-cli/issues/XXXX
+          # See: https://github.com/crazywhalecc/static-php-cli/issues/1052
           $env:SPC_EXTRA_LIBS = "zlibstatic.lib"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
 
