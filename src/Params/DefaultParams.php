@@ -54,6 +54,11 @@ class DefaultParams {
     public $driver = 'mysql';
 
     /*
+     An optional description/comment included in the migration output header.
+    */
+    public $description = '';
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

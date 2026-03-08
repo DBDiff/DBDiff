@@ -9,6 +9,10 @@ on:
       version:
         description: 'SemVer version — no "v" prefix (e.g. 2.1.0)'
         required: true
+      ref:
+        description: 'Git ref to build from — tag, branch, or SHA (e.g. v2.0.1 or main). Defaults to the tag matching the version.'
+        required: false
+        default: ''
 
 # ─── Constants ──────────────────────────────────────────────────────────────
 env:
@@ -39,6 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # required for @git-version@ placeholder in box.json
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -130,6 +135,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -204,6 +211,12 @@ jobs:
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          # Workaround for upstream SPC bug: nmake_micro_wrapper.bat omits zlibstatic.lib
+          # from LIBS_MICRO even when zlib is in the dependency list. SPC reads
+          # SPC_EXTRA_LIBS and appends it to both LIBS_MICRO and LIBS_CLI, so
+          # setting it here bridges the gap until the upstream fix lands.
+          # See: https://github.com/crazywhalecc/static-php-cli/issues/XXXX
+          $env:SPC_EXTRA_LIBS = "zlibstatic.lib"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
 
       - name: Combine PHP + PHAR → binary (Windows)
@@ -258,6 +271,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       # Download all available artifacts (PHAR + whatever binaries succeeded).
       # Artifacts from failed binary jobs simply won't be present in binaries/.
@@ -449,6 +463,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - name: Download PHAR artifact
         uses: actions/download-artifact@v4
