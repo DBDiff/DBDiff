@@ -3,7 +3,7 @@
   "output": "dist/dbdiff.phar",
   "compression": "GZ",
   "chmod": "0755",
-  "check-requirements": false,
+  "check-requirements": true,
   "finder": [
     { "in": "src" },
     {

@@ -39,7 +39,8 @@
     },
     "scripts": {
         "post-install-cmd": "scripts/post-install.sh",
-        "post-update-cmd": "scripts/post-install.sh"
+        "post-update-cmd": "scripts/post-install.sh",
+        "build:phar": "vendor/bin/box compile"
     },
     "support": {
         "email": "hello@akalsoftware.com"
