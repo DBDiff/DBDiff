@@ -9,10 +9,6 @@ on:
       version:
         description: 'SemVer version — no "v" prefix (e.g. 2.1.0)'
         required: true
-      ref:
-        description: 'Git ref to build from — tag, branch, or SHA (e.g. v2.0.1 or main). Defaults to the tag matching the version.'
-        required: false
-        default: ''
 
 # ─── Constants ──────────────────────────────────────────────────────────────
 env:
@@ -46,12 +42,10 @@ jobs:
           # Always check out master for build tooling (box.json, humbug/box).
           # The PHP source is overlaid from the release ref below.
 
-      - name: Overlay PHP source from release ref
+      - name: Stamp version constant
         run: |
-          REF="${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}"
-          git fetch --tags
-          git checkout "$REF" -- src/
-          echo "PHP source overlaid from $REF"
+          printf '<?php\nnamespace DBDiff;\nconst VERSION = '\''%s'\'';\n' '${{ inputs.version }}' > src/Version.php
+          echo "Version stamped as ${{ inputs.version }}"
 
       - uses: shivammathur/setup-php@v2
         with:
