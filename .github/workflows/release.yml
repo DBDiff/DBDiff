@@ -43,7 +43,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # required for @git-version@ placeholder in box.json
-          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
+          # Always check out master for build tooling (box.json, humbug/box).
+          # The PHP source is overlaid from the release ref below.
+
+      - name: Overlay PHP source from release ref
+        run: |
+          REF="${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}"
+          git fetch --tags
+          git checkout "$REF" -- src/
+          echo "PHP source overlaid from $REF"
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -135,8 +143,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -271,7 +277,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       # Download all available artifacts (PHAR + whatever binaries succeeded).
       # Artifacts from failed binary jobs simply won't be present in binaries/.
@@ -463,8 +468,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref != '' && inputs.ref || format('v{0}', inputs.version) }}
 
       - name: Download PHAR artifact
         uses: actions/download-artifact@v4
