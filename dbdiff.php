@@ -3,6 +3,7 @@
 require __DIR__ . '/vendor/autoload.php';
 
 use DBDiff\Migration\Command\DiffCommand;
+
 use DBDiff\Migration\Command\MigrationNewCommand;
 use DBDiff\Migration\Command\MigrationUpCommand;
 use DBDiff\Migration\Command\MigrationDownCommand;
@@ -12,7 +13,7 @@ use DBDiff\Migration\Command\MigrationRepairCommand;
 use DBDiff\Migration\Command\MigrationBaselineCommand;
 use Symfony\Component\Console\Application;
 
-$app = new Application('DBDiff', '2.0.0');
+$app = new Application('DBDiff', \DBDiff\VERSION);
 
 $app->addCommands([
     new DiffCommand,
