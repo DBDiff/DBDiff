@@ -216,4 +216,99 @@ class MigrationFileTest extends TestCase
         $this->assertStringContainsString('nodown2' . MigrationFile::DOWN_SUFFIX, $found[0]->downPath);
         $this->assertFalse($found[0]->hasDown());
     }
+
+    // ── scanDir() — Supabase plain .sql format ────────────────────────────────
+
+    /** A plain .sql file with the 14-digit prefix is recognised as a Supabase migration. */
+    public function testScanDirFindsSupabasePlainSqlFile(): void
+    {
+        file_put_contents("{$this->tmpDir}/20260218210000_add_build_log.sql", 'CREATE TABLE build_log ();');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(1, $found);
+        $this->assertSame('20260218210000', $found[0]->version);
+        $this->assertSame('add_build_log',   $found[0]->description);
+    }
+
+    /** Supabase-format migrations are UP-only: hasDown() must return false. */
+    public function testScanDirSupabaseMigrationHasNoDown(): void
+    {
+        file_put_contents("{$this->tmpDir}/20260218210000_add_build_log.sql", 'CREATE TABLE build_log ();');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertFalse($found[0]->hasDown());
+        $this->assertNull($found[0]->getDownSql());
+    }
+
+    /** Supabase UP SQL is readable via getUpSql(). */
+    public function testScanDirSupabaseMigrationUpSqlIsReadable(): void
+    {
+        $sql = 'CREATE TABLE build_log (id bigint primary key);';
+        file_put_contents("{$this->tmpDir}/20260303120000_create_log.sql", $sql);
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertSame($sql, $found[0]->getUpSql());
+    }
+
+    /** Multiple Supabase files are returned sorted ascending by version. */
+    public function testScanDirSupabaseMultipleFilesAreOrdered(): void
+    {
+        file_put_contents("{$this->tmpDir}/20260303120002_third.sql", '-- c');
+        file_put_contents("{$this->tmpDir}/20260303120000_first.sql", '-- a');
+        file_put_contents("{$this->tmpDir}/20260303120001_second.sql", '-- b');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(3, $found);
+        $this->assertSame('20260303120000', $found[0]->version);
+        $this->assertSame('20260303120001', $found[1]->version);
+        $this->assertSame('20260303120002', $found[2]->version);
+    }
+
+    /** Mixed directory: both native and Supabase formats coexist. */
+    public function testScanDirMixedFormatsBothFound(): void
+    {
+        // DBDiff native
+        MigrationFile::scaffold($this->tmpDir, 'native', '20260101120000');
+        // Supabase plain
+        file_put_contents("{$this->tmpDir}/20260102120000_supabase.sql", 'SELECT 1;');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(2, $found);
+        $this->assertSame('20260101120000', $found[0]->version);
+        $this->assertSame('20260102120000', $found[1]->version);
+    }
+
+    /**
+     * When both a .up.sql AND a plain .sql exist for the same version,
+     * the DBDiff native (.up.sql) must take precedence and only one
+     * MigrationFile should be returned.
+     */
+    public function testScanDirNativeUpSqlTakesPrecedenceOverPlainSql(): void
+    {
+        $version = '20260303120000';
+        MigrationFile::scaffold($this->tmpDir, 'overlap', $version);
+        // Also create a plain .sql for the same version
+        file_put_contents("{$this->tmpDir}/{$version}_overlap.sql", 'SELECT 2; -- supabase copy');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(1, $found);
+        $this->assertStringEndsWith(MigrationFile::UP_SUFFIX, $found[0]->upPath);
+    }
+
+    /** Plain .sql files whose names don't match {14digits}_{desc} are ignored. */
+    public function testScanDirIgnoresPlainSqlWithoutVersionPrefix(): void
+    {
+        file_put_contents("{$this->tmpDir}/helpers.sql", '-- shared helpers');
+        file_put_contents("{$this->tmpDir}/2026_short_version.sql", '-- bad version');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(0, $found);
+    }
 }

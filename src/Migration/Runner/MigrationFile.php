@@ -3,16 +3,20 @@
 use DBDiff\Migration\Exceptions\MigrationException;
 
 /**
- * Represents a single migration unit on disk — a matching pair of:
- *   {version}_{description}.up.sql    (required)
- *   {version}_{description}.down.sql  (optional, needed for rollback)
+ * Represents a single migration unit on disk.
  *
- * Naming convention expected:
+ * Two on-disk formats are supported:
+ *
+ *   DBDiff native (default):
+ *     {version}_{description}.up.sql    (required)
+ *     {version}_{description}.down.sql  (optional, needed for rollback)
+ *
+ *   Supabase:
+ *     {version}_{description}.sql       (UP-only — no DOWN concept)
+ *
+ * In both cases the version is a 14-digit timestamp prefix, e.g.:
  *   20260303120000_create_users.up.sql
- *   20260303120000_create_users.down.sql
- *
- * The 14-digit timestamp prefix is the version; everything after the first
- * underscore (before .up.sql / .down.sql) is the human-readable description.
+ *   20260303120000_create_users.sql
  *
  * To create a file pair on disk, use MigrationFile::scaffold().
  * To load all migrations from a directory, use MigrationFile::scanDir().
@@ -81,6 +85,13 @@ class MigrationFile
      * Scan a migrations directory and return all valid MigrationFile instances,
      * sorted ascending by version (i.e. oldest first).
      *
+     * Supports two on-disk formats:
+     *   DBDiff native : {version}_{desc}.up.sql  + optional .down.sql
+     *   Supabase      : {version}_{desc}.sql      (UP-only, no DOWN concept)
+     *
+     * If both formats are present for the same version, the DBDiff native
+     * (.up.sql) file takes precedence.
+     *
      * @return MigrationFile[]
      */
     public static function scanDir(string $dir): array
@@ -89,25 +100,58 @@ class MigrationFile
             return [];
         }
 
-        $files = glob("{$dir}/*" . self::UP_SUFFIX) ?: [];
-        sort($files);
+        // ── DBDiff native format (.up.sql) ────────────────────────────────────
+        $upFiles = glob("{$dir}/*" . self::UP_SUFFIX) ?: [];
 
         $migrations = [];
-        foreach ($files as $upPath) {
+
+        foreach ($upFiles as $upPath) {
             $baseName = basename($upPath, self::UP_SUFFIX);
             $parsed   = self::parseName($baseName);
 
             if ($parsed === null) {
-                continue; // skip files that don't match the naming convention
+                continue;
             }
 
             [$version, $description] = $parsed;
             $downPath = $dir . '/' . $baseName . self::DOWN_SUFFIX;
 
-            $migrations[] = new self($version, $description, $upPath, $downPath);
+            $migrations[$version] = new self($version, $description, $upPath, $downPath);
         }
 
-        return $migrations;
+        // ── Supabase format (plain .sql — no .up/.down suffix) ───────────────
+        $allSqlFiles = glob("{$dir}/*.sql") ?: [];
+
+        foreach ($allSqlFiles as $upPath) {
+            // Skip files already handled as DBDiff native format
+            if (str_ends_with($upPath, self::UP_SUFFIX) || str_ends_with($upPath, self::DOWN_SUFFIX)) {
+                continue;
+            }
+
+            $baseName = basename($upPath, '.sql');
+            $parsed   = self::parseName($baseName);
+
+            if ($parsed === null) {
+                continue;
+            }
+
+            [$version, $description] = $parsed;
+
+            // .up.sql takes precedence if the same version was already registered
+            if (isset($migrations[$version])) {
+                continue;
+            }
+
+            // Supabase migrations are UP-only; downPath points to a non-existent path
+            $downPath = $dir . '/' . $baseName . self::DOWN_SUFFIX;
+
+            $migrations[$version] = new self($version, $description, $upPath, $downPath);
+        }
+
+        // Sort ascending by version (14-digit timestamp key)
+        ksort($migrations);
+
+        return array_values($migrations);
     }
 
     /**
