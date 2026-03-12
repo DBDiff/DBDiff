@@ -64,8 +64,29 @@ class DsnParser
             ];
         }
 
+
         $parsed = parse_url($url);
 
+        // If parse_url fails (commonly because credentials contain unencoded
+        // characters such as '@'), attempt a best-effort fix by percent-encoding
+        // the userinfo (user:pass) portion and re-parse.  This allows callers to
+        // pass DSNs containing unencoded special characters and still succeed.
+        if ($parsed === false || empty($parsed['scheme'])) {
+            // Try to percent-encode user:pass if present
+            if (preg_match('#^([a-z0-9+.-]+)://([^@/]+)@([^/]+)(/.*)?$#i', $url, $m)) {
+                $scheme = $m[1];
+                $userinfo = $m[2];
+                $hostpart = $m[3];
+                $rest = $m[4] ?? '';
+                // Split userinfo into user:pass
+                $userpass = explode(':', $userinfo, 2);
+                $user = rawurlencode($userpass[0]);
+                $pass = isset($userpass[1]) ? rawurlencode($userpass[1]) : '';
+                $encodedUserinfo = $user . ($pass !== '' ? ":$pass" : '');
+                $fixedUrl = "$scheme://$encodedUserinfo@$hostpart$rest";
+                $parsed = parse_url($fixedUrl);
+            }
+        }
         if ($parsed === false || empty($parsed['scheme'])) {
             throw new \InvalidArgumentException("Cannot parse database URL: {$url}");
         }
@@ -82,8 +103,8 @@ class DsnParser
 
         // ── MySQL / Postgres ──────────────────────────────────────────────────
         $host     = $parsed['host']     ?? 'localhost';
-        $user     = isset($parsed['user'])     ? urldecode($parsed['user'])     : '';
-        $password = isset($parsed['pass'])     ? urldecode($parsed['pass'])     : '';
+        $user     = isset($parsed['user'])     ? rawurldecode($parsed['user'])     : '';
+        $password = isset($parsed['pass'])     ? rawurldecode($parsed['pass'])     : '';
         $dbName   = ltrim($parsed['path'] ?? '', '/');
 
         // Default ports

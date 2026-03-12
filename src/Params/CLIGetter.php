@@ -15,7 +15,7 @@ class CLIGetter implements ParamsGetter {
         $stdio = $cliFactory->newStdio();
 
         $getopt = $context->getopt([
-            'server1::', 'server2::', 'format::',
+            'server1::', 'server2::', 'server1-url::', 'server2-url::', 'format::',
             'template::', 'type::', 'include::',
             'nocomments::', 'config::', 'output::', 'debug::',
             'driver::', 'supabase::'
@@ -26,10 +26,15 @@ class CLIGetter implements ParamsGetter {
             $params->input = $this->parseInput($input);
         } else throw new CLIException("Missing input");
 
-        if ($getopt->get('--server1')) {
+        // Prefer --server1-url/--server2-url if present, else fallback to --server1/--server2
+        if ($getopt->get('--server1-url')) {
+            $params->server1 = $getopt->get('--server1-url');
+        } elseif ($getopt->get('--server1')) {
             $params->server1 = $this->parseServer($getopt->get('--server1'));
         }
-        if ($getopt->get('--server2')) {
+        if ($getopt->get('--server2-url')) {
+            $params->server2 = $getopt->get('--server2-url');
+        } elseif ($getopt->get('--server2')) {
             $params->server2 = $this->parseServer($getopt->get('--server2'));
         }
         if ($getopt->get('--format')) {
