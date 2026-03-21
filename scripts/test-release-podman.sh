@@ -174,30 +174,38 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
         docker.io/library/postgres:16 >/dev/null
 
     # ── Wait for MySQL to be ready ───────────────────────────────────────────
+    # Use a real SQL query — mysqladmin ping can return OK before the server
+    # has finished initializing authentication.
     echo "Waiting for MySQL..."
-    for i in $(seq 1 30); do
-        if $CT exec "$MYSQL_CTR" mysqladmin ping -prootpass --silent 2>/dev/null; then
+    for i in $(seq 1 40); do
+        if $CT exec "$MYSQL_CTR" \
+               mysql -uroot -prootpass --connect-timeout=2 \
+               -e "SELECT 1" diff1 2>/dev/null; then
             break
         fi
-        sleep 2
-        if [ "$i" -eq 30 ]; then
+        sleep 3
+        if [ "$i" -eq 40 ]; then
             echo "  ERROR: MySQL never became ready" >&2
             exit 1
         fi
     done
+    echo "  MySQL ready."
 
     # ── Wait for Postgres ────────────────────────────────────────────────────
+    # pg_isready confirms the listener, but we also test a SQL round-trip.
     echo "Waiting for Postgres..."
-    for i in $(seq 1 30); do
-        if $CT exec "$PG_CTR" pg_isready -U postgres --quiet 2>/dev/null; then
+    for i in $(seq 1 40); do
+        if $CT exec "$PG_CTR" \
+               psql -U postgres -d diff1 -c "SELECT 1" 2>/dev/null; then
             break
         fi
-        sleep 2
-        if [ "$i" -eq 30 ]; then
+        sleep 3
+        if [ "$i" -eq 40 ]; then
             echo "  ERROR: Postgres never became ready" >&2
             exit 1
         fi
     done
+    echo "  Postgres ready."
 
     # ── DB diff test helper ──────────────────────────────────────────────────
     run_db_test() {
@@ -249,11 +257,14 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
     echo ""
     echo "Loading MySQL fixtures..."
     $CT exec "$MYSQL_CTR" \
-        bash -c 'mysql -prootpass -e "CREATE DATABASE IF NOT EXISTS diff2;" &>/dev/null'
-    $CT exec -i "$MYSQL_CTR" \
-        bash -c 'mysql -prootpass diff1' < tests/end2end/db1-up.sql
-    $CT exec -i "$MYSQL_CTR" \
-        bash -c 'mysql -prootpass diff2' < tests/end2end/db2-up.sql
+        mysql -uroot -prootpass -e "CREATE DATABASE IF NOT EXISTS diff2;"
+    $CT cp tests/end2end/db1-up.sql "$MYSQL_CTR":/tmp/db1-up.sql
+    $CT cp tests/end2end/db2-up.sql "$MYSQL_CTR":/tmp/db2-up.sql
+    $CT exec "$MYSQL_CTR" \
+        bash -c 'mysql -uroot -prootpass diff1 < /tmp/db1-up.sql'
+    $CT exec "$MYSQL_CTR" \
+        bash -c 'mysql -uroot -prootpass diff2 < /tmp/db2-up.sql'
+    echo "  MySQL fixtures loaded."
 
     run_db_test "MySQL schema diff via DSN URL" \
         "dbdiff diff \
@@ -266,11 +277,14 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
     echo ""
     echo "Loading Postgres fixtures..."
     $CT exec "$PG_CTR" \
-        bash -c 'PGPASSWORD=rootpass psql -U postgres -c "CREATE DATABASE diff2;" &>/dev/null' || true
-    $CT exec -i "$PG_CTR" \
-        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff1' < tests/end2end/db1-up-pgsql.sql
-    $CT exec -i "$PG_CTR" \
-        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff2' < tests/end2end/db2-up-pgsql.sql
+        psql -U postgres -c "CREATE DATABASE diff2;" 2>/dev/null || true
+    $CT cp tests/end2end/db1-up-pgsql.sql "$PG_CTR":/tmp/db1-up-pgsql.sql
+    $CT cp tests/end2end/db2-up-pgsql.sql "$PG_CTR":/tmp/db2-up-pgsql.sql
+    $CT exec "$PG_CTR" \
+        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff1 < /tmp/db1-up-pgsql.sql'
+    $CT exec "$PG_CTR" \
+        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff2 < /tmp/db2-up-pgsql.sql'
+    echo "  Postgres fixtures loaded."
 
     run_db_test "Postgres schema diff via DSN URL" \
         "dbdiff diff \
