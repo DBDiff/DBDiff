@@ -48,7 +48,6 @@ class ParamsFactory {
             throw new CLIException("A server is required");
         }
 
-        self::$instance = $params;
         return $params;
 
     }
