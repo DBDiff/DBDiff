@@ -59,6 +59,12 @@ class DefaultParams {
     public $description = '';
 
     /*
+     Optional SSL mode for Postgres connections (e.g. 'require', 'verify-ca').
+     Populated automatically when a DSN URL contains a sslmode parameter.
+    */
+    public $sslmode = '';
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */
