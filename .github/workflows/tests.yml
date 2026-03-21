@@ -108,10 +108,7 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
-    - name: Record SQLite baseline
-      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --sqlite
-
-    - name: Verify SQLite baseline determinism
+    - name: Run SQLite e2e tests
       run: ./scripts/run-tests.sh --sqlite
 
   # ── PostgreSQL matrix ────────────────────────────────────────────────────────
@@ -160,10 +157,7 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
-    - name: Record PostgreSQL baseline
-      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --postgres 127.0.0.1
-
-    - name: Verify PostgreSQL baseline determinism
+    - name: Run PostgreSQL e2e tests
       run: ./scripts/run-tests.sh --postgres 127.0.0.1
 
   # ── DSN URL integration tests (--server1-url / --server2-url) ──────────────
