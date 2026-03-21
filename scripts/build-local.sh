@@ -98,6 +98,11 @@ else
         sh -exc '
             apt-get -qq install -y unzip git 2>/dev/null | tail -3
 
+            # Install Composer (box requires it to verify the autoloader)
+            curl -sSL https://getcomposer.org/installer \
+                | php -- --install-dir=/usr/local/bin --filename=composer
+            composer --version
+
             # Download box.phar (the PHAR builder) — not installed on host
             curl -sSL \
                 https://github.com/box-project/box/releases/latest/download/box.phar \
