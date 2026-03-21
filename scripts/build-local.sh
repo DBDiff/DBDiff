@@ -97,7 +97,8 @@ else
         -v "$ROOT/dist:/app/dist:Z" \
         php:8.3-cli \
         sh -exc '
-            apt-get -qq install -y unzip git 2>/dev/null | tail -3
+            apt-get update -qq
+            apt-get install -y -q --no-install-recommends unzip git
 
             # Install Composer
             curl -sSL https://getcomposer.org/installer \
@@ -111,17 +112,17 @@ else
             chmod +x /usr/local/bin/box
             box --version
 
-            # Build from a temp copy of the project with ONLY production deps.
-            # This prevents dev-only packages (e.g. phpdocumentor) from being
-            # bundled in the PHAR and injecting spurious ext-* requirements
-            # into the Box requirements checker.
+            # Build from a temp copy with ONLY production deps so that
+            # dev-only packages (phpdocumentor, webmozart/assert) do not inject
+            # spurious ext-* requirements into the Box requirements checker.
             BUILD=$(mktemp -d)
             cp -a /app/src /app/dbdiff.php /app/box.json \
                   /app/composer.json /app/composer.lock /app/.git "$BUILD/"
             cd "$BUILD"
-            composer install --no-dev --optimize-autoloader 2>&1
+            composer install --no-dev --optimize-autoloader
 
-            # box.json output = dist/dbdiff.phar; we write directly to /app/dist
+            # box.json: output = dist/dbdiff.phar (relative to cwd)
+            # We write directly to the mounted /app/dist.
             mkdir -p /app/dist
             box compile
         '
