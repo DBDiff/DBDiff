@@ -64,7 +64,7 @@ echo "Container runtime: $CT"
 
 # ── SPC configuration (must match CI release workflow) ───────────────────────
 SPC_PHP_VERSION="8.3"
-SPC_EXTENSIONS="phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+SPC_EXTENSIONS="phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
 SPC_LIBS="libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 
 # Named volume — caches ~200 MB of PHP source downloads so subsequent builds
@@ -93,27 +93,36 @@ else
     echo "    (downloads box.phar into container; host vendor/ is read-only)"
 
     $CT run --rm \
-        -v "$ROOT:/app:Z" \
+        -v "$ROOT:/app:ro,Z" \
+        -v "$ROOT/dist:/app/dist:Z" \
         php:8.3-cli \
         sh -exc '
             apt-get -qq install -y unzip git 2>/dev/null | tail -3
 
-            # Install Composer (box requires it to verify the autoloader)
+            # Install Composer
             curl -sSL https://getcomposer.org/installer \
                 | php -- --install-dir=/usr/local/bin --filename=composer
             composer --version
 
-            # Download box.phar (the PHAR builder) — not installed on host
+            # Download box.phar
             curl -sSL \
                 https://github.com/box-project/box/releases/latest/download/box.phar \
                 -o /usr/local/bin/box
             chmod +x /usr/local/bin/box
             box --version
 
-            # box.json says output = dist/dbdiff.phar (relative to /app).
-            # Box only READS vendor/ and src/, never writes to them.
-            cd /app
-            mkdir -p dist
+            # Build from a temp copy of the project with ONLY production deps.
+            # This prevents dev-only packages (e.g. phpdocumentor) from being
+            # bundled in the PHAR and injecting spurious ext-* requirements
+            # into the Box requirements checker.
+            BUILD=$(mktemp -d)
+            cp -a /app/src /app/dbdiff.php /app/box.json \
+                  /app/composer.json /app/composer.lock /app/.git "$BUILD/"
+            cd "$BUILD"
+            composer install --no-dev --optimize-autoloader 2>&1
+
+            # box.json output = dist/dbdiff.phar; we write directly to /app/dist
+            mkdir -p /app/dist
             box compile
         '
 
@@ -130,16 +139,16 @@ echo "    Subsequent runs: ~3-5 min (sources cached)."
 $CT run --rm \
     -v "$ROOT:/work:Z" \
     -v "${SPC_VOLUME}:/spc:Z" \
-    -e SPC_EXTENSIONS \
-    -e SPC_LIBS \
-    -e SPC_PHP_VERSION \
+    -e "SPC_EXTENSIONS=$SPC_EXTENSIONS" \
+    -e "SPC_LIBS=$SPC_LIBS" \
+    -e "SPC_PHP_VERSION=$SPC_PHP_VERSION" \
     ubuntu:22.04 \
     bash -exc '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
         apt-get install -y -qq --no-install-recommends \
             curl ca-certificates build-essential pkg-config cmake \
-            automake autoconf libtool re2c bison flex unzip git xz-utils
+            automake autoconf libtool re2c bison flex unzip git xz-utils sudo
 
         # Download the SPC binary (tiny ~5 MB; always latest)
         SPC_URL="https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-linux-x86_64.tar.gz"
@@ -161,13 +170,14 @@ $CT run --rm \
         cd /build
         spc doctor --auto-fix
 
-        # Only download sources if not already present
-        if [ ! -d downloads ] || [ -z "$(ls -A downloads 2>/dev/null)" ]; then
+        # Download sources — SPC uses its own lock file to skip already-cached
+        # items, so this is safe to call even when partially cached.
+        if [ ! -f downloads/.lock.json ] || ! grep -q '"php-src"' downloads/.lock.json 2>/dev/null; then
             echo "Downloading PHP sources (~200 MB)..."
             spc download "php-src,micro,$SPC_EXTENSIONS,$SPC_LIBS" \
                 --with-php="$SPC_PHP_VERSION"
         else
-            echo "Source downloads already cached — skipping."
+            echo "PHP sources already in cache — skipping download."
         fi
 
         spc build "$SPC_EXTENSIONS" --build-micro
