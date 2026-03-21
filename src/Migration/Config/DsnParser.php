@@ -69,23 +69,9 @@ class DsnParser
 
         // If parse_url fails (commonly because credentials contain unencoded
         // characters such as '@'), attempt a best-effort fix by percent-encoding
-        // the userinfo (user:pass) portion and re-parse.  This allows callers to
-        // pass DSNs containing unencoded special characters and still succeed.
+        // the userinfo (user:pass) portion and re-parse.
         if ($parsed === false || empty($parsed['scheme'])) {
-            // Try to percent-encode user:pass if present
-            if (preg_match('#^([a-z0-9+.-]+)://([^@/]+)@([^/]+)(/.*)?$#i', $url, $m)) {
-                $scheme = $m[1];
-                $userinfo = $m[2];
-                $hostpart = $m[3];
-                $rest = $m[4] ?? '';
-                // Split userinfo into user:pass
-                $userpass = explode(':', $userinfo, 2);
-                $user = rawurlencode($userpass[0]);
-                $pass = isset($userpass[1]) ? rawurlencode($userpass[1]) : '';
-                $encodedUserinfo = $user . ($pass !== '' ? ":$pass" : '');
-                $fixedUrl = "$scheme://$encodedUserinfo@$hostpart$rest";
-                $parsed = parse_url($fixedUrl);
-            }
+            $parsed = self::retryWithEncodedUserinfo($url);
         }
         if ($parsed === false || empty($parsed['scheme'])) {
             throw new \InvalidArgumentException("Cannot parse database URL: {$url}");
@@ -150,6 +136,30 @@ class DsnParser
         }
 
         return '/' . $rawPath;
+    }
+
+    /**
+     * Attempt to fix a URL that parse_url() couldn't handle by
+     * percent-encoding the userinfo portion (user:pass).
+     *
+     * @return array|false  The parsed URL components, or false on failure.
+     */
+    private static function retryWithEncodedUserinfo(string $url): array|false
+    {
+        if (!preg_match('#^([a-z0-9+.-]+)://([^@/]+)@([^/]+)(/.*)?$#i', $url, $m)) {
+            return false;
+        }
+
+        $scheme   = $m[1];
+        $hostpart = $m[3];
+        $rest     = $m[4] ?? '';
+
+        $userpass = explode(':', $m[2], 2);
+        $user = rawurlencode($userpass[0]);
+        $pass = isset($userpass[1]) ? rawurlencode($userpass[1]) : '';
+        $encodedUserinfo = $user . ($pass !== '' ? ":$pass" : '');
+
+        return parse_url("$scheme://$encodedUserinfo@$hostpart$rest");
     }
 
     /**
