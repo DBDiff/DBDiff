@@ -141,7 +141,8 @@ jobs:
 
       # SPC doctor --auto-fix installs the musl cross-compiler via sudo.
       - name: Allow sudo for SPC doctor
-        run: echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
+        run: |
+          echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
 
       # ── Build/restore static PHP micro SAPI ──────────────────────────────
       - name: Build static PHP micro SAPI (cached)
