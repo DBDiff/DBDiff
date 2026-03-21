@@ -256,3 +256,13 @@ jobs:
 
           echo "--- npm wrapper: diff --help ---"
           node packages/@dbdiff/cli/bin/dbdiff.js --help
+
+          echo "--- npm wrapper: MySQL schema diff ---"
+          node packages/@dbdiff/cli/bin/dbdiff.js diff \
+            --server1-url "mysql://root:rootpass@127.0.0.1:3306/diff1" \
+            --server2-url "mysql://root:rootpass@127.0.0.1:3306/diff2" \
+            --type=schema --include=all --nocomments \
+            --output=npm-diff.sql
+          echo "--- npm diff output ($(wc -l < npm-diff.sql) lines) ---"
+          cat npm-diff.sql
+          test -s npm-diff.sql

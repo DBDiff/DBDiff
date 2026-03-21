@@ -1,0 +1,35 @@
+# docker-compose.phar.yml — run the DBDiff PHAR against any remote database
+#
+# Usage (Podman or Docker):
+#
+#   # First build (one-time, ~30 sec to compile PHP extensions):
+#   podman compose -f docker-compose.phar.yml build
+#
+#   # Schema diff between two Supabase projects:
+#   podman compose -f docker-compose.phar.yml run --rm dbdiff diff \
+#     --server1-url="postgresql://postgres:<pass>@db.<ref1>.supabase.co:5432/postgres" \
+#     --server2-url="postgresql://postgres:<pass>@db.<ref2>.supabase.co:5432/postgres"
+#
+#   # MySQL diff:
+#   podman compose -f docker-compose.phar.yml run --rm dbdiff diff \
+#     --server1-url="mysql://user:pass@host:3306/db1" \
+#     --server2-url="mysql://user:pass@host:3306/db2"
+#
+#   # Passwords with special characters: percent-encode @ → %40, # → %23
+#
+# Note: The container reads dist/dbdiff.phar from the project root.
+# Rebuild the PHAR first if you've changed source files:
+#   scripts/build-local.sh
+
+services:
+  dbdiff:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.phar
+    # Mount the project root so /app/dist/dbdiff.phar is available.
+    # The entrypoint is: php /app/dist/dbdiff.phar
+    volumes:
+      - .:/app:ro
+    # Use host networking so the container can reach remote databases
+    # (Supabase, local MySQL/Postgres on the host, etc.) without extra config.
+    network_mode: host

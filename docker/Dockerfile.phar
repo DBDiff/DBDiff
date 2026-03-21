@@ -1,0 +1,14 @@
+ARG PHP_VERSION=8.3
+FROM docker.io/library/php:${PHP_VERSION}-cli
+
+# Install only what's needed to run the PHAR against remote databases.
+# No Composer, no source code — just the PHP extensions.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq-dev \
+        libsqlite3-dev \
+    && docker-php-ext-install -j$(nproc) pdo pdo_mysql pdo_pgsql pdo_sqlite \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENTRYPOINT ["php", "/app/dist/dbdiff.phar"]
