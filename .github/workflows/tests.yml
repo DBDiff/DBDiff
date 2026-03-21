@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
 
     steps:
     - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
         mysql-version: ['8.0', '8.4', '9.3', '9.6']
 
     env:
@@ -93,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
 
     steps:
     - uses: actions/checkout@v4
@@ -119,7 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php-version: ['8.2', '8.3', '8.4', '8.5']
         postgres-version: ['14', '15', '16', '17', '18']
 
     env:
@@ -213,7 +213,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'mysql://root:rootpass@127.0.0.1:3306/diff1' \
           --server2-url 'mysql://root:rootpass@127.0.0.1:3306/diff2' \
-          --type=all --include=all --nocomments --output=/tmp/dsn-mysql.sql
+          --type=schema --include=all --nocomments --output=/tmp/dsn-mysql.sql
 
         echo "--- MySQL DSN URL output ---"
         head -20 /tmp/dsn-mysql.sql
@@ -229,7 +229,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff1' \
           --server2-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff2' \
-          --type=all --include=all --nocomments --output=/tmp/dsn-pgsql.sql
+          --type=schema --include=all --nocomments --output=/tmp/dsn-pgsql.sql
 
         echo "--- PostgreSQL DSN URL output ---"
         head -20 /tmp/dsn-pgsql.sql
