@@ -119,7 +119,7 @@ else
             cp -a /app/src /app/dbdiff.php /app/box.json \
                   /app/composer.json /app/composer.lock /app/.git "$BUILD/"
             cd "$BUILD"
-            composer install --no-dev --optimize-autoloader
+            composer install --no-dev --no-scripts --optimize-autoloader
 
             # box.json: output = dist/dbdiff.phar (relative to cwd)
             # We write directly to the mounted /app/dist.
