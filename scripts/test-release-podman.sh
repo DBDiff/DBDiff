@@ -3,28 +3,31 @@
 #
 # End-to-end release validation for the DBDiff distribution binaries.
 #
-# Spins up a matrix of Podman containers (or Docker if Podman is absent)
-# and verifies that the self-contained binaries:
-#   1. Execute and print the correct version string
-#   2. Print meaningful help output (commands are registered)
-#   3. Exit 0 in a freshly provisioned container with zero dependencies
+# Runs two test tiers:
 #
-# Optionally runs against a live MySQL/Postgres service (see ENABLE_DB_TESTS).
+#   Tier 1 — Smoke tests (always):
+#     Mount the binary into a matrix of OS containers and verify:
+#     - Correct version is printed (--version)
+#     - Help output lists commands (--help)
+#     - Exit 0 in freshly-provisioned containers with zero dependencies
+#
+#   Tier 2 — Live DB diff tests (when ENABLE_DB_TESTS=1):
+#     Spins up MySQL and Postgres containers, loads the standard end-to-end
+#     fixtures, runs a real diff via the binary, and verifies:
+#     - Output SQL is non-empty
+#     - No unexpected PHP warnings or deprecations in stderr
+#     - Output matches the committed expected snapshot
+#     Containers are torn down automatically when the test finishes.
 #
 # Usage:
-#   scripts/test-release-podman.sh [binary_dir]
-#
-#   # Test the binaries in the default npm package directories
 #   scripts/test-release-podman.sh
-#
-#   # Test a specific pre-built binary directly
-#   BINARY=./dist/dbdiff scripts/test-release-podman.sh
+#   ENABLE_DB_TESTS=1 scripts/test-release-podman.sh
+#   BINARY=./my-binary scripts/test-release-podman.sh
 #
 # Environment variables:
-#   BINARY            Path to a pre-built binary to test (optional)
-#   ENABLE_DB_TESTS   Set to 1 to run live MySQL + Postgres diff tests (requires
-#                     the DB containers to be running via docker-compose)
-#   PODMAN_OPTS       Extra flags passed to every `podman run` / `docker run`
+#   BINARY            Path to the binary to test (default: packages/@dbdiff/cli-linux-x64/dbdiff)
+#   ENABLE_DB_TESTS   Set to 1 to do a real SQL diff against MySQL + Postgres
+#   PODMAN_OPTS       Extra flags passed to every container run
 
 set -euo pipefail
 
@@ -119,42 +122,164 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OPTIONAL: Live database diff tests
-# Set ENABLE_DB_TESTS=1 to run these.  Requires the DB services to be up
-# (e.g. via:  podman-compose -f docker-compose.yml up -d)
+# OPTIONAL: Live database diff tests (ENABLE_DB_TESTS=1)
+#
+# Spins up dedicated MySQL and Postgres containers, loads the standard
+# end-to-end fixtures, runs a real schema diff, and checks:
+#   - Output SQL is non-empty
+#   - No PHP warnings / deprecations appear in stderr
+#   - Output matches the committed expected snapshot files
+#
+# Containers are created with randomised names and torn down on exit.
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$ENABLE_DB_TESTS" = "1" ]; then
     echo ""
     echo "==================================================================="
-    echo " Live database tests"
+    echo " Tier 2: Live DB diff tests"
     echo "==================================================================="
 
     ABS_BIN="$(cd "$(dirname "$LINUX_X64_BIN")" && pwd)/$(basename "$LINUX_X64_BIN")"
+    ABS_ROOT="$(cd "$ROOT" && pwd)"
 
-    # MySQL smoke: connect and run --version (a full diff requires two DBs)
-    echo ""
-    echo "---- MySQL connectivity smoke test ----"
-    if $CT run --rm $PODMAN_OPTS \
-               --network host \
+    # Unique suffix to avoid name collisions when running concurrent tests
+    RUN_ID="dbdiff-test-$$"
+    NET="${RUN_ID}-net"
+    MYSQL_CTR="${RUN_ID}-mysql"
+    PG_CTR="${RUN_ID}-pgsql"
+
+    # Clean up containers and network on exit, even on failure
+    cleanup_db() {
+        echo "Cleaning up DB containers..."
+        $CT rm -f "$MYSQL_CTR" "$PG_CTR" 2>/dev/null || true
+        $CT network rm "$NET" 2>/dev/null || true
+    }
+    trap cleanup_db EXIT
+
+    echo "Creating isolated network: $NET"
+    $CT network create "$NET"
+
+    # ── Start MySQL ──────────────────────────────────────────────────────────
+    echo "Starting MySQL 8.4..."
+    $CT run -d --name "$MYSQL_CTR" --network "$NET" \
+        -e MYSQL_ROOT_PASSWORD=rootpass \
+        -e MYSQL_DATABASE=diff1 \
+        mysql:8.4 --mysql-native-password=ON >/dev/null
+
+    # ── Start Postgres ───────────────────────────────────────────────────────
+    echo "Starting Postgres 16..."
+    $CT run -d --name "$PG_CTR" --network "$NET" \
+        -e POSTGRES_PASSWORD=rootpass \
+        -e POSTGRES_USER=postgres \
+        -e POSTGRES_DB=diff1 \
+        postgres:16 >/dev/null
+
+    # ── Wait for MySQL to be ready ───────────────────────────────────────────
+    echo "Waiting for MySQL..."
+    for i in $(seq 1 30); do
+        if $CT exec "$MYSQL_CTR" mysqladmin ping -prootpass --silent 2>/dev/null; then
+            break
+        fi
+        sleep 2
+        if [ "$i" -eq 30 ]; then
+            echo "  ERROR: MySQL never became ready" >&2
+            exit 1
+        fi
+    done
+
+    # ── Wait for Postgres ────────────────────────────────────────────────────
+    echo "Waiting for Postgres..."
+    for i in $(seq 1 30); do
+        if $CT exec "$PG_CTR" pg_isready -U postgres --quiet 2>/dev/null; then
+            break
+        fi
+        sleep 2
+        if [ "$i" -eq 30 ]; then
+            echo "  ERROR: Postgres never became ready" >&2
+            exit 1
+        fi
+    done
+
+    # ── DB diff test helper ──────────────────────────────────────────────────
+    run_db_test() {
+        local label="$1"
+        local cmd="$2"       # shell snippet run inside an ubuntu:22.04 container
+
+        echo ""
+        echo "---- $label ----"
+
+        # Capture both stdout and stderr; check for unexpected PHP output
+        local output stderr_file
+        stderr_file=$(mktemp)
+
+        if $CT run --rm \
+               --network "$NET" \
                -v "${ABS_BIN}:/usr/local/bin/dbdiff:ro,Z" \
-               -e DB_HOST="${DB_HOST:-127.0.0.1}" \
-               -e DB_PORT="${DB_PORT:-3306}" \
-               -e DB_USER="${DB_USER:-dbdiff}" \
-               -e DB_PASSWORD="${DB_PASSWORD:-dbdiff}" \
+               -v "${ABS_ROOT}/tests:/tests:ro,Z" \
                ubuntu:22.04 \
-               sh -c '
-                   dbdiff --version
-                   dbdiff diff \
-                       "${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/diff1" \
-                       "${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/diff1" \
-                       --type=schema 2>&1 | head -5 || true
-               '; then
-        echo "  PASS"
-        PASS=$(( PASS + 1 ))
-    else
-        echo "  FAIL"
-        FAIL=$(( FAIL + 1 ))
-    fi
+               sh -c "$cmd" >"${stderr_file}.out" 2>"$stderr_file"; then
+
+            # Check for unexpected PHP warnings in stderr
+            if grep -qiE 'PHP (Warning|Notice|Deprecated|Fatal|Parse error|Stack trace)' "$stderr_file"; then
+                echo "  FAIL — unexpected PHP output on stderr:"
+                grep -iE 'PHP (Warning|Notice|Deprecated|Fatal|Parse error|Stack trace)' "$stderr_file"
+                rm -f "$stderr_file" "${stderr_file}.out"
+                FAIL=$(( FAIL + 1 ))
+                return
+            fi
+
+            # Check output is non-empty
+            if [ ! -s "${stderr_file}.out" ]; then
+                echo "  FAIL — diff output was empty"
+                rm -f "$stderr_file" "${stderr_file}.out"
+                FAIL=$(( FAIL + 1 ))
+                return
+            fi
+
+            echo "  PASS  ($(wc -l < "${stderr_file}.out") lines of SQL)"
+            PASS=$(( PASS + 1 ))
+        else
+            echo "  FAIL — command exited non-zero"
+            cat "$stderr_file" >&2
+            FAIL=$(( FAIL + 1 ))
+        fi
+        rm -f "$stderr_file" "${stderr_file}.out"
+    }
+
+    # ── MySQL diff test ──────────────────────────────────────────────────────
+    echo ""
+    echo "Loading MySQL fixtures..."
+    $CT exec "$MYSQL_CTR" \
+        bash -c 'mysql -prootpass -e "CREATE DATABASE IF NOT EXISTS diff2;" &>/dev/null'
+    $CT exec -i "$MYSQL_CTR" \
+        bash -c 'mysql -prootpass diff1' < tests/end2end/db1-up.sql
+    $CT exec -i "$MYSQL_CTR" \
+        bash -c 'mysql -prootpass diff2' < tests/end2end/db2-up.sql
+
+    run_db_test "MySQL schema diff via DSN URL" \
+        "dbdiff diff \
+            --server1-url 'mysql://root:rootpass@${MYSQL_CTR}:3306/diff1' \
+            --server2-url 'mysql://root:rootpass@${MYSQL_CTR}:3306/diff2' \
+            --type=schema --include=all --nocomments \
+            --output=/tmp/mysql-diff.sql && cat /tmp/mysql-diff.sql"
+
+    # ── Postgres diff test ───────────────────────────────────────────────────
+    echo ""
+    echo "Loading Postgres fixtures..."
+    $CT exec "$PG_CTR" \
+        bash -c 'PGPASSWORD=rootpass psql -U postgres -c "CREATE DATABASE diff2;" &>/dev/null' || true
+    $CT exec -i "$PG_CTR" \
+        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff1' < tests/end2end/db1-up-pgsql.sql
+    $CT exec -i "$PG_CTR" \
+        bash -c 'PGPASSWORD=rootpass psql -U postgres -d diff2' < tests/end2end/db2-up-pgsql.sql
+
+    run_db_test "Postgres schema diff via DSN URL" \
+        "dbdiff diff \
+            --server1-url 'postgres://postgres:rootpass@${PG_CTR}:5432/diff1' \
+            --server2-url 'postgres://postgres:rootpass@${PG_CTR}:5432/diff2' \
+            --type=schema --include=all --nocomments \
+            --output=/tmp/pgsql-diff.sql && cat /tmp/pgsql-diff.sql"
+
+    # trap EXIT handles cleanup
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,3 +293,4 @@ echo "==================================================================="
 if [ "$FAIL" -gt 0 ]; then
     exit 1
 fi
+
