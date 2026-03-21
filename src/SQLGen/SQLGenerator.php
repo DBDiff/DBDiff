@@ -7,6 +7,9 @@ use DBDiff\Logger;
 
 class SQLGenerator implements SQLGenInterface {
 
+    protected $diffSorter;
+    protected $diff;
+
     function __construct($diff) {
         $this->diffSorter = new DiffSorter;
         $this->diff = array_merge($diff['schema'], $diff['data']);

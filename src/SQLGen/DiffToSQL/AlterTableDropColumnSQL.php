@@ -7,6 +7,7 @@ use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 class AlterTableDropColumnSQL implements SQLGenInterface {
 
+    protected $obj;
     protected SQLDialectInterface $dialect;
 
     public function __construct($obj, SQLDialectInterface $dialect = null) {

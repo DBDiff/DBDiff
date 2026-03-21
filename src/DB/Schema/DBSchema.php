@@ -13,6 +13,8 @@ use DBDiff\Diff\AlterTable;
 
 class DBSchema {
 
+    protected $manager;
+
     function __construct($manager) {
         $this->manager = $manager;
     }

@@ -35,7 +35,7 @@ nocomments: false
 format: native           # native | flyway | liquibase-xml | liquibase-yaml | laravel
 
 # ── Database connection ───────────────────────────────────────────────────────
-# Used by:  dbdiff migrate:up / migrate:down / migrate:status
+# Used by:  dbdiff migration:up / migration:down / migration:status
 # Typically this points to one database (the target you are migrating).
 
 database:

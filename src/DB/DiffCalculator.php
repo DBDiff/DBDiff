@@ -9,6 +9,8 @@ use DBDiff\SQLGen\Dialect\DialectRegistry;
 
 class DiffCalculator {
 
+    protected $manager;
+
     function __construct() {
         $this->manager = new DBManager;
     }
