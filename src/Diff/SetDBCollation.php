@@ -9,6 +9,9 @@ class SetDBCollation {
     public $diff;
     public $source;
     public $target;
+    public $db;
+    public $collation;
+    public $prevCollation;
 
     function __construct($db, $collation, $prevCollation) {
         $this->db = $db;
