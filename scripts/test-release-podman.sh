@@ -96,12 +96,12 @@ echo "==================================================================="
 echo " Testing glibc x64 binary: $LINUX_X64_BIN"
 echo "==================================================================="
 
-run_test "Ubuntu 24.04"     ubuntu:24.04        "$LINUX_X64_BIN"
-run_test "Ubuntu 22.04"     ubuntu:22.04        "$LINUX_X64_BIN"
-run_test "Ubuntu 20.04"     ubuntu:20.04        "$LINUX_X64_BIN"
-run_test "Debian 12"        debian:12-slim      "$LINUX_X64_BIN"
-run_test "Debian 11"        debian:11-slim      "$LINUX_X64_BIN"
-run_test "AlmaLinux 9 (RHEL)" docker.io/almalinux:9-minimal "$LINUX_X64_BIN"
+run_test "Ubuntu 24.04"     docker.io/library/ubuntu:24.04        "$LINUX_X64_BIN"
+run_test "Ubuntu 22.04"     docker.io/library/ubuntu:22.04        "$LINUX_X64_BIN"
+run_test "Ubuntu 20.04"     docker.io/library/ubuntu:20.04        "$LINUX_X64_BIN"
+run_test "Debian 12"        docker.io/library/debian:12-slim      "$LINUX_X64_BIN"
+run_test "Debian 11"        docker.io/library/debian:11-slim      "$LINUX_X64_BIN"
+run_test "AlmaLinux 9 (RHEL)" docker.io/almalinux:9-minimal        "$LINUX_X64_BIN"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MATRIX: musl (x64) binary — must run correctly on Alpine
@@ -112,9 +112,9 @@ if [ -f "$LINUX_X64_MUSL_BIN" ]; then
     echo " Testing musl x64 binary: $LINUX_X64_MUSL_BIN"
     echo "==================================================================="
 
-    run_test "Alpine 3.21"  alpine:3.21         "$LINUX_X64_MUSL_BIN"
-    run_test "Alpine 3.20"  alpine:3.20         "$LINUX_X64_MUSL_BIN"
-    run_test "Alpine 3.19"  alpine:3.19         "$LINUX_X64_MUSL_BIN"
+    run_test "Alpine 3.21"  docker.io/library/alpine:3.21         "$LINUX_X64_MUSL_BIN"
+    run_test "Alpine 3.20"  docker.io/library/alpine:3.20         "$LINUX_X64_MUSL_BIN"
+    run_test "Alpine 3.19"  docker.io/library/alpine:3.19         "$LINUX_X64_MUSL_BIN"
 else
     echo ""
     echo "Skipping musl tests — $LINUX_X64_MUSL_BIN not found."
@@ -163,7 +163,7 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
     $CT run -d --name "$MYSQL_CTR" --network "$NET" \
         -e MYSQL_ROOT_PASSWORD=rootpass \
         -e MYSQL_DATABASE=diff1 \
-        mysql:8.4 --mysql-native-password=ON >/dev/null
+        docker.io/library/mysql:8.4 --mysql-native-password=ON >/dev/null
 
     # ── Start Postgres ───────────────────────────────────────────────────────
     echo "Starting Postgres 16..."
@@ -171,7 +171,7 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
         -e POSTGRES_PASSWORD=rootpass \
         -e POSTGRES_USER=postgres \
         -e POSTGRES_DB=diff1 \
-        postgres:16 >/dev/null
+        docker.io/library/postgres:16 >/dev/null
 
     # ── Wait for MySQL to be ready ───────────────────────────────────────────
     echo "Waiting for MySQL..."
@@ -215,7 +215,7 @@ if [ "$ENABLE_DB_TESTS" = "1" ]; then
                --network "$NET" \
                -v "${ABS_BIN}:/usr/local/bin/dbdiff:ro,Z" \
                -v "${ABS_ROOT}/tests:/tests:ro,Z" \
-               ubuntu:22.04 \
+               docker.io/library/ubuntu:22.04 \
                sh -c "$cmd" >"${stderr_file}.out" 2>"$stderr_file"; then
 
             # Check for unexpected PHP warnings in stderr
