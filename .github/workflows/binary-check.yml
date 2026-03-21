@@ -1,0 +1,257 @@
+name: Binary Smoke & Integration CI
+
+# Runs on every push to master and on every PR targeting master.
+#
+# Verifies the full binary distribution path end-to-end before release:
+#
+#   Job 1  build-phar       — builds dist/dbdiff.phar with Box (prod deps only)
+#   Job 2  binary-linux-x64 — builds linux-x64 static binary via SPC; runs:
+#            • Smoke tests  (--version, --help exit 0 on bare Ubuntu/Alpine)
+#            • MySQL schema diff against a real MySQL 8.4 service container
+#            • Postgres schema diff against a real Postgres 16 service container
+#            • npm wrapper  (node packages/@dbdiff/cli/bin/dbdiff.js --version)
+#
+# SPC build cache
+#   The first run takes 30-60 min (PHP 8.3 source compilation). Subsequent runs
+#   hit the actions/cache and complete in ~3-5 min.  The cache is keyed on the
+#   PHP version + extension list (captured in the workflow file hash) so it is
+#   automatically invalidated whenever SPC_EXTENSIONS or SPC_PHP_VERSION changes.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  SPC_PHP_VERSION: "8.3"
+  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+  SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JOB 1 — Build the PHAR (production deps only, no humbug/box in require-dev)
+# ═══════════════════════════════════════════════════════════════════════════════
+jobs:
+  build-phar:
+    name: Build PHAR
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for @git-version@ placeholder in box.json
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.SPC_PHP_VERSION }}
+          extensions: phar, openssl, zlib
+          tools: composer
+          ini-values: phar.readonly=0
+
+      # box is a build tool — not in require-dev — so download its phar directly.
+      - name: Download Box
+        run: |
+          curl -sSL \
+            https://github.com/box-project/box/releases/latest/download/box.phar \
+            -o /usr/local/bin/box
+          chmod +x /usr/local/bin/box
+          box --version
+
+      # Install production deps only.  Dev-only packages (e.g. phpdocumentor,
+      # webmozart/assert) declare ext-* requirements that Box embeds into the
+      # PHAR requirements checker — causing the binary to fail at runtime on a
+      # static PHP that was not built with those extensions.
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --no-scripts --optimize-autoloader
+
+      - name: Build PHAR
+        run: box compile
+
+      - name: Smoke-test PHAR
+        run: php dist/dbdiff.phar --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbdiff-phar-ci
+          path: dist/dbdiff.phar
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — linux-x64 binary build + smoke + DB integration + npm wrapper
+  # ═══════════════════════════════════════════════════════════════════════════
+  binary-linux-x64:
+    name: Linux x64 binary + integration tests
+    needs: build-phar
+    runs-on: ubuntu-latest
+
+    # Live DB services — mirrors what the PHP test suite already uses.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: diff1
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_DB: diff1
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-phar-ci
+          path: dist/
+
+      # ── SPC build cache ────────────────────────────────────────────────────
+      # Cache the compiled SPC buildroot (contains micro.sfx) and the PHP
+      # source downloads so the full compile only runs on the first cache miss.
+      - name: Cache SPC build artifacts
+        id: spc-cache
+        uses: actions/cache@v4
+        with:
+          path: spc-cache
+          # Cache is invalidated when SPC_EXTENSIONS / SPC_PHP_VERSION changes
+          # (captured in the workflow file hash) or when bumped manually.
+          key: spc-linux-x64-v1-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/binary-check.yml') }}
+          restore-keys: |
+            spc-linux-x64-v1-php${{ env.SPC_PHP_VERSION }}-
+
+      - name: Download SPC
+        run: |
+          curl -fsSL \
+            https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-linux-x86_64.tar.gz \
+            | tar xz
+          chmod +x spc
+
+      # SPC doctor --auto-fix installs the musl cross-compiler via sudo.
+      - name: Allow sudo for SPC doctor
+        run: echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
+
+      # ── Build/restore static PHP micro SAPI ──────────────────────────────
+      - name: Build static PHP micro SAPI (cached)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Restore cached artifacts so we can skip the 30-60 min compile.
+          if [ -d spc-cache/buildroot ]; then
+            echo "Restoring SPC buildroot from cache..."
+            cp -a spc-cache/buildroot buildroot
+          fi
+          if [ -d spc-cache/downloads ]; then
+            echo "Restoring SPC downloads from cache..."
+            cp -a spc-cache/downloads downloads
+          fi
+
+          ./spc doctor --auto-fix
+
+          if [ -f buildroot/bin/micro.sfx ]; then
+            echo "Cache hit — reusing micro.sfx, skipping SPC download + build."
+          else
+            echo "No cache — building from scratch (~30-60 min)..."
+            ./spc download \
+              "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
+              --with-php="${{ env.SPC_PHP_VERSION }}"
+            ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
+          fi
+
+          # Persist back to spc-cache/ so actions/cache saves it at job end.
+          mkdir -p spc-cache
+          cp -a buildroot spc-cache/buildroot
+          if [ -d downloads ]; then
+            cp -a downloads spc-cache/downloads
+          fi
+
+      # ── Combine micro SAPI + PHAR → single self-contained binary ──────────
+      - name: Combine PHP + PHAR → binary
+        run: |
+          cat buildroot/bin/micro.sfx dist/dbdiff.phar > dbdiff
+          chmod +x dbdiff
+
+      # ── Smoke tests ────────────────────────────────────────────────────────
+      - name: Smoke-test binary (--version, --help)
+        run: |
+          ./dbdiff --version
+          ./dbdiff --help
+
+      # ── MySQL integration ─────────────────────────────────────────────────
+      - name: Load MySQL fixtures
+        env:
+          MYSQL_PWD: rootpass
+        run: |
+          mysql -uroot -h127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS diff2;"
+          mysql -uroot -h127.0.0.1 diff1 < tests/end2end/db1-up.sql
+          mysql -uroot -h127.0.0.1 diff2 < tests/end2end/db2-up.sql
+
+      - name: MySQL schema diff via binary
+        run: |
+          ./dbdiff diff \
+            --server1-url "mysql://root:rootpass@127.0.0.1:3306/diff1" \
+            --server2-url "mysql://root:rootpass@127.0.0.1:3306/diff2" \
+            --type=schema --include=all --nocomments \
+            --output=mysql-diff.sql
+          echo "--- MySQL diff output ($(wc -l < mysql-diff.sql) lines) ---"
+          cat mysql-diff.sql
+          test -s mysql-diff.sql
+
+      # ── Postgres integration ──────────────────────────────────────────────
+      - name: Load Postgres fixtures
+        env:
+          PGPASSWORD: rootpass
+        run: |
+          psql -U postgres -h127.0.0.1 -c "CREATE DATABASE diff2;" || true
+          psql -U postgres -h127.0.0.1 -d diff1 < tests/end2end/db1-up-pgsql.sql
+          psql -U postgres -h127.0.0.1 -d diff2 < tests/end2end/db2-up-pgsql.sql
+
+      - name: Postgres schema diff via binary
+        run: |
+          ./dbdiff diff \
+            --server1-url "postgres://postgres:rootpass@127.0.0.1:5432/diff1" \
+            --server2-url "postgres://postgres:rootpass@127.0.0.1:5432/diff2" \
+            --type=schema --include=all --nocomments \
+            --output=pgsql-diff.sql
+          echo "--- Postgres diff output ($(wc -l < pgsql-diff.sql) lines) ---"
+          cat pgsql-diff.sql
+          test -s pgsql-diff.sql
+
+      # ── npm wrapper integration ───────────────────────────────────────────
+      # Stage the binary into the platform package directory, then create the
+      # node_modules symlinks that require.resolve() needs, and test that the
+      # JS wrapper correctly resolves and invokes the binary.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Stage binary into npm package + test JS wrapper
+        run: |
+          # Place the binary where the platform package expects it.
+          cp dbdiff packages/@dbdiff/cli-linux-x64/dbdiff
+          chmod +x packages/@dbdiff/cli-linux-x64/dbdiff
+
+          # Create node_modules symlinks so require.resolve('@dbdiff/cli-linux-x64/...')
+          # works the same way it would after 'npm install @dbdiff/cli'.
+          mkdir -p node_modules/@dbdiff
+          ln -s "$(pwd)/packages/@dbdiff/cli-linux-x64"  node_modules/@dbdiff/cli-linux-x64
+          ln -s "$(pwd)/packages/@dbdiff/cli"             node_modules/@dbdiff/cli
+
+          echo "--- npm wrapper: --version ---"
+          node packages/@dbdiff/cli/bin/dbdiff.js --version
+
+          echo "--- npm wrapper: diff --help ---"
+          node packages/@dbdiff/cli/bin/dbdiff.js --help
