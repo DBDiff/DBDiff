@@ -4,6 +4,7 @@ use DBDiff\DBDiff;
 use DBDiff\Migration\Config\DsnParser;
 use DBDiff\Migration\Format\FormatRegistry;
 use DBDiff\Params\DefaultParams;
+use DBDiff\Params\ParamsFactory;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -79,6 +80,10 @@ class DiffCommand extends Command
             if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
                 $this->mergeFileConfig($params);
             }
+
+            // Pre-populate so internal code (DBSchema, TableSchema, etc.)
+            // that calls ParamsFactory::get() receives the same params.
+            ParamsFactory::set($params);
 
             $written = $this->runAndWrite($params, $input->getOption('output'), $output);
 

@@ -4,8 +4,27 @@ use DBDiff\Exceptions\CLIException;
 
 
 class ParamsFactory {
-    
+
+    /** @var object|null  Cached params instance (set by DiffCommand or the first get() call). */
+    private static ?object $instance = null;
+
+    /**
+     * Pre-populate the shared params instance.
+     *
+     * DiffCommand calls this before running the diff pipeline so that
+     * internal code which calls get() (DBSchema, TableSchema, etc.)
+     * receives the same params without re-parsing $GLOBALS['argv'].
+     */
+    public static function set(object $params): void
+    {
+        self::$instance = $params;
+    }
+
     public static function get() {
+
+        if (self::$instance !== null) {
+            return self::$instance;
+        }
         
         $params = new DefaultParams;
 
@@ -28,8 +47,18 @@ class ParamsFactory {
         if ($driver !== 'sqlite' && empty($params->server1)) {
             throw new CLIException("A server is required");
         }
+
+        self::$instance = $params;
         return $params;
 
+    }
+
+    /**
+     * Clear the cached instance (useful in tests).
+     */
+    public static function reset(): void
+    {
+        self::$instance = null;
     }
 
     protected static function merge($obj1, $obj2) {
