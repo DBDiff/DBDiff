@@ -46,6 +46,13 @@ class DsnParser
         // strip a leading "env(" wrapper if someone passes the literal config value.
         $url = trim($url);
 
+        // Proactively normalise credentials before parse_url() sees the URL.
+        // This encode → decode round-trip handles raw passwords that contain
+        // '@', '#', '?', '/', and other URL-special characters without the user
+        // having to pre-encode them.  See DsnPasswordEncoder for details and
+        // the known limitation around literal '%' + two hex digits.
+        $url = DsnPasswordEncoder::normalizeUrl($url);
+
         // ── SQLite early-exit ─────────────────────────────────────────────────
         // PHP's parse_url() returns false for sqlite:///absolute/path because
         // the empty authority (the third slash) is treated as a malformed URL.

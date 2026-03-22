@@ -287,7 +287,42 @@ _Flags always override settings in `.dbdiff`._
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
 
+> **UP only by default:** The generated file includes only the UP (forward) migration by default. To also generate the DOWN (rollback) section, pass `--include=all`. Example: `dbdiff diff --include=all ...`
+
 > **DSN URLs vs `--server` flags:** Use `--server1-url` / `--server2-url` when you have a connection string (common with Supabase, Neon, Railway, etc.). Use `--server1` / `--server2` when specifying credentials separately.
+
+> **Passwords with special characters:** Embed the password percent-encoded in the URL. Use `dbdiff url:encode` to safely encode any password (see [`url:encode`](#urlencode--password-encoder) below). If dbdiff is not yet installed, `scripts/encode-password.sh` works without any dependencies.
+
+### `url:encode` — Password encoder
+
+Percent-encodes a raw password for safe embedding in any `--server-url` connection string.
+
+```bash
+dbdiff url:encode '<raw password>'
+```
+
+Capture the result directly into a connection flag:
+
+```bash
+PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
+dbdiff diff \
+  --server1-url="postgres://user:${PASS}@db.xxxx.supabase.co:5432/postgres" \
+  --server2-url="postgres://user:pass@db.yyyy.supabase.co:5432/postgres"
+```
+
+Accepts stdin too, for use in pipelines:
+
+```bash
+echo 'my$ecret#pass' | dbdiff url:encode
+```
+
+All characters except RFC 3986 unreserved characters (`A–Z a–z 0–9 - _ . ~`) are encoded. This is the safe, zero-guesswork approach for any password — including ones containing `@`, `#`, `?`, `/`, `+`, and literal `%`.
+
+**If dbdiff is not yet installed** (e.g. you are setting up CI), use the included bash script instead — no Python, Node, or PHP required:
+
+```bash
+PASS=$(scripts/encode-password.sh 'my$ecret#pass@word%123')
+```
 
 ### Migration Runner
 
@@ -348,6 +383,15 @@ DBDiff includes a built-in migration runner. All `migration:*` commands accept:
 ```bash
 ./dbdiff diff \
   --server1-url='postgres://user:pass@db.xxxx.supabase.co:5432/postgres' \
+  --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
+```
+
+If your password contains special characters, use `dbdiff url:encode` (see [`url:encode`](#urlencode--password-encoder) in the Command-Line API section):
+
+```bash
+PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
+./dbdiff diff \
+  --server1-url="postgres://user:${PASS}@db.xxxx.supabase.co:5432/postgres" \
   --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
 ```
 

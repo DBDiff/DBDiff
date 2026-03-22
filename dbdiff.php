@@ -11,6 +11,7 @@ use DBDiff\Migration\Command\MigrationStatusCommand;
 use DBDiff\Migration\Command\MigrationValidateCommand;
 use DBDiff\Migration\Command\MigrationRepairCommand;
 use DBDiff\Migration\Command\MigrationBaselineCommand;
+use DBDiff\Migration\Command\UrlEncodeCommand;
 use Symfony\Component\Console\Application;
 
 $app = new Application('DBDiff', \DBDiff\VERSION);
@@ -24,6 +25,7 @@ $app->addCommands([
     new MigrationValidateCommand,
     new MigrationRepairCommand,
     new MigrationBaselineCommand,
+    new UrlEncodeCommand,
 ]);
 
 // Set `diff` as the default command so that the legacy
