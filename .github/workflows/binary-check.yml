@@ -156,6 +156,9 @@ jobs:
           fi
           if [ -d spc-cache/downloads ]; then
             echo "Restoring SPC downloads from cache..."
+            # Ensure all files are writable before copying — .git/objects/pack
+            # files in the micro PHP source clone can be read-only in the cache.
+            chmod -R u+w spc-cache/downloads
             cp -a spc-cache/downloads downloads
           fi
 
@@ -173,6 +176,9 @@ jobs:
 
           # Persist back to spc-cache/ so actions/cache saves it at job end.
           mkdir -p spc-cache
+          # Ensure existing cache dirs are writable before overwriting.
+          [ -d spc-cache/buildroot ] && chmod -R u+w spc-cache/buildroot
+          [ -d spc-cache/downloads ] && chmod -R u+w spc-cache/downloads
           cp -a buildroot spc-cache/buildroot
           if [ -d downloads ]; then
             cp -a downloads spc-cache/downloads
