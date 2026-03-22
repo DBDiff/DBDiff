@@ -201,7 +201,9 @@ class DiffCommand extends Command
             $dir = $outputOpt ? rtrim($outputOpt, '/') : getcwd();
             foreach ($rendered as $fileName => $content) {
                 $path = "{$dir}/{$fileName}";
-                file_put_contents($path, $content);
+                if (file_put_contents($path, $content) === false) {
+                    throw new \RuntimeException("Failed to write output file: {$path}");
+                }
                 $output->writeln("<info>Written:</info> {$path}");
             }
             return;
@@ -210,7 +212,9 @@ class DiffCommand extends Command
         $ext  = $formatter->getExtension();
         $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
         $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
-        file_put_contents($path, $rendered);
+        if (file_put_contents($path, $rendered) === false) {
+            throw new \RuntimeException("Failed to write output file: {$path}");
+        }
         $output->writeln("<info>Written:</info> {$path}");
     }
 
