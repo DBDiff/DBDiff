@@ -13,3 +13,13 @@ reports/
 
 # Exclude vendor (it will be installed in the container)
 vendor/
+
+# Exclude example/config files that are not needed in any container image
+*.example
+*.yml.example
+docker-compose*.yml
+docs/
+images/
+scripts/
+tests/
+.github/
