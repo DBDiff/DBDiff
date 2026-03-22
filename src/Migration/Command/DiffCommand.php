@@ -1,6 +1,7 @@
 <?php namespace DBDiff\Migration\Command;
 
 use DBDiff\DBDiff;
+use DBDiff\Exceptions\FSException;
 use DBDiff\Migration\Config\DsnParser;
 use DBDiff\Migration\Format\FormatRegistry;
 use DBDiff\Params\DefaultParams;
@@ -202,7 +203,7 @@ class DiffCommand extends Command
             foreach ($rendered as $fileName => $content) {
                 $path = "{$dir}/{$fileName}";
                 if (file_put_contents($path, $content) === false) {
-                    throw new \RuntimeException("Failed to write output file: {$path}");
+                    throw new FSException("Failed to write output file: {$path}");
                 }
                 $output->writeln("<info>Written:</info> {$path}");
             }
@@ -213,7 +214,7 @@ class DiffCommand extends Command
         $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
         $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
         if (file_put_contents($path, $rendered) === false) {
-            throw new \RuntimeException("Failed to write output file: {$path}");
+            throw new FSException("Failed to write output file: {$path}");
         }
         $output->writeln("<info>Written:</info> {$path}");
     }
