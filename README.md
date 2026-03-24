@@ -23,9 +23,9 @@
 - Diffs schema changes, data changes, or both — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
-- Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
-- [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand
+- Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
+- [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
 - Ignore specific tables or fields via a YAML config file
 - Unicode / UTF-8 aware
