@@ -9,6 +9,8 @@ class AlterTableCollation {
     public $diff;
     public $source;
     public $target;
+    public $collation;
+    public $prevCollation;
 
     function __construct($table, $collation, $prevCollation) {
         $this->table  = $table;

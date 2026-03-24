@@ -14,7 +14,7 @@ on:
 env:
   # Extensions compiled into the static PHP binary.
   # yaml is pure-PHP via symfony/yaml so it is excluded here.
-  SPC_EXTENSIONS: "phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
   # Native C library sources SPC must download alongside the extensions (Unix)
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
   # Windows-specific library names. SPC uses pre-built Visual C++ packages for
@@ -55,11 +55,21 @@ jobs:
           # Box compiles the PHAR in a subprocess that overrides phar.readonly
           ini-values: phar.readonly=0
 
-      - name: Install Composer dependencies (with humbug/box)
-        run: composer install --optimize-autoloader
+      # humbug/box is a build tool, not a project dependency — it is not in
+      # require-dev so we download the phar directly from its GitHub release.
+      - name: Download Box
+        run: |
+          curl -sSL \
+            https://github.com/box-project/box/releases/latest/download/box.phar \
+            -o /usr/local/bin/box
+          chmod +x /usr/local/bin/box
+          box --version
+
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --no-scripts --optimize-autoloader
 
       - name: Build PHAR with Box
-        run: vendor/bin/box compile
+        run: box compile
 
       - name: Smoke-test PHAR
         run: php dist/dbdiff.phar --version

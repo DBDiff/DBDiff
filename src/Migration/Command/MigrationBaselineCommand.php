@@ -29,8 +29,8 @@ class MigrationBaselineCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('version',         null, InputOption::VALUE_REQUIRED, '14-digit version to baseline at (default: current timestamp)')
-            ->addOption('description',     null, InputOption::VALUE_REQUIRED, 'Description for the baseline entry', 'baseline')
+            ->addOption('baseline-version', null, InputOption::VALUE_REQUIRED, '14-digit version to baseline at (default: current timestamp)')
+            ->addOption('description',      null, InputOption::VALUE_REQUIRED, 'Description for the baseline entry', 'baseline')
             ->addOption('force',           null, InputOption::VALUE_NONE,     'Skip the confirmation prompt')
             ->addOption('migrations-dir',  null, InputOption::VALUE_REQUIRED, 'Override the migrations directory')
             ->addOption('config',          null, InputOption::VALUE_REQUIRED, 'Path to dbdiff.yml');
@@ -41,7 +41,7 @@ class MigrationBaselineCommand extends Command
     {
         $config      = $this->loadConfig($input);
         $runner      = new MigrationRunner($config);
-        $version     = $input->getOption('version') ?? date('YmdHis');
+        $version     = $input->getOption('baseline-version') ?? date('YmdHis');
         $description = $input->getOption('description') ?? 'baseline';
 
         // Validate version format

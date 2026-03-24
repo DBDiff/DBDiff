@@ -221,6 +221,25 @@ class DsnParserTest extends TestCase
         $this->assertSame('my@user', $r['user']);
     }
 
+    /**
+     * Unencoded credentials containing special characters (e.g. '@' and '+')
+     * should be accepted by the parser via the fallback encoding behaviour.
+     */
+    public function testUnencodedPasswordWithAtAndPlus(): void
+    {
+        $r = DsnParser::parse('postgresql://postgres:p@ss+xx@db.example.com:5432/postgres');
+        $this->assertSame('postgres', $r['user']);
+        $this->assertSame('p@ss+xx', $r['password']);
+        $this->assertSame('db.example.com', $r['host']);
+    }
+
+    public function testUnencodedPasswordWithExclamation(): void
+    {
+        $r = DsnParser::parse('postgresql://alice:p@ss!word@host:5432/db');
+        $this->assertSame('alice', $r['user']);
+        $this->assertSame('p@ss!word', $r['password']);
+    }
+
     // ── toServerAndDb() ───────────────────────────────────────────────────────
 
     public function testToServerAndDbShape(): void

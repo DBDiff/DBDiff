@@ -52,6 +52,10 @@ while [[ $# -gt 0 ]]; do
             TESTSUITE="Unit"
             shift
             ;;
+        --testsuite)
+            TESTSUITE="$2"
+            shift 2
+            ;;
         --sqlite)
             SQLITE_ONLY="true"
             shift

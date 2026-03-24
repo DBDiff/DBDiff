@@ -9,6 +9,9 @@ class SetDBCharset {
     public $diff;
     public $source;
     public $target;
+    public $db;
+    public $charset;
+    public $prevCharset;
 
     function __construct($db, $charset, $prevCharset) {
         $this->db = $db;

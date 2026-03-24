@@ -46,6 +46,13 @@ class DsnParser
         // strip a leading "env(" wrapper if someone passes the literal config value.
         $url = trim($url);
 
+        // Proactively normalise credentials before parse_url() sees the URL.
+        // This encode → decode round-trip handles raw passwords that contain
+        // '@', '#', '?', '/', and other URL-special characters without the user
+        // having to pre-encode them.  See DsnPasswordEncoder for details and
+        // the known limitation around literal '%' + two hex digits.
+        $url = DsnPasswordEncoder::normalizeUrl($url);
+
         // ── SQLite early-exit ─────────────────────────────────────────────────
         // PHP's parse_url() returns false for sqlite:///absolute/path because
         // the empty authority (the third slash) is treated as a malformed URL.
@@ -64,8 +71,15 @@ class DsnParser
             ];
         }
 
+
         $parsed = parse_url($url);
 
+        // If parse_url fails (commonly because credentials contain unencoded
+        // characters such as '@'), attempt a best-effort fix by percent-encoding
+        // the userinfo (user:pass) portion and re-parse.
+        if ($parsed === false || empty($parsed['scheme'])) {
+            $parsed = self::retryWithEncodedUserinfo($url);
+        }
         if ($parsed === false || empty($parsed['scheme'])) {
             throw new \InvalidArgumentException("Cannot parse database URL: {$url}");
         }
@@ -82,8 +96,8 @@ class DsnParser
 
         // ── MySQL / Postgres ──────────────────────────────────────────────────
         $host     = $parsed['host']     ?? 'localhost';
-        $user     = isset($parsed['user'])     ? urldecode($parsed['user'])     : '';
-        $password = isset($parsed['pass'])     ? urldecode($parsed['pass'])     : '';
+        $user     = isset($parsed['user'])     ? rawurldecode($parsed['user'])     : '';
+        $password = isset($parsed['pass'])     ? rawurldecode($parsed['pass'])     : '';
         $dbName   = ltrim($parsed['path'] ?? '', '/');
 
         // Default ports
@@ -129,6 +143,30 @@ class DsnParser
         }
 
         return '/' . $rawPath;
+    }
+
+    /**
+     * Attempt to fix a URL that parse_url() couldn't handle by
+     * percent-encoding the userinfo portion (user:pass).
+     *
+     * @return array|false  The parsed URL components, or false on failure.
+     */
+    private static function retryWithEncodedUserinfo(string $url): array|false
+    {
+        if (!preg_match('#^([a-z0-9+.-]+)://([^@/]+)@([^/]+)(/.*)?$#i', $url, $m)) {
+            return false;
+        }
+
+        $scheme   = $m[1];
+        $hostpart = $m[3];
+        $rest     = $m[4] ?? '';
+
+        $userpass = explode(':', $m[2], 2);
+        $user = rawurlencode($userpass[0]);
+        $pass = isset($userpass[1]) ? rawurlencode($userpass[1]) : '';
+        $encodedUserinfo = $user . ($pass !== '' ? ":$pass" : '');
+
+        return parse_url("$scheme://$encodedUserinfo@$hostpart$rest");
     }
 
     /**

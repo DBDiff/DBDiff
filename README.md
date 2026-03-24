@@ -22,8 +22,10 @@
 - Compares two databases (local or remote) and generates SQL migrations automatically
 - Diffs schema changes, data changes, or both — with deterministic, predictable output
 - Up and down SQL generated in the same file
+- Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
-- [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand
+- Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
+- [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
 - Ignore specific tables or fields via a YAML config file
 - Unicode / UTF-8 aware
@@ -262,23 +264,85 @@ Expected output:
 
 ## Command-Line API
 
+### `diff` (default command)
+
 _Flags always override settings in `.dbdiff`._
 
 | Flag | Description |
 |---|---|
 | `--server1=user:pass@host:port` | Source connection. Omit if using only one server. |
 | `--server2=user:pass@host:port` | Target connection (if different from server1). |
+| `--server1-url=<dsn>` | Full DSN URL for source (e.g. `postgres://user:pass@host:5432/db`). |
+| `--server2-url=<dsn>` | Full DSN URL for target. Supported schemes: `mysql://`, `pgsql://`, `postgres://`, `postgresql://`, `sqlite://`. |
 | `--driver=mysql\|pgsql\|sqlite` | Database driver. Defaults to `mysql`. |
 | `--supabase` | Shorthand for `--driver=pgsql` + SSL. |
 | `--format=native\|flyway\|liquibase-xml\|liquibase-yaml\|laravel` | Output format. Defaults to `native`. |
 | `--description=<slug>` | Slug used in generated filenames. |
 | `--template=<path>` | Custom output template. |
 | `--type=schema\|data\|all` | What to diff. Defaults to `schema`. |
-| `--include=up\|down\|all` | Directions to include. Defaults to `up`. |
-| `--nocomments=true` | Strip comment headers from output. |
+| `--include=up\|down\|both` | Directions to include. Defaults to `up`. (`all` is accepted as an alias for `both`.) |
+| `--nocomments` | Strip comment headers from output. |
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Output file path. Defaults to `migration.sql`. |
+| `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
+
+> **UP only by default:** The generated file includes only the UP (forward) migration by default. To also generate the DOWN (rollback) section, pass `--include=all`. Example: `dbdiff diff --include=all ...`
+
+> **DSN URLs vs `--server` flags:** Use `--server1-url` / `--server2-url` when you have a connection string (common with Supabase, Neon, Railway, etc.). Use `--server1` / `--server2` when specifying credentials separately.
+
+> **Passwords with special characters:** Embed the password percent-encoded in the URL. Use `dbdiff url:encode` to safely encode any password (see [`url:encode`](#urlencode--password-encoder) below). If dbdiff is not yet installed, `scripts/encode-password.sh` works without any dependencies.
+
+### `url:encode` — Password encoder
+
+Percent-encodes a raw password for safe embedding in any `--server-url` connection string.
+
+```bash
+dbdiff url:encode '<raw password>'
+```
+
+Capture the result directly into a connection flag:
+
+```bash
+PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
+dbdiff diff \
+  --server1-url="postgres://user:${PASS}@db.xxxx.supabase.co:5432/postgres" \
+  --server2-url="postgres://user:pass@db.yyyy.supabase.co:5432/postgres"
+```
+
+Accepts stdin too, for use in pipelines:
+
+```bash
+echo 'my$ecret#pass' | dbdiff url:encode
+```
+
+All characters except RFC 3986 unreserved characters (`A–Z a–z 0–9 - _ . ~`) are encoded. This is the safe, zero-guesswork approach for any password — including ones containing `@`, `#`, `?`, `/`, `+`, and literal `%`.
+
+**If dbdiff is not yet installed** (e.g. you are setting up CI), use the included bash script instead — no Python, Node, or PHP required:
+
+```bash
+PASS=$(scripts/encode-password.sh 'my$ecret#pass@word%123')
+```
+
+### Migration Runner
+
+DBDiff includes a built-in migration runner. All `migration:*` commands accept:
+
+| Flag | Description |
+|---|---|
+| `--db-url=<dsn>` | Full DSN URL for the target database. |
+| `--migrations-dir=<path>` | Override the migrations directory. |
+| `--config=<file>` | Path to `dbdiff.yml`. |
+
+| Command | Description | Extra flags |
+|---|---|---|
+| `migration:new <name>` | Scaffold a new `.up.sql` / `.down.sql` migration pair. | — |
+| `migration:up` | Apply all pending migrations. | `--target=<version>` — stop after this version |
+| `migration:down` | Roll back applied migration(s). | `--last=<n>` (default `1`), `--target=<version>` |
+| `migration:status` | Show applied vs pending migrations. | — |
+| `migration:validate` | Verify on-disk checksums match the history table. | — |
+| `migration:repair` | Remove failed entries so they can be retried. | `--force` — skip confirmation |
+| `migration:baseline` | Mark current DB state as the migration baseline. | `--baseline-version=<YYYYMMDDHHmmss>`, `--description=<text>`, `--force` |
 
 
 ## Usage Examples
@@ -290,7 +354,7 @@ _Flags always override settings in `.dbdiff`._
 
 ### MySQL — data diff only
 ```bash
-./dbdiff server1.dev.table1:server2.prod.table1 --nocomments=true --type=data
+./dbdiff server1.dev.table1:server2.prod.table1 --nocomments --type=data
 ```
 
 ### MySQL — Flyway format with output path
@@ -313,6 +377,40 @@ _Flags always override settings in `.dbdiff`._
 ### SQLite
 ```bash
 ./dbdiff --driver=sqlite server1./var/db/v1.db:server1./var/db/v2.db
+```
+
+### DSN URLs
+```bash
+./dbdiff diff \
+  --server1-url='postgres://user:pass@db.xxxx.supabase.co:5432/postgres' \
+  --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
+```
+
+If your password contains special characters, use `dbdiff url:encode` (see [`url:encode`](#urlencode--password-encoder) in the Command-Line API section):
+
+```bash
+PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
+./dbdiff diff \
+  --server1-url="postgres://user:${PASS}@db.xxxx.supabase.co:5432/postgres" \
+  --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
+```
+
+### Migration runner
+```bash
+# Scaffold a new migration
+./dbdiff migration:new create_users_table
+
+# Apply all pending migrations
+./dbdiff migration:up --db-url='postgres://user:pass@localhost:5432/mydb'
+
+# Check status
+./dbdiff migration:status --db-url='postgres://user:pass@localhost:5432/mydb'
+
+# Roll back the last migration
+./dbdiff migration:down --db-url='postgres://user:pass@localhost:5432/mydb'
+
+# Validate checksums
+./dbdiff migration:validate --db-url='postgres://user:pass@localhost:5432/mydb'
 ```
 
 
@@ -357,7 +455,7 @@ fieldsToIgnore:
     - field1
     - field2
 
-# ── Migration runner (dbdiff migrate:up) ──────────────────────────────────
+# ── Migration runner (dbdiff migration:up) ────────────────────────────────
 database:
   driver: mysql
   host: localhost
@@ -467,7 +565,7 @@ Test DBDiff locally against any combination of PHP and MySQL:
 ./start.sh all all --parallel
 ```
 
-The CI matrix: **6 PHP × 4 MySQL = 24 jobs**, plus dedicated jobs for SQLite and PostgreSQL.
+The CI matrix: **5 PHP × 4 MySQL = 20 jobs**, plus dedicated jobs for SQLite, PostgreSQL, DSN URLs, and Supabase.
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
 

@@ -7,6 +7,7 @@ use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 class UpdateDataSQL implements SQLGenInterface {
 
+    protected $obj;
     protected SQLDialectInterface $dialect;
 
     public function __construct($obj, SQLDialectInterface $dialect = null) {

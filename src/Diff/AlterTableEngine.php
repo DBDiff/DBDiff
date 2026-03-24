@@ -9,6 +9,8 @@ class AlterTableEngine {
     public $diff;
     public $source;
     public $target;
+    public $engine;
+    public $prevEngine;
 
     function __construct($table, $engine, $prevEngine) {
         $this->table  = $table;

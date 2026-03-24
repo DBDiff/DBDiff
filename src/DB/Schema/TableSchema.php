@@ -23,6 +23,8 @@ use DBDiff\Logger;
 
 class TableSchema {
 
+    protected $manager;
+
     function __construct($manager) {
         $this->manager = $manager;
     }

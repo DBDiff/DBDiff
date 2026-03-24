@@ -81,9 +81,7 @@ jobs:
       run: composer install --prefer-dist --no-progress
 
     - name: Run comprehensive tests
-      run: ./scripts/run-tests.sh
-      # End2EndSQLiteTest  → skips when baseline not yet committed (own job below)
-      # End2EndPostgresTest → skips because DB_HOST_POSTGRES is unset
+      run: ./scripts/run-tests.sh --testsuite DBDiff,Unit
 
   # ── SQLite standalone (no DB service needed) ─────────────────────────────────
   test-sqlite:
@@ -108,10 +106,7 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
-    - name: Record SQLite baseline
-      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --sqlite
-
-    - name: Verify SQLite baseline determinism
+    - name: Run SQLite e2e tests
       run: ./scripts/run-tests.sh --sqlite
 
   # ── PostgreSQL matrix ────────────────────────────────────────────────────────
@@ -160,8 +155,228 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
-    - name: Record PostgreSQL baseline
-      run: DBDIFF_RECORD_MODE=true ./scripts/run-tests.sh --postgres 127.0.0.1
-
-    - name: Verify PostgreSQL baseline determinism
+    - name: Run PostgreSQL e2e tests
       run: ./scripts/run-tests.sh --postgres 127.0.0.1
+
+  # ── DSN URL integration tests (--server1-url / --server2-url) ──────────────
+  test-dsn-urls:
+    name: DSN URL / ${{ matrix.driver }} / PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { driver: mysql,  php-version: '8.3', db-image: 'mysql:8.4',    db-port: 3306, health-cmd: 'mysqladmin ping' }
+          - { driver: pgsql,  php-version: '8.3', db-image: 'postgres:16',  db-port: 5432, health-cmd: 'pg_isready -U postgres' }
+
+    services:
+      db:
+        image: ${{ matrix.db-image }}
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: diff1
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: postgres
+          POSTGRES_DB: diff1
+        ports:
+          - ${{ matrix.db-port }}:${{ matrix.db-port }}
+        options: >-
+          --health-cmd="${{ matrix.health-cmd }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Test MySQL via DSN URL
+      if: matrix.driver == 'mysql'
+      run: |
+        # Create the second test database and load fixtures
+        mysql -h 127.0.0.1 -u root -prootpass -e "CREATE DATABASE diff2;"
+        mysql -h 127.0.0.1 -u root -prootpass diff1 < tests/end2end/db1-up.sql
+        mysql -h 127.0.0.1 -u root -prootpass diff2 < tests/end2end/db2-up.sql
+
+        php dbdiff diff \
+          --server1-url 'mysql://root:rootpass@127.0.0.1:3306/diff1' \
+          --server2-url 'mysql://root:rootpass@127.0.0.1:3306/diff2' \
+          --type=schema --include=all --nocomments --output=/tmp/dsn-mysql.sql
+
+        echo "--- MySQL DSN URL output ---"
+        head -20 /tmp/dsn-mysql.sql
+        test -s /tmp/dsn-mysql.sql || { echo 'FAIL: empty output'; exit 1; }
+
+    - name: Test PostgreSQL via DSN URL
+      if: matrix.driver == 'pgsql'
+      run: |
+        PGPASSWORD=rootpass psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE diff2;"
+        PGPASSWORD=rootpass psql -h 127.0.0.1 -U postgres -d diff1 -f tests/end2end/db1-up-pgsql.sql
+        PGPASSWORD=rootpass psql -h 127.0.0.1 -U postgres -d diff2 -f tests/end2end/db2-up-pgsql.sql
+
+        php dbdiff diff \
+          --server1-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff1' \
+          --server2-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff2' \
+          --type=schema --include=all --nocomments --output=/tmp/dsn-pgsql.sql
+
+        echo "--- PostgreSQL DSN URL output ---"
+        head -20 /tmp/dsn-pgsql.sql
+        test -s /tmp/dsn-pgsql.sql || { echo 'FAIL: empty output'; exit 1; }
+
+    - name: Test SQLite via DSN URL
+      run: |
+        # Create two SQLite databases with differing schemas
+        sqlite3 /tmp/v1.db <<'SQL'
+          CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+          INSERT INTO users VALUES (1, 'Alice');
+        SQL
+        sqlite3 /tmp/v2.db <<'SQL'
+          CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT);
+          INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');
+        SQL
+
+        php dbdiff diff \
+          --server1-url 'sqlite:///tmp/v1.db' \
+          --server2-url 'sqlite:///tmp/v2.db' \
+          --type=all --include=all --nocomments --output=/tmp/dsn-sqlite.sql
+
+        echo "--- SQLite DSN URL output ---"
+        cat /tmp/dsn-sqlite.sql
+        test -s /tmp/dsn-sqlite.sql || { echo 'FAIL: empty output'; exit 1; }
+
+  # ── Supabase Postgres integration ───────────────────────────────────────────
+  # Uses the official supabase/postgres image (real Supabase Postgres with
+  # uuid-ossp, pgvector, pg_graphql, etc.) to verify first-class Supabase
+  # support: DSN URL connections, schema diffs, and migration runner.
+  test-supabase:
+    name: Supabase Postgres / PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.3', '8.4']
+
+    env:
+      SUPABASE_DB_HOST: 127.0.0.1
+      SUPABASE_DB_PORT: 5432
+      SUPABASE_DB_USER: postgres
+      SUPABASE_DB_PASS: supabase-test-pass
+
+    services:
+      supabase-db:
+        image: supabase/postgres:15.6.1.146
+        env:
+          POSTGRES_PASSWORD: supabase-test-pass
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_pgsql, pdo_sqlite, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    # ── 1. DSN URL connection check ──
+    - name: Verify DSN URL connects to Supabase Postgres
+      run: |
+        php -r "
+          require 'vendor/autoload.php';
+          \$url = 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/postgres';
+          \$parsed = \DBDiff\Migration\Config\DsnParser::parse(\$url);
+          echo 'Driver:  ' . \$parsed['driver'] . PHP_EOL;
+          echo 'Host:    ' . \$parsed['server']['host'] . PHP_EOL;
+          echo 'Port:    ' . \$parsed['server']['port'] . PHP_EOL;
+          echo 'DB:      ' . \$parsed['db'] . PHP_EOL;
+
+          // Verify actual PDO connection
+          \$dsn = 'pgsql:host=127.0.0.1;port=5432;dbname=postgres';
+          \$pdo = new PDO(\$dsn, 'postgres', 'supabase-test-pass');
+          \$ver = \$pdo->query('SELECT version()')->fetchColumn();
+          echo 'Postgres: ' . \$ver . PHP_EOL;
+          echo 'OK: DSN URL parsed and PDO connection established' . PHP_EOL;
+        "
+
+    # ── 2. Schema diff via DSN URLs ──
+    - name: Diff two databases on Supabase Postgres
+      run: |
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE supa_diff1;"
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE supa_diff2;"
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_diff1 -f tests/end2end/db1-up-supabase.sql
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_diff2 -f tests/end2end/db2-up-supabase.sql
+
+        php dbdiff diff \
+          --server1-url 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_diff1' \
+          --server2-url 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_diff2' \
+          --type=schema --include=up --nocomments --output=/tmp/supabase-diff.sql
+
+        echo "--- Supabase schema diff output ---"
+        cat /tmp/supabase-diff.sql
+        test -s /tmp/supabase-diff.sql || { echo 'FAIL: empty diff output'; exit 1; }
+
+        # The diff should detect the new 'comments' table and column changes
+        grep -q 'comments' /tmp/supabase-diff.sql || { echo 'FAIL: missing comments table in diff'; exit 1; }
+
+    # ── 3. Migration runner against Supabase Postgres ──
+    - name: Run migration lifecycle on Supabase Postgres
+      run: |
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE supa_migrate;"
+
+        # migration:up — apply both migrations
+        php dbdiff migration:up \
+          --db-url='postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_migrate' \
+          --migrations-dir=tests/end2end/supabase-migrations
+
+        echo "--- Tables after migration:up ---"
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_migrate \
+          -c "\dt public.*"
+
+        # Verify tables were created
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_migrate \
+          -tc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users','posts')" \
+          | grep -q '2' || { echo 'FAIL: expected 2 tables after up'; exit 1; }
+
+        # migration:status — both should show as applied
+        php dbdiff migration:status \
+          --db-url='postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_migrate' \
+          --migrations-dir=tests/end2end/supabase-migrations
+
+        # migration:validate — checksums should be clean
+        php dbdiff migration:validate \
+          --db-url='postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_migrate' \
+          --migrations-dir=tests/end2end/supabase-migrations
+
+        # migration:down — roll back one migration (posts)
+        php dbdiff migration:down \
+          --db-url='postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_migrate' \
+          --migrations-dir=tests/end2end/supabase-migrations
+
+        # Verify only users table remains
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_migrate \
+          -tc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='posts'" \
+          | grep -q '0' || { echo 'FAIL: posts table should be dropped after down'; exit 1; }
+
+        echo "OK: Full migration lifecycle passed on Supabase Postgres"

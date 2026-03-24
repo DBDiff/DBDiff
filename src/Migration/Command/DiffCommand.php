@@ -1,9 +1,11 @@
 <?php namespace DBDiff\Migration\Command;
 
 use DBDiff\DBDiff;
+use DBDiff\Exceptions\FSException;
 use DBDiff\Migration\Config\DsnParser;
 use DBDiff\Migration\Format\FormatRegistry;
 use DBDiff\Params\DefaultParams;
+use DBDiff\Params\ParamsFactory;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -79,6 +81,10 @@ class DiffCommand extends Command
             if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
                 $this->mergeFileConfig($params);
             }
+
+            // Pre-populate so internal code (DBSchema, TableSchema, etc.)
+            // that calls ParamsFactory::get() receives the same params.
+            ParamsFactory::set($params);
 
             $written = $this->runAndWrite($params, $input->getOption('output'), $output);
 
@@ -196,7 +202,9 @@ class DiffCommand extends Command
             $dir = $outputOpt ? rtrim($outputOpt, '/') : getcwd();
             foreach ($rendered as $fileName => $content) {
                 $path = "{$dir}/{$fileName}";
-                file_put_contents($path, $content);
+                if (file_put_contents($path, $content) === false) {
+                    throw new FSException("Failed to write output file: {$path}");
+                }
                 $output->writeln("<info>Written:</info> {$path}");
             }
             return;
@@ -205,7 +213,9 @@ class DiffCommand extends Command
         $ext  = $formatter->getExtension();
         $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
         $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
-        file_put_contents($path, $rendered);
+        if (file_put_contents($path, $rendered) === false) {
+            throw new FSException("Failed to write output file: {$path}");
+        }
         $output->writeln("<info>Written:</info> {$path}");
     }
 
