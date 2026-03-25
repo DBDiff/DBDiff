@@ -333,12 +333,12 @@ class LocalTableData {
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result1 = $this->source->select(
-           "SELECT $columnsAUtf FROM {$db1}.{$table} as a
-            LEFT JOIN {$db2}.{$table} as b ON $keyCols WHERE $keyNulls2
+           "SELECT $columnsAUtf FROM `{$db1}`.`{$table}` as a
+            LEFT JOIN `{$db2}`.`{$table}` as b ON $keyCols WHERE $keyNulls2
         ");
         $result2 = $this->source->select(
-           "SELECT $columnsBUtf FROM {$db2}.{$table} as b
-            LEFT JOIN {$db1}.{$table} as a ON $keyCols WHERE $keyNulls1
+           "SELECT $columnsBUtf FROM `{$db2}`.`{$table}` as b
+            LEFT JOIN `{$db1}`.`{$table}` as a ON $keyCols WHERE $keyNulls1
         ");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
 
@@ -392,15 +392,15 @@ class LocalTableData {
         $columnsB   = implode(',', $wrapCast($columns2, 'b'));
         
         $keyCols = implode(self::SQL_AND, array_map(function($el) {
-            return "a.{$el} = b.{$el}";
+            return "`a`.`{$el}` = `b`.`{$el}`";
         }, $key));
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result = $this->source->select(
            "SELECT * FROM (
                 SELECT $columnsAas, $columnsBas, SHA2(concat($columnsA), 256) AS hash1,
-                SHA2(concat($columnsB), 256) AS hash2 FROM {$db1}.{$table} as a 
-                INNER JOIN {$db2}.{$table} as b  
+                SHA2(concat($columnsB), 256) AS hash2 FROM `{$db1}`.`{$table}` as a 
+                INNER JOIN `{$db2}`.`{$table}` as b  
                 ON $keyCols
             ) t WHERE hash1 <> hash2");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
