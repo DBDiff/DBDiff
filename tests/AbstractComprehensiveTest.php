@@ -261,6 +261,70 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
         $this->assertStringNotContainsString('another_ignored_field', $output);
     }
 
+    /**
+     * Bug #6 regression: views must never appear in the diff output.
+     *
+     * The source DB contains a VIEW `active_products` alongside a `products`
+     * table.  After the fix, `getTables()` excludes views so only the real
+     * schema differences between the `products` tables are emitted — no
+     * DROP TABLE / CREATE TABLE for the view.
+     */
+    public function testViewsExcludedFromDiff(): void
+    {
+        $this->loadFixture('views_ignored');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+
+        // Core regression: the view name must never appear in any generated SQL.
+        $this->assertStringNotContainsString(
+            'active_products',
+            $output,
+            'Bug #6 regression: views must not appear in the diff output'
+        );
+        // The real table difference (price column) should still be detected.
+        $this->assertStringContainsString(
+            'products',
+            $output,
+            'The schema diff for the base table must still be generated'
+        );
+    }
+
+    /**
+     * Bug #7 regression: rows containing NULL column values must be detected
+     * during data diff and appear in the output as UPDATE statements.
+     *
+     * Before the fix, MySQL's CONCAT() returned NULL for any row with a NULL
+     * column, causing the MD5 hash to be NULL for all such rows — making any
+     * difference in those rows invisible.
+     */
+    public function testNullableColumnDataDetected(): void
+    {
+        $this->loadFixture('nullable_data');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=data', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+
+        // Core regression: NULL↔value changes must produce UPDATE statements.
+        $this->assertNotEmpty(
+            trim($output),
+            'Bug #7 regression: data diff with NULL column changes must not be empty'
+        );
+        $this->assertStringContainsString(
+            'UPDATE',
+            $output,
+            'Bug #7 regression: NULL↔value column changes must produce UPDATE statements'
+        );
+        // Row 3 has description=NULL in both source and target — must not be in diff.
+        $this->assertStringNotContainsString(
+            "'3'",
+            $output,
+            'Bug #7 regression: row 3 has identical NULLs in source and target — must not appear in diff'
+        );
+    }
+
     // ── Shared helpers ────────────────────────────────────────────────────
 
     protected function runDBDiff(array $args): string
