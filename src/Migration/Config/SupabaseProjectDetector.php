@@ -81,27 +81,22 @@ class SupabaseProjectDetector
             $cwd
         );
 
-        if (!is_resource($process)) {
-            return null;
+        $url = null;
+
+        if (is_resource($process)) {
+            fclose($pipes[0]);
+            $stdout   = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
+
+            if ($exitCode === 0 && $stdout) {
+                $data = json_decode($stdout, true);
+                // Supabase CLI outputs DB_URL in the status JSON
+                $url  = is_array($data) ? ($data['DB_URL'] ?? $data['db_url'] ?? null) : null;
+            }
         }
 
-        fclose($pipes[0]);
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($process);
-
-        if ($exitCode !== 0 || !$stdout) {
-            return null;
-        }
-
-        $data = json_decode($stdout, true);
-
-        if (!is_array($data)) {
-            return null;
-        }
-
-        // Supabase CLI outputs DB_URL in the status JSON
-        return $data['DB_URL'] ?? $data['db_url'] ?? null;
+        return $url;
     }
 }
