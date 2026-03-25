@@ -21,9 +21,6 @@ class DBDiff {
      */
     public function run($params = null): void
     {
-        // Increase memory limit
-        ini_set('memory_limit', '512M');
-
         try {
             if ($params === null) {
                 $params = ParamsFactory::get();
@@ -62,8 +59,6 @@ class DBDiff {
      */
     public function getDiffResult(object $params): array
     {
-        ini_set('memory_limit', '512M');
-
         $diffCalculator = new DiffCalculator;
         $diff           = $diffCalculator->getDiff($params);
 
