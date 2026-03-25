@@ -1,4 +1,0 @@
-#---------- UP ----------
-ALTER TABLE "users" DROP COLUMN "phone";
-#---------- DOWN ----------
-ALTER TABLE "users" ADD COLUMN "phone" text DEFAULT NULL;

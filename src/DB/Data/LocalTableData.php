@@ -34,10 +34,45 @@ class LocalTableData {
             return $this->getDiffPgsql($table, $key);
         }
 
+        // MySQL: CHECKSUM TABLE pre-scan to skip identical tables.
+        if ($this->skipIfIdentical($table)) {
+            Logger::info("Table `$table` is identical (CHECKSUM match) — skipping data diff");
+            return [];
+        }
+
         $diffSequence1 = $this->getOldNewDiff($table, $key);
         $diffSequence2 = $this->getChangeDiff($table, $key);
 
         return array_merge($diffSequence1, $diffSequence2);
+    }
+
+    /**
+     * MySQL CHECKSUM TABLE pre-scan.
+     *
+     * Issues CHECKSUM TABLE for both databases and compares.  If both
+     * checksums match and are non-null, the table data is identical and
+     * the full diff can be skipped.  This is only useful for same-server
+     * comparisons (which is always the case in LocalTableData).
+     */
+    private function skipIfIdentical(string $table): bool
+    {
+        $db1 = $this->source->getDatabaseName();
+        $db2 = $this->target->getDatabaseName();
+        try {
+            $result = $this->source->select(
+                "CHECKSUM TABLE `$db1`.`$table`, `$db2`.`$table`"
+            );
+            if (count($result) === 2) {
+                $cs1 = $result[0]['Checksum'] ?? null;
+                $cs2 = $result[1]['Checksum'] ?? null;
+                return $cs1 !== null && $cs2 !== null && $cs1 === $cs2;
+            }
+        } catch (\Throwable $e) {
+            // CHECKSUM TABLE may not be supported (e.g. certain storage engines).
+            // Fall through to the full diff.
+            Logger::info("CHECKSUM TABLE not available for `$table`: " . $e->getMessage());
+        }
+        return false;
     }
 
     // ── SQLite path ───────────────────────────────────────────────────────
@@ -106,11 +141,7 @@ class LocalTableData {
 
         $result3 = [];
         if (!empty($commonCols)) {
-            // NULL-safe inequality: "a IS NOT b" is the SQLite idiom.
-            $changeConds = implode(
-                ' OR ',
-                array_map(fn($el) => "CAST(\"a\".\"$el\" AS TEXT) IS NOT CAST(\"b\".\"$el\" AS TEXT)", $commonCols)
-            );
+            $changeConds = $this->buildSQLiteChangeConds($commonCols);
             $allCols = implode(',', array_merge(
                 array_map(fn($el) => "\"a\".\"$el\" AS \"s_$el\"", $commonCols),
                 array_map(fn($el) => "\"b\".\"$el\" AS \"t_$el\"", $commonCols)
@@ -123,6 +154,60 @@ class LocalTableData {
         }
 
         return $this->buildDiffSequence($table, $result1, $result2, $result3, $key);
+    }
+
+    /**
+     * Build the WHERE condition for detecting changed rows in SQLite.
+     *
+     * If sha3() is available (bundled into many libsqlite3 builds), use a
+     * single hash comparison — one condition per row rather than N per column.
+     * Otherwise, fall back to the NULL-safe field-by-field IS NOT comparison.
+     */
+    private function buildSQLiteChangeConds(array $commonCols): string
+    {
+        if ($this->sqliteSha3Available()) {
+            $hashA = $this->buildSQLiteSha3Expr($commonCols, 'a');
+            $hashB = $this->buildSQLiteSha3Expr($commonCols, 'b');
+            return "$hashA <> $hashB";
+        }
+
+        // Fallback: NULL-safe inequality per column
+        return implode(
+            ' OR ',
+            array_map(fn($el) => "CAST(\"a\".\"$el\" AS TEXT) IS NOT CAST(\"b\".\"$el\" AS TEXT)", $commonCols)
+        );
+    }
+
+    /**
+     * Build a sha3() hash expression over the given columns for a table alias.
+     * Example: sha3(COALESCE(CAST("a"."col1" AS TEXT), '') || X'00' || ..., 256)
+     */
+    private function buildSQLiteSha3Expr(array $columns, string $alias): string
+    {
+        $parts = array_map(
+            fn($c) => "COALESCE(CAST(\"$alias\".\"$c\" AS TEXT), '')",
+            $columns
+        );
+        return "sha3(" . implode(" || X'00' || ", $parts) . ", 256)";
+    }
+
+    /**
+     * Probe whether sha3() is available in this SQLite build.
+     * Caches the result per-process.
+     */
+    private function sqliteSha3Available(): bool
+    {
+        static $available = null;
+        if ($available !== null) {
+            return $available;
+        }
+        try {
+            $this->source->select("SELECT sha3('test', 256) AS h");
+            $available = true;
+        } catch (\Throwable $e) {
+            $available = false;
+        }
+        return $available;
     }
 
     /** Turn the three raw result sets into Diff objects. */
@@ -176,10 +261,18 @@ class LocalTableData {
 
     // ── PostgreSQL path ───────────────────────────────────────────────────
     //
-    // PostgreSQL does not support cross-database queries, so we cannot JOIN
-    // across two databases in a single SQL statement.  Instead we fetch all
-    // rows from each database separately over their respective connections
-    // and perform the diff in PHP.
+    // PostgreSQL does not support cross-database queries.  Instead of loading
+    // both full tables into PHP memory (the old approach), we use a streaming
+    // sorted-merge with md5() row hashing:
+    //
+    // Phase 1: Stream PK + md5(row::text) from both databases in PK order.
+    //          A merge-sort pass identifies inserts, deletes, and changed PKs
+    //          without transferring full row data.
+    //
+    // Phase 2: Batch-fetch full rows only for the differing PKs.
+    //
+    // This scales to millions of rows and transfers only O(pk + 32 byte hash)
+    // per row in Phase 1.
 
     private function getDiffPgsql(string $table, array $key): array
     {
@@ -187,116 +280,10 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        // Quote identifiers for PostgreSQL
-        $quotedCols1 = implode(', ', array_map(fn($c) => "\"$c\"", $columns1));
-        $quotedCols2 = implode(', ', array_map(fn($c) => "\"$c\"", $columns2));
+        $fieldsToIgnore = $params->fieldsToIgnore[$table] ?? [];
 
-        // Fetch all rows, keyed by primary-key composite string for fast lookup
-        $srcRows = $this->fetchIndexed($this->source, $table, $quotedCols1, $key);
-        $tgtRows = $this->fetchIndexed($this->target, $table, $quotedCols2, $key);
-
-        $commonCols = array_values(array_intersect($columns1, $columns2));
-        if (isset($params->fieldsToIgnore[$table])) {
-            $commonCols = array_values(array_diff($commonCols, $params->fieldsToIgnore[$table]));
-        }
-
-        return array_merge(
-            $this->buildPgsqlInserts($table, $key, $srcRows, $tgtRows),
-            $this->buildPgsqlDeletes($table, $key, $srcRows, $tgtRows),
-            empty($commonCols) ? [] : $this->buildPgsqlUpdates($table, $key, $commonCols, $srcRows, $tgtRows)
-        );
-    }
-
-    private function buildPgsqlInserts(string $table, array $key, array $srcRows, array $tgtRows): array
-    {
-        $result = [];
-        foreach ($srcRows as $pk => $row) {
-            if (!array_key_exists($pk, $tgtRows)) {
-                $result[] = new InsertData($table, [
-                    'keys' => Arr::only($row, $key),
-                    'diff' => new \Diff\DiffOp\DiffOpAdd(Arr::except($row, '_connection')),
-                ]);
-            }
-        }
-        return $result;
-    }
-
-    private function buildPgsqlDeletes(string $table, array $key, array $srcRows, array $tgtRows): array
-    {
-        $result = [];
-        foreach ($tgtRows as $pk => $row) {
-            if (!array_key_exists($pk, $srcRows)) {
-                $result[] = new DeleteData($table, [
-                    'keys' => Arr::only($row, $key),
-                    'diff' => new \Diff\DiffOp\DiffOpRemove(Arr::except($row, '_connection')),
-                ]);
-            }
-        }
-        return $result;
-    }
-
-    private function buildPgsqlUpdates(string $table, array $key, array $commonCols, array $srcRows, array $tgtRows): array
-    {
-        $result = [];
-        foreach ($srcRows as $pk => $srcRow) {
-            if (!array_key_exists($pk, $tgtRows)) {
-                continue;
-            }
-            $update = $this->buildPgsqlUpdateForRow($table, $key, $commonCols, $srcRow, $tgtRows[$pk]);
-            if ($update !== null) {
-                $result[] = $update;
-            }
-        }
-        return $result;
-    }
-
-    private function buildPgsqlUpdateForRow(string $table, array $key, array $commonCols, array $srcRow, array $tgtRow): ?UpdateData
-    {
-        $diff = [];
-        $keys = [];
-        foreach ($commonCols as $col) {
-            if (in_array($col, $key)) {
-                $keys[$col] = $srcRow[$col];
-            }
-            $sv = (string) ($srcRow[$col] ?? '');
-            $tv = (string) ($tgtRow[$col] ?? '');
-            if ($sv !== $tv) {
-                $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
-            }
-        }
-        if (empty($diff)) {
-            return null;
-        }
-        foreach ($key as $k) {
-            if (!isset($keys[$k])) {
-                $keys[$k] = $srcRow[$k];
-            }
-        }
-        return new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
-    }
-
-    /**
-     * Fetch all rows from a table over the given connection and index them
-     * by a composite primary-key string for O(1) lookup.
-     *
-     * @param  \Illuminate\Database\Connection $conn
-     * @param  string   $table      Table name (unquoted)
-     * @param  string   $selectExpr Already-quoted SELECT column list
-     * @param  string[] $key        Primary-key column names
-     * @return array<string, array>
-     */
-    private function fetchIndexed($conn, string $table, string $selectExpr, array $key): array
-    {
-        $rows   = $conn->select("SELECT $selectExpr FROM \"$table\"");
-        $indexed = [];
-        foreach ($rows as $row) {
-            // Laravel returns stdClass objects when using select(); normalise to array.
-            $row = is_array($row) ? $row : (array) $row;
-            $pkParts = array_map(fn($k) => (string) ($row[$k] ?? ''), $key);
-            $pkStr   = implode("\x00", $pkParts);
-            $indexed[$pkStr] = $row;
-        }
-        return $indexed;
+        $merge = new StreamingMergeDiff($this->source, $this->target, 'pgsql');
+        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);
     }
 
     // ── MySQL / PostgreSQL path ───────────────────────────────────────────

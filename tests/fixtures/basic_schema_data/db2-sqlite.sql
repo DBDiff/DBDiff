@@ -1,7 +1,6 @@
 -- SQLite: basic_schema_data fixture - database 2 (target)
 -- db2 has a wider schema: extra columns and indexes.
--- Data is deliberately identical to db1 so that data-diff produces
--- empty output (SQLite's CONVERT/cross-DB join is MySQL-only).
+-- Data differences mirror the MySQL/Postgres fixtures to exercise data diff.
 
 CREATE TABLE users (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,10 +14,10 @@ CREATE TABLE users (
 
 CREATE INDEX users_status_idx ON users (status);
 
-INSERT INTO users (id, name, email, status, created_at) VALUES
-(1, 'John Doe',   'john@example.com', 'active', '2024-01-01 00:00:00'),
-(2, 'Jane Smith', 'jane@example.com', 'active', '2024-01-01 00:00:00'),
-(3, 'Bob Wilson', 'bob@example.com',  'active', '2024-01-01 00:00:00');
+INSERT INTO users (id, name, email, phone, status, created_at, updated_at) VALUES
+(1, 'John Doe',    'john@example.com',  '555-1234', 'active',  '2024-01-01 00:00:10', '2024-01-01 00:00:10'),
+(2, 'Jane Smith',  'jane@example.com',  '555-5678', 'pending', '2024-01-01 00:00:10', '2024-01-01 00:00:10'),
+(4, 'Alice Brown', 'alice@example.com', '555-9999', 'active',  '2024-01-01 00:00:10', '2024-01-01 00:00:10');
 
 CREATE TABLE posts (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +31,7 @@ CREATE TABLE posts (
 CREATE INDEX posts_user_id_idx   ON posts (user_id);
 CREATE INDEX posts_published_idx ON posts (published);
 
-INSERT INTO posts (id, user_id, title, content, published) VALUES
-(1, 1, 'First Post',  'This is the first post content',  1),
-(2, 1, 'Second Post', 'This is the second post content', 0),
-(3, 2, 'Jane Post',   'This is Jane post content',       1);
+INSERT INTO posts (id, user_id, title, content, published, published_at) VALUES
+(1, 1, 'First Post Updated', 'This is the updated first post content', 1,  '2024-01-01 10:00:00'),
+(2, 1, 'Second Post',        'This is the second post content',        1,  '2024-01-02 11:00:00'),
+(4, 4, 'Alice Post',         'This is Alice post content',             1,  '2024-01-03 12:00:00');
