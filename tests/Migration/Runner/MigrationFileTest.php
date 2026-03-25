@@ -311,4 +311,88 @@ class MigrationFileTest extends TestCase
 
         $this->assertCount(0, $found);
     }
+
+    // ── scaffoldSupabase() ────────────────────────────────────────────────────
+
+    public function testScaffoldSupabaseCreatesSingleSqlFile(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFileExists($mf->upPath);
+        $this->assertStringEndsWith('.sql', $mf->upPath);
+        $this->assertStringNotContainsString('.up.sql', $mf->upPath);
+    }
+
+    public function testScaffoldSupabaseHasNoDown(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFalse($mf->hasDown());
+        $this->assertNull($mf->getDownSql());
+    }
+
+    public function testScaffoldSupabaseDownPathDoesNotExist(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFileDoesNotExist($mf->downPath);
+    }
+
+    public function testScaffoldSupabaseFilenameConvention(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('20260101120000_create_users.sql', basename($mf->upPath));
+    }
+
+    public function testScaffoldSupabaseSlugsDescription(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'Add Build Log Table', '20260101120000');
+
+        $this->assertStringContainsString('add_build_log_table', basename($mf->upPath));
+    }
+
+    public function testScaffoldSupabaseCreatesDirectoryIfMissing(): void
+    {
+        $newDir = $this->tmpDir . '/sub/dir';
+        $mf     = MigrationFile::scaffoldSupabase($newDir, 'init', '20260101120000');
+
+        $this->assertFileExists($mf->upPath);
+        // cleanup
+        unlink($mf->upPath);
+        rmdir($newDir);
+        rmdir(dirname($newDir));
+    }
+
+    public function testScaffoldSupabaseThrowsWhenFileAlreadyExists(): void
+    {
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'init', '20260101120000');
+
+        $this->expectException(\DBDiff\Migration\Exceptions\MigrationException::class);
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'init', '20260101120000');
+    }
+
+    public function testScaffoldSupabaseVersionStoredOnObject(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('20260101120000', $mf->version);
+    }
+
+    public function testScaffoldSupabaseDescriptionStoredOnObject(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('create_users', $mf->description);
+    }
+
+    public function testScaffoldSupabaseFileIsPickedUpByScanDir(): void
+    {
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(1, $found);
+        $this->assertSame('20260101120000', $found[0]->version);
+    }
 }

@@ -228,4 +228,36 @@ class MigrationHistory
             'success'      => true,
         ]);
     }
+
+    // ── Supabase integration (Phase 4) ────────────────────────────────────────
+
+    /**
+     * Return the set of migration base names ('{version}_{description}') that
+     * Supabase's own tracking table reports as applied.
+     *
+     * Reads from supabase_migrations.schema_migrations, which Supabase populates
+     * when you run `supabase db push` or `supabase migration up`.  Each row's
+     * `version` column stores the full migration filename without the `.sql`
+     * extension, e.g. '20260303120000_create_users'.
+     *
+     * Returns an empty array (without throwing) when:
+     *   - the supabase_migrations schema does not exist (non-Supabase DB)
+     *   - the current role lacks SELECT on the table
+     *   - any other query error
+     *
+     * @return string[]  e.g. ['20260101000000_init', '20260303120000_create_users']
+     */
+    public function getSupabaseAppliedVersions(): array
+    {
+        try {
+            return $this->connection
+                ->table('supabase_migrations.schema_migrations')
+                ->orderBy('version')
+                ->pluck('version')
+                ->map(fn ($v) => (string) $v)
+                ->toArray();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
 }

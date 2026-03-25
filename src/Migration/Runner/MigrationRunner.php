@@ -310,6 +310,20 @@ class MigrationRunner
     }
 
     /**
+     * Return the set of migration base names tracked by Supabase's own
+     * supabase_migrations.schema_migrations table.
+     *
+     * Delegates directly to MigrationHistory::getSupabaseAppliedVersions().
+     * Returns an empty array when the table is unreachable or absent.
+     *
+     * @return string[]  e.g. ['20260101000000_init', '20260303120000_create_users']
+     */
+    public function getSupabaseAppliedVersions(): array
+    {
+        return $this->history->getSupabaseAppliedVersions();
+    }
+
+    /**
      * Record the current state as the baseline.
      * All migrations at or before $version will be treated as already applied.
      *

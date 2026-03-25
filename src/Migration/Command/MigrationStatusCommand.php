@@ -41,13 +41,31 @@ class MigrationStatusCommand extends Command
         $runner = new MigrationRunner($config);
         $report = $runner->status();
 
+        // Phase 4: fetch Supabase-tracked versions when inside a Supabase project
+        $supabaseVersions = [];
+        $isSupabase       = $config->isSupabaseProject;
+
+        if ($isSupabase) {
+            $supabaseVersions = array_flip($runner->getSupabaseAppliedVersions());
+            $output->writeln(
+                '<comment>Supabase project detected:</comment> ' . $config->supabaseProjectRoot
+                . ' — showing Supabase tracking column (Supa?)'
+            );
+            $output->writeln('');
+        }
+
         if (empty($report)) {
             $output->writeln('<info>No migrations found in ' . $config->resolveMigrationsDir() . '</info>');
             return Command::SUCCESS;
         }
 
         $table = new Table($output);
-        $table->setHeaders(['#', 'Version', 'Description', 'State', 'Applied On', 'Down?', 'Time (ms)']);
+
+        $headers = ['#', 'Version', 'Description', 'State', 'Applied On', 'Down?', 'Time (ms)'];
+        if ($isSupabase) {
+            $headers[] = 'Supa?';
+        }
+        $table->setHeaders($headers);
 
         $i = 1;
         foreach ($report as $row) {
@@ -60,7 +78,7 @@ class MigrationStatusCommand extends Command
                 default             => $row['state'],
             };
 
-            $table->addRow([
+            $cells = [
                 $i++,
                 $row['version'],
                 $row['description'],
@@ -68,7 +86,15 @@ class MigrationStatusCommand extends Command
                 $row['applied_on'] ?? '—',
                 $row['has_down'] ? 'yes' : '<comment>no</comment>',
                 $row['execution_ms'] ?? '—',
-            ]);
+            ];
+
+            if ($isSupabase) {
+                $baseName      = $row['version'] . '_' . $row['description'];
+                $supaTracked   = isset($supabaseVersions[$baseName]);
+                $cells[]       = $supaTracked ? '<info>✔</info>' : '<comment>—</comment>';
+            }
+
+            $table->addRow($cells);
         }
 
         $table->render();

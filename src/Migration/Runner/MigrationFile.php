@@ -201,6 +201,46 @@ SQL;
         return new self($version, $slug, $upPath, $downPath);
     }
 
+    /**
+     * Scaffold a Supabase-format migration: a single plain `.sql` file with no
+     * separate DOWN file — matching the {version}_{description}.sql convention
+     * used by `supabase migration new` and stored in supabase/migrations/.
+     *
+     * The returned MigrationFile's $upPath points to the `.sql` file.
+     * $downPath is set to a non-existent path so hasDown() returns false.
+     *
+     * @throws MigrationException if the directory cannot be created or the file already exists
+     */
+    public static function scaffoldSupabase(string $dir, string $description, string $version = ''): self
+    {
+        $version  = $version ?: date('YmdHis');
+        $slug     = self::slugify($description);
+        $baseName = "{$version}_{$slug}";
+        $sqlPath  = "{$dir}/{$baseName}.sql";
+        $downPath = "{$dir}/{$baseName}" . self::DOWN_SUFFIX; // intentionally non-existent
+
+        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+            throw new MigrationException("Cannot create migrations directory: {$dir}");
+        }
+
+        if (file_exists($sqlPath)) {
+            throw new MigrationException("Migration file already exists: {$sqlPath}");
+        }
+
+        $label    = ucfirst(strtolower($slug));
+        $template = <<<SQL
+-- Supabase migration: {$label}
+-- Version: {$version}
+-- Edit this file to define your schema changes, then apply with:
+--   supabase db push  OR  dbdiff migration:up
+
+SQL;
+
+        file_put_contents($sqlPath, $template);
+
+        return new self($version, $slug, $sqlPath, $downPath);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**

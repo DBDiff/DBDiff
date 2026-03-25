@@ -3,6 +3,7 @@
 use DBDiff\DBDiff;
 use DBDiff\Exceptions\FSException;
 use DBDiff\Migration\Config\DsnParser;
+use DBDiff\Migration\Config\SupabaseProjectDetector;
 use DBDiff\Migration\Format\FormatRegistry;
 use DBDiff\Params\DefaultParams;
 use DBDiff\Params\ParamsFactory;
@@ -123,11 +124,23 @@ class DiffCommand extends Command
     /**
      * Populate $params with connection details from either URL-style or legacy
      * CLI options.  Throws \InvalidArgumentException on invalid/missing input.
+     *
+     * Phase 4: when inside a Supabase project and --server1-url is not supplied,
+     * attempt to auto-fill it from the local stack via `supabase status --output json`.
      */
     private function resolveConnections(InputInterface $input, DefaultParams $params): void
     {
         $s1url = $input->getOption('server1-url');
         $s2url = $input->getOption('server2-url');
+
+        // Phase 4: auto-fill --server1-url from the local Supabase stack when
+        // the user is inside a Supabase project but hasn't supplied server1-url.
+        if (!$s1url && !$input->getOption('server1')) {
+            $autoUrl = $this->tryGetSupabaseLocalUrl();
+            if ($autoUrl !== null) {
+                $s1url = $autoUrl;
+            }
+        }
 
         if ($s1url || $s2url) {
             $autoInput     = $this->applyServerUrls($params, $s1url, $s2url);
@@ -317,6 +330,21 @@ class DiffCommand extends Command
             'down'        => 'down',
             default       => 'up',
         };
+    }
+
+    /**
+     * Phase 4: Try to get the local Supabase stack DB URL from `supabase status`.
+     *
+     * Only attempted when a supabase/config.toml is found in cwd or a parent.
+     * Returns null silently when the CLI is not installed or the stack is not running.
+     */
+    private function tryGetSupabaseLocalUrl(): ?string
+    {
+        if (SupabaseProjectDetector::find() === null) {
+            return null;
+        }
+
+        return SupabaseProjectDetector::localDbUrl();
     }
 
     private function mergeFileConfig(object $params): void

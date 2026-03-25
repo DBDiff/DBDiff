@@ -225,4 +225,29 @@ class MigrationHistoryTest extends TestCase
         $versions = $this->history->getAppliedVersions();
         $this->assertContains('20260101000000', $versions);
     }
+
+    // ── getSupabaseAppliedVersions() ─────────────────────────────────────────
+
+    /**
+     * SQLite in-memory has no supabase_migrations schema, so the query throws.
+     * The method must catch the error and return an empty array — never throw.
+     */
+    public function testGetSupabaseAppliedVersionsReturnsEmptyWhenTableMissing(): void
+    {
+        $versions = $this->history->getSupabaseAppliedVersions();
+
+        $this->assertIsArray($versions);
+        $this->assertSame([], $versions);
+    }
+
+    /**
+     * Calling the method multiple times is safe (no side effects, no state).
+     */
+    public function testGetSupabaseAppliedVersionsIsIdempotent(): void
+    {
+        $first  = $this->history->getSupabaseAppliedVersions();
+        $second = $this->history->getSupabaseAppliedVersions();
+
+        $this->assertSame($first, $second);
+    }
 }
