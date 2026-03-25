@@ -51,7 +51,7 @@ class TableSchema {
         if ($driver === 'mysql') {
             $sourceEngine = $sourceSchema['engine'];
             $targetEngine = $targetSchema['engine'];
-            if ($sourceEngine != $targetEngine) {
+            if ($sourceEngine != $targetEngine && !empty($sourceEngine) && !empty($targetEngine)) {
                 $diffSequence[] = new AlterTableEngine($table, $sourceEngine, $targetEngine);
             }
         }

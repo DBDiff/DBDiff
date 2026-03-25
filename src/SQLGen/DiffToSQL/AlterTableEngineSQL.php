@@ -19,12 +19,18 @@ class AlterTableEngineSQL implements SQLGenInterface {
         if (!$this->dialect->isMySQLOnly()) {
             return '';
         }
+        if (empty($this->obj->engine)) {
+            return '';
+        }
         $t = $this->dialect->quote($this->obj->table);
         return "ALTER TABLE $t ENGINE = {$this->obj->engine};";
     }
 
     public function getDown(): string {
         if (!$this->dialect->isMySQLOnly()) {
+            return '';
+        }
+        if (empty($this->obj->prevEngine)) {
             return '';
         }
         $t = $this->dialect->quote($this->obj->table);
