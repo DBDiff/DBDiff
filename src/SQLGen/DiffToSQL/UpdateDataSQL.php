@@ -3,6 +3,8 @@
 use DBDiff\SQLGen\SQLGenInterface;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
 use DBDiff\SQLGen\Dialect\SQLDialectInterface;
+use Diff\DiffOp\DiffOpAdd;
+use Diff\DiffOp\DiffOpRemove;
 
 
 class UpdateDataSQL implements SQLGenInterface {
@@ -20,10 +22,14 @@ class UpdateDataSQL implements SQLGenInterface {
         $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
         array_walk($values, function (&$diff, $column) use ($d) {
-            $q    = $d->quote($column);
-            $diff = is_null($diff->getNewValue())
-                ? "$q = NULL"
-                : "$q = '" . addslashes($diff->getNewValue()) . "'";
+            $q = $d->quote($column);
+            if ($diff instanceof DiffOpRemove) {
+                $diff = "$q = NULL";
+            } elseif (!method_exists($diff, 'getNewValue') || is_null($diff->getNewValue())) {
+                $diff = "$q = NULL";
+            } else {
+                $diff = "$q = '" . addslashes($diff->getNewValue()) . "'";
+            }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
@@ -37,7 +43,14 @@ class UpdateDataSQL implements SQLGenInterface {
         $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
         array_walk($values, function (&$diff, $column) use ($d) {
-            $diff = $d->quote($column) . " = '" . addslashes($diff->getOldValue()) . "'";
+            $q = $d->quote($column);
+            if ($diff instanceof DiffOpAdd) {
+                $diff = "$q = NULL";
+            } elseif (!method_exists($diff, 'getOldValue') || is_null($diff->getOldValue())) {
+                $diff = "$q = NULL";
+            } else {
+                $diff = "$q = '" . addslashes($diff->getOldValue()) . "'";
+            }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {

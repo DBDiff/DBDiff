@@ -22,7 +22,7 @@ ALTER TABLE "aa" ADD CONSTRAINT "aa_name_key" UNIQUE ("name");
 ALTER TABLE "aa" ADD CONSTRAINT "fk_aa_bb" FOREIGN KEY ("as") REFERENCES "bb" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
 ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
-INSERT INTO "cc" VALUES('11');
+INSERT INTO "cc" ("id") VALUES('11');
 """
 SQL_DOWN = u"""
 DELETE FROM "cc" WHERE "id" = '11';
@@ -52,5 +52,5 @@ ALTER TABLE "aa" DROP CONSTRAINT "aa_name_key";
 ALTER TABLE "aa" DROP CONSTRAINT "fk_aa_bb";
 ALTER TABLE "aa" ADD CONSTRAINT "aa_name_pass_zx_key" UNIQUE ("name", "pass", "zx");
 ALTER TABLE "aa" ADD CONSTRAINT "aa_pass_key" UNIQUE ("pass");
-INSERT INTO "zz" VALUES('1','name','1');
+INSERT INTO "zz" ("id","name","bool") VALUES('1','name','1');
 """

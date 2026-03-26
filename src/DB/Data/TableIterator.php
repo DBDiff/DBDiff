@@ -16,9 +16,10 @@ class TableIterator {
 
     public function next($size) {
         $data = $this->connection->table($this->table)
-                     ->skip($this->offset)->take($size)->get();
+                     ->skip($this->offset)->take($size)->get()->toArray();
         $this->offset += $size;
-        return $data;
+        // Normalise stdClass rows to associative arrays
+        return array_map(fn($row) => is_array($row) ? $row : (array) $row, $data);
     }
 
 }

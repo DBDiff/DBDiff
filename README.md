@@ -284,6 +284,7 @@ _Flags always override settings in `.dbdiff`._
 | `--nocomments` | Strip comment headers from output. |
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Output file path. Defaults to `migration.sql`. |
+| `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
 
@@ -292,6 +293,8 @@ _Flags always override settings in `.dbdiff`._
 > **DSN URLs vs `--server` flags:** Use `--server1-url` / `--server2-url` when you have a connection string (common with Supabase, Neon, Railway, etc.). Use `--server1` / `--server2` when specifying credentials separately.
 
 > **Passwords with special characters:** Embed the password percent-encoded in the URL. Use `dbdiff url:encode` to safely encode any password (see [`url:encode`](#urlencode--password-encoder) below). If dbdiff is not yet installed, `scripts/encode-password.sh` works without any dependencies.
+
+> **Memory:** The CLI sets a default PHP memory limit of 1G. Diffing very large databases may need more — pass `--memory-limit=2G` on the command line or add `memory_limit: 2G` to your `.dbdiff` / `dbdiff.yml` config. The CLI flag always wins over the config file.
 
 ### `url:encode` — Password encoder
 

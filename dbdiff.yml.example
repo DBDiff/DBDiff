@@ -34,6 +34,14 @@ include: up              # up | down | both
 nocomments: false
 format: native           # native | flyway | liquibase-xml | liquibase-yaml | laravel
 
+# ── PHP memory limit ──────────────────────────────────────────────────────────
+# The CLI entry point (dbdiff / dbdiff.php / PHAR) sets a default of 1G, which
+# is sufficient for most databases. Raise it here if you're diffing very large
+# schemas or data sets, or lower it in resource-constrained environments.
+# Accepts any PHP shorthand: 512M, 1G, 2G, -1 (unlimited), etc.
+# Override on the fly with --memory-limit=<value>; the CLI flag always wins.
+memory_limit: 1G
+
 # ── Database connection ───────────────────────────────────────────────────────
 # Used by:  dbdiff migration:up / migration:down / migration:status
 # Typically this points to one database (the target you are migrating).

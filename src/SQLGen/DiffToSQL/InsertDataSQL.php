@@ -17,11 +17,13 @@ class InsertDataSQL implements SQLGenInterface {
     
     public function getUp(): string {
         $t      = $this->dialect->quote($this->obj->table);
-        $values = $this->obj->diff['diff']->getNewValue();
+        $d      = $this->dialect;
+        $row    = $this->obj->diff['diff']->getNewValue();
+        $cols   = implode(',', array_map(fn($c) => $d->quote($c), array_keys($row)));
         $values = array_map(function ($el) {
             return is_null($el) ? 'NULL' : "'" . addslashes($el) . "'";
-        }, $values);
-        return "INSERT INTO $t VALUES(" . implode(',', $values) . ");";
+        }, $row);
+        return "INSERT INTO $t ($cols) VALUES(" . implode(',', $values) . ");";
     }
 
     public function getDown(): string {

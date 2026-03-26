@@ -27,9 +27,13 @@ class DeleteDataSQL implements SQLGenInterface {
 
     public function getDown(): string {
         $t      = $this->dialect->quote($this->obj->table);
-        $values = $this->obj->diff['diff']->getOldValue();
-        $values = array_map(fn($el) => "'" . addslashes($el) . "'", $values);
-        return "INSERT INTO $t VALUES(" . implode(',', $values) . ");";
+        $d      = $this->dialect;
+        $row    = $this->obj->diff['diff']->getOldValue();
+        $cols   = implode(',', array_map(fn($c) => $d->quote($c), array_keys($row)));
+        $values = array_map(function ($el) {
+            return is_null($el) ? 'NULL' : "'" . addslashes($el) . "'";
+        }, $row);
+        return "INSERT INTO $t ($cols) VALUES(" . implode(',', $values) . ");";
     }
 
 }

@@ -163,4 +163,78 @@
              unlink("./tests/end2end/$this->migration_actual");
          }
      }
+
+     /**
+      * Bug #3 regression: database names containing hyphens must be
+      * backtick-escaped in all generated SQL.
+      *
+      * Before the fix, `FROM my-db.table` was emitted without quoting,
+      * causing MySQL to interpret the hyphen as subtraction (error 1064).
+      * This test runs the same diff with databases named `diff-1`/`diff-2`
+      * and asserts that DBDiff completes without throwing and produces output.
+      */
+     public function testHyphenatedDatabaseNames(): void
+     {
+         $hyphenDb1 = 'diff-1';
+         $hyphenDb2 = 'diff-2';
+         $outputFile = './tests/end2end/migration_hyphen_actual';
+
+         $this->db->exec("DROP DATABASE IF EXISTS `$hyphenDb1`;");
+         $this->db->exec("DROP DATABASE IF EXISTS `$hyphenDb2`;");
+         $this->db->exec("CREATE DATABASE `$hyphenDb1`;");
+         $this->db->exec("CREATE DATABASE `$hyphenDb2`;");
+
+         try {
+             $this->db->query("use `$hyphenDb1`");
+             $this->db->exec(file_get_contents('tests/end2end/db1-up.sql'));
+             $this->db->query("use `$hyphenDb2`");
+             $this->db->exec(file_get_contents('tests/end2end/db2-up.sql'));
+
+             $GLOBALS['argv'] = [
+                 '',
+                 "--server1=$this->user:$this->pass@$this->host:$this->port",
+                 '--type=all',
+                 '--include=all',
+                 '--nocomments',
+                 "--output=$outputFile",
+                 "server1.{$hyphenDb1}:server1.{$hyphenDb2}",
+             ];
+
+             ob_start();
+             try {
+                 $dbdiff = new DBDiff\DBDiff;
+                 $dbdiff->run();
+             } finally {
+                 ob_end_clean();
+             }
+
+             // If hyphens weren't escaped, DBDiff would throw a PDO syntax error
+             // and no output file would be written.
+             $this->assertFileExists(
+                 $outputFile,
+                 'Bug #3 regression: DBDiff must not throw a SQL error for hyphenated DB names'
+             );
+             $actual = trim(file_get_contents($outputFile));
+             $this->assertNotEmpty(
+                 $actual,
+                 'Bug #3 regression: diff between hyphenated databases must produce output'
+             );
+             // The output must match the baseline recorded for the non-hyphenated equivalent
+             // (same schema/data, only the DB name differs — SQL output is identical).
+             $expectedPath = "./tests/end2end/{$this->migration_expected}";
+             if (file_exists($expectedPath)) {
+                 $this->assertEquals(
+                     trim(file_get_contents($expectedPath)),
+                     $actual,
+                     'Bug #3 regression: hyphenated DB output must match the standard baseline'
+                 );
+             }
+         } finally {
+             $this->db->exec("DROP DATABASE IF EXISTS `$hyphenDb1`;");
+             $this->db->exec("DROP DATABASE IF EXISTS `$hyphenDb2`;");
+             if (file_exists($outputFile)) {
+                 unlink($outputFile);
+             }
+         }
+     }
  }

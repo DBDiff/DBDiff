@@ -21,8 +21,11 @@ class MySQLAdapter implements DBAdapterInterface {
     }
 
     public function getTables(Connection $connection): array {
-        $result = $connection->select("show tables");
-        return Arr::flatten($result);
+        $db = $connection->getDatabaseName();
+        $result = $connection->select(
+            "SHOW FULL TABLES FROM `$db` WHERE Table_type = 'BASE TABLE'"
+        );
+        return array_map(fn($row) => array_values((array) $row)[0], $result);
     }
 
     public function getColumns(Connection $connection, string $table): array {

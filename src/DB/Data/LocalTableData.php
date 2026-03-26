@@ -321,12 +321,12 @@ class LocalTableData {
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result1 = $this->source->select(
-           "SELECT $columnsAUtf FROM {$db1}.{$table} as a
-            LEFT JOIN {$db2}.{$table} as b ON $keyCols WHERE $keyNulls2
+           "SELECT $columnsAUtf FROM `{$db1}`.`{$table}` as a
+            LEFT JOIN `{$db2}`.`{$table}` as b ON $keyCols WHERE $keyNulls2
         ");
         $result2 = $this->source->select(
-           "SELECT $columnsBUtf FROM {$db2}.{$table} as b
-            LEFT JOIN {$db1}.{$table} as a ON $keyCols WHERE $keyNulls1
+           "SELECT $columnsBUtf FROM `{$db2}`.`{$table}` as b
+            LEFT JOIN `{$db1}`.`{$table}` as a ON $keyCols WHERE $keyNulls1
         ");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
 
@@ -370,27 +370,38 @@ class LocalTableData {
 
         $wrapCast = function($arr, $p) {
             return array_map(function($el) use ($p) {
-                return "CAST(`{$p}`.`{$el}` AS CHAR CHARACTER SET utf8)";
+                return "CAST(IFNULL(`{$p}`.`{$el}`, '\\0') AS CHAR CHARACTER SET utf8)";
+            }, $arr);
+        };
+
+        // NULL-presence bitmap: distinguishes NULL from empty string
+        $wrapNullCheck = function($arr, $p) {
+            return array_map(function($el) use ($p) {
+                return "IF(`{$p}`.`{$el}` IS NULL, '1', '0')";
             }, $arr);
         };
 
         $columnsAas = implode(',', $wrapAs($columns1, 'a', 's_'));
         $columnsA   = implode(',', $wrapCast($columns1, 'a'));
+        $columnsA0  = implode(',', $wrapNullCheck($columns1, 'a'));
         $columnsBas = implode(',', $wrapAs($columns2, 'b', 't_'));
         $columnsB   = implode(',', $wrapCast($columns2, 'b'));
+        $columnsB0  = implode(',', $wrapNullCheck($columns2, 'b'));
         
         $keyCols = implode(self::SQL_AND, array_map(function($el) {
-            return "a.{$el} = b.{$el}";
+            return "`a`.`{$el}` = `b`.`{$el}`";
         }, $key));
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result = $this->source->select(
            "SELECT * FROM (
                 SELECT $columnsAas, $columnsBas, SHA2(concat($columnsA), 256) AS hash1,
-                SHA2(concat($columnsB), 256) AS hash2 FROM {$db1}.{$table} as a 
-                INNER JOIN {$db2}.{$table} as b  
+                SHA2(concat($columnsB), 256) AS hash2,
+                CONCAT($columnsA0) AS nullmap1, CONCAT($columnsB0) AS nullmap2
+                FROM `{$db1}`.`{$table}` as a
+                INNER JOIN `{$db2}`.`{$table}` as b
                 ON $keyCols
-            ) t WHERE hash1 <> hash2");
+            ) t WHERE hash1 <> hash2 OR nullmap1 <> nullmap2");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
         
         foreach ($result as $row) {

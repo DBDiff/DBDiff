@@ -1,5 +1,13 @@
 <?php
 
+// Set a generous default memory limit for the CLI. Diffing large databases can
+// pull substantial result sets into memory. PHP's default of 128M is often too
+// low. This value is intentionally applied here (in the CLI entry point) rather
+// than inside the library, so library consumers are never surprised.
+// Override per-run via --memory-limit=<value> or memory_limit: <value> in your
+// .dbdiff / dbdiff.yml config file.
+ini_set('memory_limit', '1G');
+
 require __DIR__ . '/vendor/autoload.php';
 
 use DBDiff\Migration\Command\DiffCommand;
