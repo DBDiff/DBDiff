@@ -160,6 +160,65 @@ class SupabaseProjectDetectorTest extends TestCase
         $this->assertNull(SupabaseProjectDetector::envDbUrl());
     }
 
+    // ── extractTomlSection() ─────────────────────────────────────────────────
+
+    public function testExtractTomlSectionReturnsNullWhenSectionAbsent(): void
+    {
+        $contents = "[api]\nport = 54321\n";
+        $this->assertNull(SupabaseProjectDetector::extractTomlSection($contents, 'db'));
+    }
+
+    public function testExtractTomlSectionReturnsSectionBody(): void
+    {
+        $contents = "[db]\nport = 54322\n";
+        $body = SupabaseProjectDetector::extractTomlSection($contents, 'db');
+        $this->assertNotNull($body);
+        $this->assertStringContainsString('port = 54322', $body);
+    }
+
+    public function testExtractTomlSectionStopsAtNextSection(): void
+    {
+        $contents = "[db]\nport = 54322\n\n[auth]\nenabled = true\n";
+        $body = SupabaseProjectDetector::extractTomlSection($contents, 'db');
+        $this->assertStringContainsString('port = 54322', $body);
+        $this->assertStringNotContainsString('enabled', $body);
+    }
+
+    public function testExtractTomlSectionReadsToEndWhenLastSection(): void
+    {
+        $contents = "[api]\nfoo = 1\n\n[db]\nport = 54322\npassword = \"secret\"\n";
+        $body = SupabaseProjectDetector::extractTomlSection($contents, 'db');
+        $this->assertStringContainsString('port = 54322', $body);
+        $this->assertStringContainsString('password = "secret"', $body);
+    }
+
+    // ── parseTomlDbSection() ─────────────────────────────────────────────────
+
+    public function testParseTomlDbSectionUsesDefaultsForEmptySection(): void
+    {
+        $result = SupabaseProjectDetector::parseTomlDbSection('# just a comment');
+        $this->assertSame(54322, $result['port']);
+        $this->assertSame('postgres', $result['pass']);
+    }
+
+    public function testParseTomlDbSectionParsesPort(): void
+    {
+        $result = SupabaseProjectDetector::parseTomlDbSection("port = 55000\n");
+        $this->assertSame(55000, $result['port']);
+    }
+
+    public function testParseTomlDbSectionParsesQuotedPass(): void
+    {
+        $result = SupabaseProjectDetector::parseTomlDbSection("password = \"mysecret\"\n");
+        $this->assertSame('mysecret', $result['pass']);
+    }
+
+    public function testParseTomlDbSectionParsesUnquotedPass(): void
+    {
+        $result = SupabaseProjectDetector::parseTomlDbSection("password = noquotes\n");
+        $this->assertSame('noquotes', $result['pass']);
+    }
+
     // ── configTomlDbUrl() ────────────────────────────────────────────────────
 
     public function testConfigTomlDbUrlReturnsNullWhenNoConfigToml(): void

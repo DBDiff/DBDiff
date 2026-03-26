@@ -129,67 +129,77 @@ class SupabaseProjectDetector
     // ── config.toml parsing ──────────────────────────────────────────────────
 
     /**
+     * Extract the body of a named TOML section from file contents.
+     *
+     * Returns the text between the section header and the next section header
+     * (or end of file), or null if the named section is not present.
+     *
+     * @param string $contents    Full TOML file contents.
+     * @param string $sectionName Exact section name (e.g. 'db').
+     */
+    public static function extractTomlSection(string $contents, string $sectionName): ?string
+    {
+        $pattern = '/^\[' . preg_quote($sectionName, '/') . '\]\s*$/m';
+
+        if (!preg_match($pattern, $contents, $m, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        $sectionStart = $m[0][1] + strlen($m[0][0]);
+        $after        = substr($contents, $sectionStart);
+
+        if (preg_match('/^\[[^\]]/m', $after, $nextSection)) {
+            $nextPos = strpos($after, $nextSection[0]);
+            return $nextPos !== false ? substr($after, 0, $nextPos) : $after;
+        }
+
+        return $after;
+    }
+
+    /**
+     * Parse `port` and `password` keys from a TOML [db] section body.
+     *
+     * @param  string $section  Body text of the [db] section (without the header line).
+     * @return array{port: int, pass: string}  Defaults: port=54322, pass='postgres'.
+     */
+    public static function parseTomlDbSection(string $section): array
+    {
+        $port   = 54322;      // Supabase CLI default
+        $dbPass = 'postgres'; // Supabase CLI default
+
+        if (preg_match('/^\s*port\s*=\s*(\d+)/m', $section, $portMatch)) {
+            $port = (int) $portMatch[1];
+        }
+
+        if (preg_match('/^\s*password\s*=\s*["\']([^"\']*)["\']$/m', $section, $pwMatch)) {
+            $dbPass = $pwMatch[1];
+        } elseif (preg_match('/^\s*password\s*=\s*(\S+)/m', $section, $pwMatch)) {
+            $dbPass = trim($pwMatch[1], '"\'');
+        }
+
+        return ['port' => $port, 'pass' => $dbPass];
+    }
+
+    /**
      * Parse the [db] section from supabase/config.toml and build a local DSN.
      *
-     * Extracts `port` (default 54322) and `password` (default 'postgres') from
-     * the [db] section.  Constructs:
-     *   postgresql://postgres:{password}@127.0.0.1:{port}/postgres
-     *
-     * Returns null if the config file doesn't exist or has no [db] section.
+     * Returns null if the file doesn't exist or has no [db] section.
      *
      * @param string $projectRoot  The Supabase project root directory.
      */
     public static function configTomlDbUrl(string $projectRoot): ?string
     {
-        $path = $projectRoot . '/supabase/config.toml';
+        $path     = $projectRoot . '/supabase/config.toml';
+        $contents = file_exists($path) ? file_get_contents($path) : false;
+        $section  = ($contents !== false) ? self::extractTomlSection($contents, 'db') : null;
 
-        if (!file_exists($path)) {
+        if ($section === null) {
             return null;
         }
 
-        $contents = file_get_contents($path);
-        if ($contents === false) {
-            return null;
-        }
+        $creds = self::parseTomlDbSection($section);
 
-        $port     = 54322;    // Supabase CLI default
-        $password = 'postgres'; // Supabase CLI default
-
-        // Extract the [db] section and parse key = value pairs.
-        // We use a simple regex approach to avoid requiring a full TOML library.
-        if (preg_match('/^\[db\]\s*$/m', $contents, $m, PREG_OFFSET_CAPTURE)) {
-            $sectionStart = $m[0][1] + strlen($m[0][0]);
-            // Read until the next [section] or end of file
-            $sectionEnd = preg_match('/^\[/m', $contents, $_, 0, $sectionStart)
-                ? strpos($contents, $_, $sectionStart)
-                : strlen($contents);
-
-            // Handle the case where preg_match returns the match
-            if (preg_match('/^\[[^\]]/m', substr($contents, $sectionStart), $nextSection)) {
-                $nextPos = strpos($contents, $nextSection[0], $sectionStart);
-                $section = $nextPos !== false
-                    ? substr($contents, $sectionStart, $nextPos - $sectionStart)
-                    : substr($contents, $sectionStart);
-            } else {
-                $section = substr($contents, $sectionStart);
-            }
-
-            if (preg_match('/^\s*port\s*=\s*(\d+)/m', $section, $portMatch)) {
-                $port = (int) $portMatch[1];
-            }
-
-            if (preg_match('/^\s*password\s*=\s*["\']([^"\']*)["\']$/m', $section, $pwMatch)) {
-                $password = $pwMatch[1];
-            } elseif (preg_match('/^\s*password\s*=\s*(\S+)/m', $section, $pwMatch)) {
-                $password = trim($pwMatch[1], '"\'');
-            }
-        } else {
-            return null;
-        }
-
-        $encodedPassword = rawurlencode($password);
-
-        return "postgresql://postgres:{$encodedPassword}@127.0.0.1:{$port}/postgres";
+        return 'postgresql://postgres:' . rawurlencode($creds['pass']) . '@127.0.0.1:' . $creds['port'] . '/postgres';
     }
 
     // ── supabase link / remote DSN ───────────────────────────────────────────
@@ -266,40 +276,19 @@ class SupabaseProjectDetector
     }
 
     /**
-     * Full resolution chain: attempt to resolve a DB URL using all available
-     * sources, in priority order.
-     *
-     * 1. Environment variables (SUPABASE_DB_URL, DATABASE_URL, DIRECT_URL)
-     * 2. `supabase status --output json` (local stack)
-     * 3. config.toml [db] section (local stack credentials)
+     * Full resolution chain for a database URL, in priority order:
+     *   env vars → supabase status → config.toml [db] section.
      *
      * @param string|null $projectRoot  The Supabase project root (auto-detected if null).
      * @return string|null  A database URL, or null if nothing could be resolved.
      */
     public static function resolveDbUrl(?string $projectRoot = null): ?string
     {
-        // 1. Environment variables
-        $envUrl = self::envDbUrl();
-        if ($envUrl !== null) {
-            return $envUrl;
-        }
+        $root = $projectRoot ?? self::find();
 
-        $root = $projectRoot ?? self::find() ?? null;
-
-        // 2. supabase status (local running stack)
-        $localUrl = self::localDbUrl($root);
-        if ($localUrl !== null) {
-            return $localUrl;
-        }
-
-        // 3. config.toml [db] section
-        if ($root !== null) {
-            $tomlUrl = self::configTomlDbUrl($root);
-            if ($tomlUrl !== null) {
-                return $tomlUrl;
-            }
-        }
-
-        return null;
+        // Priority: env vars → supabase status → config.toml
+        return self::envDbUrl()
+            ?? self::localDbUrl($root)
+            ?? ($root !== null ? self::configTomlDbUrl($root) : null);
     }
 }
