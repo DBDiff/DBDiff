@@ -393,6 +393,9 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
         }
 
         $config = array_merge($base, $overrides);
+        if (!is_dir('tests/config')) {
+            mkdir('tests/config', 0755, true);
+        }
         file_put_contents("tests/config/$filename", $this->arrayToYaml($config));
     }
 
