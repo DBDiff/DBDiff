@@ -108,6 +108,21 @@ class MigrationStatusCommand extends Command
         $output->writeln('');
         $output->writeln("<info>{$applied} applied</info>, <comment>{$pending} pending</comment>" . ($issues > 0 ? ", <error>{$issues} with issues</error>" : ''));
 
+        // ── Supabase drift warning ───────────────────────────────────────────
+        if ($isSupabase) {
+            $drift = $runner->getSupabaseDrift();
+            if (!empty($drift)) {
+                $output->writeln('');
+                $output->writeln('<error>⚠ Supabase drift detected:</error>');
+                foreach ($drift as $d) {
+                    $icon = $d['source'] === 'supabase_only' ? '→' : '←';
+                    $output->writeln("  {$icon} {$d['detail']}");
+                }
+                $output->writeln('');
+                $output->writeln('<comment>Run migrations through DBDiff to keep both history tables in sync.</comment>');
+            }
+        }
+
         return Command::SUCCESS;
     }
 }

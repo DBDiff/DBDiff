@@ -395,4 +395,59 @@ class MigrationFileTest extends TestCase
         $this->assertCount(1, $found);
         $this->assertSame('20260101120000', $found[0]->version);
     }
+
+    // ── lintSupabaseTransaction() ───────────────────────────────────────────
+
+    public function testLintDetectsBeginAndCommit(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'has txn', '20260101120000');
+        file_put_contents($mf->upPath, "BEGIN;\nCREATE TABLE t (id INT);\nCOMMIT;");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(2, $warnings);
+        $this->assertStringContainsString('BEGIN', $warnings[0]);
+        $this->assertStringContainsString('COMMIT', $warnings[1]);
+    }
+
+    public function testLintDetectsRollback(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'has rollback', '20260101120000');
+        file_put_contents($mf->upPath, "CREATE TABLE t (id INT);\nROLLBACK;");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('ROLLBACK', $warnings[0]);
+    }
+
+    public function testLintDetectsStartTransaction(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'start txn', '20260101120000');
+        file_put_contents($mf->upPath, "START TRANSACTION;\nCREATE TABLE t (id INT);");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('START TRANSACTION', $warnings[0]);
+    }
+
+    public function testLintReturnsEmptyForCleanSql(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'clean', '20260101120000');
+        file_put_contents($mf->upPath, 'CREATE TABLE clean (id INT);');
+
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
+
+    public function testLintIgnoresTransactionKeywordsInComments(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'commented', '20260101120000');
+        file_put_contents($mf->upPath, "-- BEGIN migration changes\n/* COMMIT later */\nCREATE TABLE t (id INT);");
+
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
+
+    public function testLintReturnsEmptyForMissingFile(): void
+    {
+        $mf = new MigrationFile('20260101120000', 'gone', '/nonexistent/file.sql', '/nonexistent/down.sql');
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
 }

@@ -113,6 +113,225 @@ class SupabaseProjectDetectorTest extends TestCase
         $this->assertNull($result);
     }
 
+    // ── envDbUrl() ───────────────────────────────────────────────────────────
+
+    public function testEnvDbUrlReturnsSupabaseDbUrlFirst(): void
+    {
+        putenv('SUPABASE_DB_URL=postgresql://test@localhost/db');
+        putenv('DATABASE_URL=postgresql://other@localhost/db');
+
+        $url = SupabaseProjectDetector::envDbUrl();
+        $this->assertSame('postgresql://test@localhost/db', $url);
+
+        putenv('SUPABASE_DB_URL');
+        putenv('DATABASE_URL');
+    }
+
+    public function testEnvDbUrlFallsToDatabaseUrl(): void
+    {
+        putenv('SUPABASE_DB_URL');
+        putenv('DATABASE_URL=postgresql://fallback@localhost/db');
+        putenv('DIRECT_URL');
+
+        $url = SupabaseProjectDetector::envDbUrl();
+        $this->assertSame('postgresql://fallback@localhost/db', $url);
+
+        putenv('DATABASE_URL');
+    }
+
+    public function testEnvDbUrlFallsToDirectUrl(): void
+    {
+        putenv('SUPABASE_DB_URL');
+        putenv('DATABASE_URL');
+        putenv('DIRECT_URL=postgresql://direct@localhost/db');
+
+        $url = SupabaseProjectDetector::envDbUrl();
+        $this->assertSame('postgresql://direct@localhost/db', $url);
+
+        putenv('DIRECT_URL');
+    }
+
+    public function testEnvDbUrlReturnsNullWhenNoneSet(): void
+    {
+        putenv('SUPABASE_DB_URL');
+        putenv('DATABASE_URL');
+        putenv('DIRECT_URL');
+
+        $this->assertNull(SupabaseProjectDetector::envDbUrl());
+    }
+
+    // ── configTomlDbUrl() ────────────────────────────────────────────────────
+
+    public function testConfigTomlDbUrlReturnsNullWhenNoConfigToml(): void
+    {
+        $dir = $this->makeTempDir();
+        $this->assertNull(SupabaseProjectDetector::configTomlDbUrl($dir));
+    }
+
+    public function testConfigTomlDbUrlParsesDbSection(): void
+    {
+        $dir = $this->makeTempDir();
+        $supaDir = $dir . '/supabase';
+        mkdir($supaDir, 0755, true);
+        file_put_contents($supaDir . '/config.toml', <<<'TOML'
+[api]
+port = 54321
+
+[db]
+port = 54322
+password = "my_secret_password"
+TOML);
+
+        $url = SupabaseProjectDetector::configTomlDbUrl($dir);
+        $this->assertSame('postgresql://postgres:my_secret_password@127.0.0.1:54322/postgres', $url);
+    }
+
+    public function testConfigTomlDbUrlUsesDefaultsWhenDbSectionMinimal(): void
+    {
+        $dir = $this->makeTempDir();
+        $supaDir = $dir . '/supabase';
+        mkdir($supaDir, 0755, true);
+        file_put_contents($supaDir . '/config.toml', <<<'TOML'
+[db]
+# minimal — uses defaults
+TOML);
+
+        $url = SupabaseProjectDetector::configTomlDbUrl($dir);
+        $this->assertSame('postgresql://postgres:postgres@127.0.0.1:54322/postgres', $url);
+    }
+
+    public function testConfigTomlDbUrlReturnsNullWithoutDbSection(): void
+    {
+        $dir = $this->makeTempDir();
+        $supaDir = $dir . '/supabase';
+        mkdir($supaDir, 0755, true);
+        file_put_contents($supaDir . '/config.toml', "[api]\nport = 54321\n");
+
+        $this->assertNull(SupabaseProjectDetector::configTomlDbUrl($dir));
+    }
+
+    public function testConfigTomlDbUrlEncodesSpecialCharsInPassword(): void
+    {
+        $dir = $this->makeTempDir();
+        $supaDir = $dir . '/supabase';
+        mkdir($supaDir, 0755, true);
+        file_put_contents($supaDir . '/config.toml', <<<'TOML'
+[db]
+port = 54322
+password = "p@ss#word"
+TOML);
+
+        $url = SupabaseProjectDetector::configTomlDbUrl($dir);
+        $this->assertStringContainsString('p%40ss%23word', $url);
+    }
+
+    // ── linkedProjectRef() ───────────────────────────────────────────────────
+
+    public function testLinkedProjectRefReturnsNullWhenNoFile(): void
+    {
+        $dir = $this->makeTempDir();
+        $this->assertNull(SupabaseProjectDetector::linkedProjectRef($dir));
+    }
+
+    public function testLinkedProjectRefReadsFromSupabaseTempDir(): void
+    {
+        $dir = $this->makeTempDir();
+        $refDir = $dir . '/.supabase/temp';
+        mkdir($refDir, 0755, true);
+        file_put_contents($refDir . '/project-ref', "abcdefghijklmnopqrst\n");
+
+        $ref = SupabaseProjectDetector::linkedProjectRef($dir);
+        $this->assertSame('abcdefghijklmnopqrst', $ref);
+    }
+
+    public function testLinkedProjectRefTrimsWhitespace(): void
+    {
+        $dir = $this->makeTempDir();
+        $refDir = $dir . '/.supabase/temp';
+        mkdir($refDir, 0755, true);
+        file_put_contents($refDir . '/project-ref', "  myref  \n");
+
+        $ref = SupabaseProjectDetector::linkedProjectRef($dir);
+        $this->assertSame('myref', $ref);
+    }
+
+    public function testLinkedProjectRefReturnsNullForEmptyFile(): void
+    {
+        $dir = $this->makeTempDir();
+        $refDir = $dir . '/.supabase/temp';
+        mkdir($refDir, 0755, true);
+        file_put_contents($refDir . '/project-ref', '');
+
+        $this->assertNull(SupabaseProjectDetector::linkedProjectRef($dir));
+    }
+
+    // ── remoteDbUrl() ────────────────────────────────────────────────────────
+
+    public function testRemoteDbUrlBuildsDirectUrlWithoutRegion(): void
+    {
+        $url = SupabaseProjectDetector::remoteDbUrl('abcref', 'mypassword');
+        $this->assertSame(
+            'postgresql://postgres:mypassword@db.abcref.supabase.co:5432/postgres',
+            $url
+        );
+    }
+
+    public function testRemoteDbUrlBuildsPoolerUrlWithRegion(): void
+    {
+        $url = SupabaseProjectDetector::remoteDbUrl('abcref', 'mypassword', 'us-east-1');
+        $this->assertSame(
+            'postgresql://postgres.abcref:mypassword@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+            $url
+        );
+    }
+
+    public function testRemoteDbUrlUsesEnvPasswordFallback(): void
+    {
+        putenv('SUPABASE_DB_PASSWORD=envpass');
+
+        $url = SupabaseProjectDetector::remoteDbUrl('ref123');
+        $this->assertStringContainsString('envpass', $url);
+
+        putenv('SUPABASE_DB_PASSWORD');
+    }
+
+    public function testRemoteDbUrlUsesPlaceholderWhenNoPassword(): void
+    {
+        putenv('SUPABASE_DB_PASSWORD');
+
+        $url = SupabaseProjectDetector::remoteDbUrl('ref123');
+        $this->assertStringContainsString('%5BYOUR-PASSWORD%5D', $url);
+    }
+
+    // ── resolveDbUrl() ───────────────────────────────────────────────────────
+
+    public function testResolveDbUrlPrefersEnvVar(): void
+    {
+        putenv('SUPABASE_DB_URL=postgresql://env@localhost/db');
+
+        $url = SupabaseProjectDetector::resolveDbUrl();
+        $this->assertSame('postgresql://env@localhost/db', $url);
+
+        putenv('SUPABASE_DB_URL');
+    }
+
+    public function testResolveDbUrlFallsToConfigToml(): void
+    {
+        putenv('SUPABASE_DB_URL');
+        putenv('DATABASE_URL');
+        putenv('DIRECT_URL');
+
+        $dir = $this->makeTempDir();
+        $supaDir = $dir . '/supabase';
+        mkdir($supaDir, 0755, true);
+        file_put_contents($supaDir . '/config.toml', "[db]\nport = 54322\npassword = \"test\"\n");
+
+        // Note: resolveDbUrl with explicit projectRoot will try local CLI first
+        // (which returns null in test env), then fall to config.toml
+        $url = SupabaseProjectDetector::resolveDbUrl($dir);
+        $this->assertSame('postgresql://postgres:test@127.0.0.1:54322/postgres', $url);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private function makeTempDir(): string

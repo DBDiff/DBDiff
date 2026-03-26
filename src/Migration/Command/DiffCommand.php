@@ -336,7 +336,8 @@ class DiffCommand extends Command
      * Phase 4: Try to get the local Supabase stack DB URL from `supabase status`.
      *
      * Only attempted when a supabase/config.toml is found in cwd or a parent.
-     * Returns null silently when the CLI is not installed or the stack is not running.
+     * Uses the full resolution chain: env vars → supabase status → config.toml.
+     * Returns null silently when no URL can be resolved.
      */
     private function tryGetSupabaseLocalUrl(): ?string
     {
@@ -344,7 +345,7 @@ class DiffCommand extends Command
             return null;
         }
 
-        return SupabaseProjectDetector::localDbUrl();
+        return SupabaseProjectDetector::resolveDbUrl();
     }
 
     private function mergeFileConfig(object $params): void

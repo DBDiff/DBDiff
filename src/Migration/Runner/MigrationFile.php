@@ -241,6 +241,52 @@ SQL;
         return new self($version, $slug, $sqlPath, $downPath);
     }
 
+    // ── Supabase lint ───────────────────────────────────────────────────────
+
+    /**
+     * Check whether the UP SQL contains explicit transaction control statements
+     * (BEGIN, COMMIT, ROLLBACK, START TRANSACTION, SET TRANSACTION).
+     *
+     * Supabase wraps every migration in an implicit transaction.  Explicit
+     * transaction control inside a Supabase migration will conflict with that
+     * wrapper, causing "cannot begin/end transactions in PL/pgSQL" errors or
+     * silent misbehaviour.
+     *
+     * Returns an array of warning strings (empty means clean).
+     *
+     * @return string[]
+     */
+    public function lintSupabaseTransaction(): array
+    {
+        if (!file_exists($this->upPath)) {
+            return [];
+        }
+
+        $sql = file_get_contents($this->upPath);
+
+        // Strip SQL comments so we don't false-positive on "-- BEGIN migration"
+        $sql = preg_replace('/--[^\n]*/', '', $sql);
+        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+
+        $warnings = [];
+        $patterns = [
+            '/\bBEGIN\b/i'              => 'BEGIN',
+            '/\bCOMMIT\b/i'             => 'COMMIT',
+            '/\bROLLBACK\b/i'           => 'ROLLBACK',
+            '/\bSTART\s+TRANSACTION\b/i' => 'START TRANSACTION',
+            '/\bSET\s+TRANSACTION\b/i'  => 'SET TRANSACTION',
+        ];
+
+        foreach ($patterns as $pattern => $label) {
+            if (preg_match($pattern, $sql)) {
+                $warnings[] = "Contains '{$label}' — Supabase wraps migrations in an implicit transaction. "
+                    . "Explicit transaction control may cause errors.";
+            }
+        }
+
+        return $warnings;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**

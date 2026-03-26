@@ -35,7 +35,11 @@ class MigrationRunner
     {
         $this->config     = $config;
         $this->connection = $this->buildConnection($config);
-        $this->history    = new MigrationHistory($this->connection, $config->historyTable);
+        $this->history    = new MigrationHistory(
+            $this->connection,
+            $config->historyTable,
+            $config->isSupabaseProject
+        );
         $this->history->ensureTable();
     }
 
@@ -68,6 +72,12 @@ class MigrationRunner
                 continue;
             }
 
+            // Lint Supabase migrations for transaction control statements
+            $warnings = [];
+            if ($this->config->migrationFormat === 'supabase') {
+                $warnings = $file->lintSupabaseTransaction();
+            }
+
             $t0 = microtime(true);
 
             try {
@@ -81,6 +91,7 @@ class MigrationRunner
                     'status'      => 'applied',
                     'ms'          => $ms,
                     'error'       => null,
+                    'warnings'    => $warnings,
                 ];
             } catch (\Throwable $e) {
                 $ms = (int) round((microtime(true) - $t0) * 1000);
@@ -91,6 +102,7 @@ class MigrationRunner
                     'status'      => 'failed',
                     'ms'          => $ms,
                     'error'       => $e->getMessage(),
+                    'warnings'    => $warnings,
                 ];
                 // HALT on first failure
                 break;
@@ -127,12 +139,18 @@ class MigrationRunner
             $file = $this->findFile($dir, $record->version);
 
             if ($file === null || !$file->hasDown()) {
+                $isSupabaseFormat = $this->config->migrationFormat === 'supabase';
+                $errorMsg = $isSupabaseFormat
+                    ? 'Supabase-format migrations are UP-only and do not support rollback. '
+                      . 'Write a new forward migration instead, or convert to DBDiff native format (.up.sql + .down.sql).'
+                    : 'No .down.sql file found — cannot roll back.';
+
                 $results[] = [
                     'version'     => $record->version,
                     'description' => $record->description,
                     'status'      => 'no_down',
                     'ms'          => 0,
-                    'error'       => 'No .down.sql file found — cannot roll back.',
+                    'error'       => $errorMsg,
                 ];
                 // Treat missing DOWN file as a soft halt so the caller can decide
                 break;
@@ -252,6 +270,57 @@ class MigrationRunner
         usort($report, fn($a, $b) => strcmp($a['version'], $b['version']));
 
         return $report;
+    }
+
+    /**
+     * Detect drift between the DBDiff history table and Supabase's own
+     * supabase_migrations.schema_migrations table.
+     *
+     * Returns an array of entries where a migration appears in one tracker
+     * but not the other.  Empty array means both are in sync.
+     *
+     * @return array<int, array{version: string, source: string, detail: string}>
+     */
+    public function getSupabaseDrift(): array
+    {
+        $supabaseVersions = $this->history->getSupabaseAppliedVersions();
+        $dbdiffVersions   = $this->history->getAppliedVersions();
+
+        $drift = [];
+
+        // Normalise Supabase basenames to version-only for comparison.
+        // Supabase stores '20260303120000_create_users'; we need just '20260303120000'.
+        $supabaseVersionMap = [];
+        foreach ($supabaseVersions as $baseName) {
+            $v = explode('_', $baseName, 2)[0];
+            $supabaseVersionMap[$v] = $baseName;
+        }
+
+        // In Supabase but not in DBDiff history
+        foreach ($supabaseVersionMap as $v => $baseName) {
+            if (!in_array($v, $dbdiffVersions, true)) {
+                $drift[] = [
+                    'version' => $v,
+                    'source'  => 'supabase_only',
+                    'detail'  => "Applied in Supabase ({$baseName}) but not in DBDiff history",
+                ];
+            }
+        }
+
+        // In DBDiff history but not in Supabase
+        foreach ($dbdiffVersions as $v) {
+            if (!isset($supabaseVersionMap[$v])) {
+                $drift[] = [
+                    'version' => $v,
+                    'source'  => 'dbdiff_only',
+                    'detail'  => "Applied in DBDiff but not in Supabase schema_migrations",
+                ];
+            }
+        }
+
+        usort($drift, fn($a, $b) => strcmp($a['version'], $b['version']));
+
+        return $drift;
     }
 
     /**
