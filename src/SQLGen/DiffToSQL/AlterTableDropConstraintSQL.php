@@ -1,5 +1,6 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
+use DBDiff\Exceptions\InvalidConstraintException;
 use DBDiff\SQLGen\SQLGenInterface;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
 use DBDiff\SQLGen\Dialect\SQLDialectInterface;
@@ -17,7 +18,7 @@ class AlterTableDropConstraintSQL implements SQLGenInterface {
 
     public function getUp(): string {
         if (empty($this->obj->name)) {
-            throw new \RuntimeException(
+            throw new InvalidConstraintException(
                 "Cannot generate DROP CONSTRAINT for table `{$this->obj->table}`: constraint name is empty"
             );
         }

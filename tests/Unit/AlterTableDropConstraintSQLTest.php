@@ -3,6 +3,7 @@
 namespace DBDiff\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use DBDiff\Exceptions\InvalidConstraintException;
 use DBDiff\SQLGen\DiffToSQL\AlterTableDropConstraintSQL;
 use DBDiff\SQLGen\Dialect\MySQLDialect;
 
@@ -48,7 +49,7 @@ class AlterTableDropConstraintSQLTest extends TestCase
         $obj    = $this->makeObj('orders', '', $diffOp);
         $sql    = new AlterTableDropConstraintSQL($obj, new MySQLDialect());
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(InvalidConstraintException::class);
         $this->expectExceptionMessage('constraint name is empty');
         $sql->getUp();
     }
@@ -63,7 +64,7 @@ class AlterTableDropConstraintSQLTest extends TestCase
         ];
         $sql = new AlterTableDropConstraintSQL($obj, new MySQLDialect());
 
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(InvalidConstraintException::class);
         $sql->getUp();
     }
 }

@@ -410,8 +410,8 @@ class LocalTableData {
                 SELECT $columnsAas, $columnsBas, SHA2(concat($columnsA), 256) AS hash1,
                 SHA2(concat($columnsB), 256) AS hash2,
                 CONCAT($columnsA0) AS nullmap1, CONCAT($columnsB0) AS nullmap2
-                FROM `{$db1}`.`{$table}` as a 
-                INNER JOIN `{$db2}`.`{$table}` as b  
+                FROM `{$db1}`.`{$table}` as a
+                INNER JOIN `{$db2}`.`{$table}` as b
                 ON $keyCols
             ) t WHERE hash1 <> hash2 OR nullmap1 <> nullmap2");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
