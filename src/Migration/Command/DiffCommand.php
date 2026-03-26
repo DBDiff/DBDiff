@@ -69,7 +69,10 @@ class DiffCommand extends Command
             ->addOption('nocomments',  null, InputOption::VALUE_NONE,     'Suppress auto-generated comment headers')
             ->addOption('config',      null, InputOption::VALUE_REQUIRED, 'Path to a .dbdiff config file (YAML)')
             ->addOption('output',      null, InputOption::VALUE_REQUIRED, 'Output file path (default: migration.<ext> in cwd)')
-            ->addOption('debug',       null, InputOption::VALUE_NONE,     'Enable verbose error output');
+            ->addOption('debug',       null, InputOption::VALUE_NONE,     'Enable verbose error output')
+            ->addOption('memory-limit', null, InputOption::VALUE_REQUIRED,
+                'PHP memory limit for this run (e.g. 512M, 1G, 2G, -1 for unlimited). '
+                . 'Overrides the 1G default set by the CLI entry point and any value in your config file.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -80,6 +83,13 @@ class DiffCommand extends Command
 
             if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
                 $this->mergeFileConfig($params);
+            }
+
+            // Apply PHP memory limit. The entry point (dbdiff / dbdiff.php) already
+            // sets a 1G default; this lets the YAML config or --memory-limit flag
+            // raise or lower it per-run without needing access to php.ini.
+            if (!empty($params->memory_limit)) {
+                ini_set('memory_limit', $params->memory_limit);
             }
 
             // Pre-populate so internal code (DBSchema, TableSchema, etc.)
@@ -115,7 +125,8 @@ class DiffCommand extends Command
         $params->debug       = (bool) $input->getOption('debug');
         $params->template    = $input->getOption('template') ?? '';
         $params->config      = $input->getOption('config');
-        $params->description = $input->getOption('description') ?: '';
+        $params->description   = $input->getOption('description') ?: '';
+        $params->memory_limit  = $input->getOption('memory-limit');
 
         return $params;
     }

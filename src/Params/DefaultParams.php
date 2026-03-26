@@ -66,6 +66,15 @@ class DefaultParams {
     public ?string $sslmode = null;
 
     /*
+     PHP memory limit applied at startup by the CLI entry points (dbdiff / dbdiff.php).
+     Defaults to 1G. Override via --memory-limit=<value> on the command line or by
+     setting memory_limit: <value> in your .dbdiff / dbdiff.yml config file.
+     Accepts any PHP shorthand: 512M, 1G, 2G, -1 (unlimited), etc.
+     Set to null to leave the system php.ini value unchanged.
+    */
+    public ?string $memory_limit = null;
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */
