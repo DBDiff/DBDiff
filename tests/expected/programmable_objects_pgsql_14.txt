@@ -3,15 +3,15 @@ DROP VIEW IF EXISTS "old_report";
 DROP TRIGGER IF EXISTS "trg_old_audit" ON "products";
 DROP FUNCTION IF EXISTS "cleanup_products";
 DROP FUNCTION IF EXISTS "trg_old_audit_fn";
-CREATE VIEW "product_names" AS SELECT id,
-    name
+CREATE VIEW "product_names" AS SELECT products.id,
+    products.name
    FROM products;
 DROP VIEW IF EXISTS "expensive_products";
-CREATE VIEW "expensive_products" AS SELECT id,
-    name,
-    price
+CREATE VIEW "expensive_products" AS SELECT products.id,
+    products.name,
+    products.price
    FROM products
-  WHERE (price > (10)::numeric);
+  WHERE (products.price > (10)::numeric);
 CREATE TRIGGER trg_products_updated BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_products_updated_fn();
 CREATE OR REPLACE FUNCTION public.get_product_count()
  RETURNS integer
@@ -48,13 +48,13 @@ DROP FUNCTION IF EXISTS "get_product_count";
 DROP FUNCTION IF EXISTS "trg_products_updated_fn";
 CREATE TRIGGER trg_old_audit AFTER DELETE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_old_audit_fn();
 DROP TRIGGER IF EXISTS "trg_products_updated" ON "products";
-CREATE VIEW "old_report" AS SELECT id,
-    name
+CREATE VIEW "old_report" AS SELECT products.id,
+    products.name
    FROM products
-  WHERE (price < (5)::numeric);
+  WHERE (products.price < (5)::numeric);
 DROP VIEW IF EXISTS "expensive_products";
-CREATE VIEW "expensive_products" AS SELECT id,
-    name
+CREATE VIEW "expensive_products" AS SELECT products.id,
+    products.name
    FROM products
-  WHERE (price > (50)::numeric);
+  WHERE (products.price > (50)::numeric);
 DROP VIEW IF EXISTS "product_names";
