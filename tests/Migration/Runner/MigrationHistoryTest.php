@@ -225,4 +225,60 @@ class MigrationHistoryTest extends TestCase
         $versions = $this->history->getAppliedVersions();
         $this->assertContains('20260101000000', $versions);
     }
+
+    // ── getSupabaseAppliedVersions() ─────────────────────────────────────────
+
+    /**
+     * SQLite in-memory has no supabase_migrations schema, so the query throws.
+     * The method must catch the error and return an empty array — never throw.
+     */
+    public function testGetSupabaseAppliedVersionsReturnsEmptyWhenTableMissing(): void
+    {
+        $versions = $this->history->getSupabaseAppliedVersions();
+
+        $this->assertIsArray($versions);
+        $this->assertSame([], $versions);
+    }
+
+    /**
+     * Calling the method multiple times is safe (no side effects, no state).
+     */
+    public function testGetSupabaseAppliedVersionsIsIdempotent(): void
+    {
+        $first  = $this->history->getSupabaseAppliedVersions();
+        $second = $this->history->getSupabaseAppliedVersions();
+
+        $this->assertSame($first, $second);
+    }
+
+    // ── Supabase sync (dual-write) ──────────────────────────────────────────
+
+    /**
+     * With supabaseSync=true on a non-pgsql connection, syncToSupabase()
+     * silently does nothing (only activates on pgsql).
+     */
+    public function testSupabaseSyncDoesNothingOnSqlite(): void
+    {
+        $history = new MigrationHistory($this->connection, '_dbdiff_migrations', true);
+        $history->ensureTable();
+
+        $file = MigrationFile::scaffold($this->tmpDir, 'sync test', '20260101120000');
+        // Should not throw even with supabaseSync enabled on SQLite
+        $history->recordSuccess($file, 10);
+
+        $this->assertTrue($history->has('20260101120000'));
+    }
+
+    /**
+     * With supabaseSync=false (default), no attempt is made to write
+     * to the Supabase tracking table.
+     */
+    public function testNoSyncByDefault(): void
+    {
+        $file = MigrationFile::scaffold($this->tmpDir, 'no sync', '20260101130000');
+        $this->history->recordSuccess($file, 10);
+
+        // Just verify the primary table was written — no Supabase sync errors
+        $this->assertTrue($this->history->has('20260101130000'));
+    }
 }

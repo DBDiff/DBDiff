@@ -719,4 +719,136 @@ class MigrationRunnerTest extends TestCase
             $this->assertSame('pending', $row['state']);
         }
     }
+
+    // ── getSupabaseDrift() ──────────────────────────────────────────────────
+
+    public function testGetSupabaseDriftReturnsEmptyArrayOnSqlite(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        $config = $this->makeConfig($dir);
+        $runner = new MigrationRunner($config);
+
+        // On SQLite, getSupabaseAppliedVersions() returns [] (no supabase schema),
+        // and no DBDiff migrations applied yet, so drift should be empty.
+        $drift = $runner->getSupabaseDrift();
+        $this->assertSame([], $drift);
+    }
+
+    public function testGetSupabaseDriftDetectsDbdiffOnlyVersions(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        $this->scaffoldMigration($dir, 'drift test', '20260101120000',
+            'CREATE TABLE drift_test (id INTEGER PRIMARY KEY);',
+            'DROP TABLE drift_test;'
+        );
+
+        $config = $this->makeConfig($dir);
+        $runner = new MigrationRunner($config);
+        $runner->up();
+
+        // Applied in DBDiff but supabase_migrations doesn't exist on SQLite
+        $drift = $runner->getSupabaseDrift();
+        $this->assertCount(1, $drift);
+        $this->assertSame('20260101120000', $drift[0]['version']);
+        $this->assertSame('dbdiff_only', $drift[0]['source']);
+    }
+
+    // ── down() Supabase error message ────────────────────────────────────────
+
+    public function testDownGivesSupabaseErrorForUpOnlyMigrations(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        // Scaffold a Supabase-format migration (no DOWN file)
+        $file = MigrationFile::scaffoldSupabase($dir, 'supa only', '20260101120000');
+        file_put_contents($file->upPath, 'CREATE TABLE supa (id INTEGER PRIMARY KEY);');
+
+        $config = new MigrationConfig(null, [
+            'driver'           => 'sqlite',
+            'path'             => $this->dbPath,
+            'migrations_dir'   => $dir,
+            'migration_format' => 'supabase',
+        ]);
+
+        $runner = new MigrationRunner($config);
+        $runner->up();
+
+        $results = $runner->down();
+        $this->assertCount(1, $results);
+        $this->assertSame('no_down', $results[0]['status']);
+        $this->assertStringContainsString('Supabase-format migrations are UP-only', $results[0]['error']);
+    }
+
+    public function testDownGivesGenericErrorForNativeFormatWithoutDown(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        $this->scaffoldMigration($dir, 'native no down', '20260101120000',
+            'CREATE TABLE native_nd (id INTEGER PRIMARY KEY);'
+            // null = no down file
+        );
+
+        $config = $this->makeConfig($dir);
+        $runner = new MigrationRunner($config);
+        $runner->up();
+
+        $results = $runner->down();
+        $this->assertCount(1, $results);
+        $this->assertSame('no_down', $results[0]['status']);
+        $this->assertStringContainsString('.down.sql', $results[0]['error']);
+    }
+
+    // ── up() lint warnings ───────────────────────────────────────────────────
+
+    public function testUpIncludesWarningsKeyInResults(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        $file = MigrationFile::scaffoldSupabase($dir, 'check warnings key', '20260101120000');
+        file_put_contents($file->upPath, "CREATE TABLE lint_test (id INTEGER PRIMARY KEY);");
+
+        $config = new MigrationConfig(null, [
+            'driver'           => 'sqlite',
+            'path'             => $this->dbPath,
+            'migrations_dir'   => $dir,
+            'migration_format' => 'supabase',
+        ]);
+
+        $runner = new MigrationRunner($config);
+        $results = $runner->up();
+
+        $this->assertCount(1, $results);
+        $this->assertSame('applied', $results[0]['status']);
+        $this->assertArrayHasKey('warnings', $results[0]);
+        $this->assertIsArray($results[0]['warnings']);
+    }
+
+    public function testUpHasNoWarningsForCleanSupabaseMigration(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+
+        $file = MigrationFile::scaffoldSupabase($dir, 'clean', '20260101120000');
+        file_put_contents($file->upPath, 'CREATE TABLE clean_test (id INTEGER PRIMARY KEY);');
+
+        $config = new MigrationConfig(null, [
+            'driver'           => 'sqlite',
+            'path'             => $this->dbPath,
+            'migrations_dir'   => $dir,
+            'migration_format' => 'supabase',
+        ]);
+
+        $runner = new MigrationRunner($config);
+        $results = $runner->up();
+
+        $this->assertCount(1, $results);
+        $this->assertEmpty($results[0]['warnings']);
+    }
 }

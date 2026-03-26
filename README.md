@@ -339,13 +339,34 @@ DBDiff includes a built-in migration runner. All `migration:*` commands accept:
 
 | Command | Description | Extra flags |
 |---|---|---|
-| `migration:new <name>` | Scaffold a new `.up.sql` / `.down.sql` migration pair. | — |
+| `migration:new <name>` | Scaffold a new migration file. | `--format=supabase` — plain `.sql` (no DOWN); auto-set inside Supabase projects |
 | `migration:up` | Apply all pending migrations. | `--target=<version>` — stop after this version |
 | `migration:down` | Roll back applied migration(s). | `--last=<n>` (default `1`), `--target=<version>` |
-| `migration:status` | Show applied vs pending migrations. | — |
+| `migration:status` | Show applied vs pending migrations. Adds a **Supa?** column inside Supabase projects. | — |
 | `migration:validate` | Verify on-disk checksums match the history table. | — |
 | `migration:repair` | Remove failed entries so they can be retried. | `--force` — skip confirmation |
 | `migration:baseline` | Mark current DB state as the migration baseline. | `--baseline-version=<YYYYMMDDHHmmss>`, `--description=<text>`, `--force` |
+
+#### Migration file formats
+
+DBDiff supports two on-disk formats in the same directory:
+
+| Format | File pattern | Best for |
+|---|---|---|
+| **Native** (default) | `{version}_{name}.up.sql` + optional `.down.sql` | New projects, rollback support |
+| **Supabase** | `{version}_{name}.sql` (UP only) | Existing `supabase/migrations/` directories |
+
+If both formats exist for the same version timestamp, the native `.up.sql` file takes precedence.
+
+#### Supabase project auto-detection
+
+When DBDiff is run inside (or below) a directory that contains `supabase/config.toml`, it automatically:
+
+- Sets the migrations directory to `supabase/migrations/` (no `--migrations-dir` needed)
+- Defaults `migration:new` to Supabase format — creating a plain `.sql` file
+- Shows a **Supa?** column in `migration:status`, indicating which migrations Supabase's own `schema_migrations` table considers applied
+
+Pass `--format=native` to `migration:new` to override the auto-detected format.
 
 
 ## Usage Examples
@@ -400,13 +421,20 @@ PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
 
 ### Migration runner
 ```bash
-# Scaffold a new migration
+# Scaffold a new migration (DBDiff native format)
 ./dbdiff migration:new create_users_table
+
+# Scaffold a Supabase-format migration (plain .sql, no DOWN file)
+./dbdiff migration:new create_users_table --format=supabase
+
+# Inside a Supabase project, format and directory are auto-detected:
+cd my-supabase-project   # contains supabase/config.toml
+./dbdiff migration:new create_users_table   # → supabase/migrations/{ts}_create_users_table.sql
 
 # Apply all pending migrations
 ./dbdiff migration:up --db-url='postgres://user:pass@localhost:5432/mydb'
 
-# Check status
+# Check status (adds a Supa? column inside Supabase projects)
 ./dbdiff migration:status --db-url='postgres://user:pass@localhost:5432/mydb'
 
 # Roll back the last migration
@@ -414,6 +442,17 @@ PASS=$(dbdiff url:encode 'my$ecret#pass@word%123')
 
 # Validate checksums
 ./dbdiff migration:validate --db-url='postgres://user:pass@localhost:5432/mydb'
+```
+
+### Supabase — diff with local stack auto-fill
+
+When inside a Supabase project (`supabase/config.toml` present) and the local stack is
+running (`supabase start`), `--server1-url` is resolved automatically from
+`supabase status`:
+
+```bash
+# Only supply the remote (production) URL — local stack fills in automatically
+./dbdiff diff --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
 ```
 
 

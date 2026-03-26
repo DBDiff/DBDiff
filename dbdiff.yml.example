@@ -61,6 +61,10 @@ migrations:
   dir: ./migrations                   # Where migration files are stored
   history_table: _dbdiff_migrations   # Tracking table (created automatically)
   out_of_order: false                 # Allow applying older versions after newer ones
+  format: native                      # native | supabase
+                                      # native   — {version}_{desc}.up.sql + optional .down.sql
+                                      # supabase — {version}_{desc}.sql (UP-only)
+                                      # Auto-set to 'supabase' when supabase/config.toml is detected
 
 # ── Supabase (Postgres) ───────────────────────────────────────────────────────
 # Option A — paste a connection string directly (simplest):

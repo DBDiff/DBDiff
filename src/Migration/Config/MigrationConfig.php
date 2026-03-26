@@ -68,7 +68,32 @@ class MigrationConfig
     public string $historyTable    = '_dbdiff_migrations';
     public bool   $outOfOrder      = false;
 
+    /**
+     * Migration file format: 'native' (default) or 'supabase'.
+     *   native   — {version}_{desc}.up.sql + optional .down.sql
+     *   supabase — {version}_{desc}.sql (UP-only, no DOWN concept)
+     *
+     * Auto-set to 'supabase' when a Supabase project is detected and no
+     * explicit format was configured.  Commands use this as their default
+     * when no --format flag is supplied.
+     */
+    public string $migrationFormat  = 'native';
+
+    // ── Supabase project detection (Phase 1 + 4) ─────────────────────────────
+
+    /** Whether a supabase/config.toml was auto-detected in cwd or a parent. */
+    public bool   $isSupabaseProject  = false;
+
+    /** Absolute path to the directory containing supabase/config.toml. */
+    public string $supabaseProjectRoot = '';
+
     // ─────────────────────────────────────────────────────────────────────────
+
+    /** Tracks whether migrationsDir was set from config file or CLI override. */
+    private bool $migrationsDirExplicit = false;
+
+    /** Tracks whether migrationFormat was set from config file or CLI override. */
+    private bool $migrationFormatExplicit = false;
 
     /**
      * @param string|null $configFile  Explicit path to a YAML config file.
@@ -78,7 +103,8 @@ class MigrationConfig
      *                                 'db_url'          — full DSN URL (highest precedence)
      *                                 'driver', 'host', 'port', 'name', 'path',
      *                                 'user', 'password', 'sslmode', 'pgbouncer',
-     *                                 'migrations_dir', 'history_table', 'out_of_order'
+     *                                 'migrations_dir', 'history_table', 'out_of_order',
+     *                                 'migration_format' — 'native' or 'supabase'
      */
     public function __construct(?string $configFile = null, array $overrides = [])
     {
@@ -89,6 +115,7 @@ class MigrationConfig
         }
 
         $this->applyOverrides($overrides);
+        $this->detectSupabaseProject();
     }
 
     // ── Public helpers ────────────────────────────────────────────────────────
@@ -162,6 +189,31 @@ class MigrationConfig
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    /**
+     * Auto-detect a Supabase project by walking up from cwd.
+     * Only runs when neither migrationsDir nor migrationFormat was explicitly set.
+     * Sets $isSupabaseProject, $supabaseProjectRoot, $migrationsDir, $migrationFormat.
+     */
+    private function detectSupabaseProject(): void
+    {
+        $root = SupabaseProjectDetector::find();
+
+        if ($root === null) {
+            return;
+        }
+
+        $this->isSupabaseProject  = true;
+        $this->supabaseProjectRoot = $root;
+
+        if (!$this->migrationsDirExplicit) {
+            $this->migrationsDir = SupabaseProjectDetector::migrationsDir($root);
+        }
+
+        if (!$this->migrationFormatExplicit) {
+            $this->migrationFormat = 'supabase';
+        }
+    }
+
     private function detect(): ?string
     {
         $candidates = [
@@ -212,9 +264,19 @@ class MigrationConfig
 
         // Populate migrations section
         $m = $this->raw['migrations'] ?? [];
-        $this->migrationsDir = $m['dir']           ?? $this->migrationsDir;
-        $this->historyTable  = $m['history_table'] ?? $this->historyTable;
-        $this->outOfOrder    = (bool) ($m['out_of_order'] ?? $this->outOfOrder);
+
+        if (isset($m['dir'])) {
+            $this->migrationsDir       = $m['dir'];
+            $this->migrationsDirExplicit = true;
+        }
+
+        if (isset($m['format'])) {
+            $this->migrationFormat       = $m['format'];
+            $this->migrationFormatExplicit = true;
+        }
+
+        $this->historyTable = $m['history_table'] ?? $this->historyTable;
+        $this->outOfOrder   = (bool) ($m['out_of_order'] ?? $this->outOfOrder);
     }
 
     /**
@@ -250,24 +312,32 @@ class MigrationConfig
         }
 
         $map = [
-            'driver'          => 'driver',
-            'host'            => 'host',
-            'port'            => 'port',
-            'name'            => 'dbName',
-            'path'            => 'dbPath',
-            'user'            => 'user',
-            'password'        => 'password',
-            'sslmode'         => 'sslMode',
-            'pgbouncer'       => 'pgbouncer',
-            'migrations_dir'  => 'migrationsDir',
-            'history_table'   => 'historyTable',
-            'out_of_order'    => 'outOfOrder',
+            'driver'           => 'driver',
+            'host'             => 'host',
+            'port'             => 'port',
+            'name'             => 'dbName',
+            'path'             => 'dbPath',
+            'user'             => 'user',
+            'password'         => 'password',
+            'sslmode'          => 'sslMode',
+            'pgbouncer'        => 'pgbouncer',
+            'migrations_dir'   => 'migrationsDir',
+            'history_table'    => 'historyTable',
+            'out_of_order'     => 'outOfOrder',
+            'migration_format' => 'migrationFormat',
         ];
 
         foreach ($overrides as $key => $value) {
             if (isset($map[$key]) && $value !== null) {
                 $prop = $map[$key];
                 $this->$prop = $value;
+
+                // Track explicit overrides so Supabase auto-detection doesn't clobber them
+                if ($key === 'migrations_dir') {
+                    $this->migrationsDirExplicit = true;
+                } elseif ($key === 'migration_format') {
+                    $this->migrationFormatExplicit = true;
+                }
             }
         }
     }
