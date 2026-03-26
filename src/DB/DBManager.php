@@ -110,4 +110,24 @@ class DBManager {
     public function getDBVariable(string $connection, string $variable): ?string {
         return $this->adapter->getDBVariable($this->getDB($connection), $variable);
     }
+
+    public function getBinaryColumns(string $connection, string $table): array {
+        return $this->adapter->getBinaryColumns($this->getDB($connection), $table);
+    }
+
+    public function getForeignKeyMap(string $connection): array {
+        return $this->adapter->getForeignKeyMap($this->getDB($connection));
+    }
+
+    public function getViews(string $connection): array {
+        return $this->adapter->getViews($this->getDB($connection));
+    }
+
+    public function getTriggers(string $connection): array {
+        return $this->adapter->getTriggers($this->getDB($connection));
+    }
+
+    public function getRoutines(string $connection): array {
+        return $this->adapter->getRoutines($this->getDB($connection));
+    }
 }

@@ -9,6 +9,7 @@ class DropTable {
     public $diff;
     public $source;
     public $target;
+    public ?int $sortOrder = null;
 
     /** @var \DBDiff\DB\DBManager */
     public $manager;

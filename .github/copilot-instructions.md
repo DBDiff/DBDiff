@@ -4,15 +4,15 @@
 
 Automated database schema & data diff tool that generates SQL migration files. Compares two databases and produces UP + DOWN SQL. Built-in migration runner with versioned history tracking.
 
-Supports MySQL 8.0–9.6, PostgreSQL 14–18, SQLite 3, plus MySQL-compatible variants (MariaDB, Aurora, PlanetScale, Vitess, TiDB) and Supabase.
+Supports MySQL 8.0–9.6, PostgreSQL 14–18, SQLite 3, plus MySQL-compatible variants (MariaDB, Aurora, PlanetScale, Vitess, TiDB, Dolt) and Supabase.
 
 ## Architecture
 
 ```
 src/
   DB/          — Adapters (MySQL, Postgres, SQLite), schema introspection, data diffing
-  Diff/        — 18 diff object models (AddTable, AlterTableChangeColumn, InsertData, etc.)
-  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (20+ generators)
+  Diff/        — 27 diff object models (AddTable, AlterTableChangeColumn, InsertData, CreateView, CreateTrigger, CreateRoutine, etc.)
+  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (27 generators)
   Migration/   — Commands (Symfony Console), Runner, Config, Format/ (Native, Flyway, Liquibase, Laravel)
   Params/      — CLI parameter parsing (CLI flags → config file → defaults)
   Exceptions/  — Exception hierarchy
@@ -44,7 +44,7 @@ composer run build:phar                       # Compile PHAR binary (uses box.js
 podman run --rm -v "$(pwd):/app:Z" -w /app php:8.4-cli vendor/bin/phpunit ...
 ```
 
-**CI matrix**: 5 PHP versions (8.1–8.5) × 4 MySQL versions. See `.github/workflows/tests.yml`.
+**CI matrix**: 5 PHP versions (8.1–8.5) × 4 MySQL versions, Dolt, PostgreSQL 14–18, SQLite. See `.github/workflows/tests.yml`.
 
 ## Conventions
 
@@ -63,6 +63,10 @@ podman run --rm -v "$(pwd):/app:Z" -w /app php:8.4-cli vendor/bin/phpunit ...
 - `InsertDataSQL` and `DeleteDataSQL` emit explicit column-name lists (not `INSERT INTO t VALUES`).
 - The `_dbdiff_migrations` table tracks migration history — never diff this table.
 - Supabase mode (`--supabase`) sets `driver=pgsql`, `sslMode=require`, and enables dual-write to `supabase_migrations.schema_migrations`.
+- MySQL adapter's `normalizeCreateStatement()` strips DEFINER, ALGORITHM, SQL SECURITY, and trailing semicolons from view/trigger/routine definitions.
+- PostgreSQL `DROP TRIGGER` requires `ON table` — handled by `PostgresDialect::dropTrigger()`.
+- SQLite has no stored procedures/functions — `getRoutines()` returns `[]`.
+- DiffSorter places DROP view/trigger/routine BEFORE table ops, CREATE/ALTER AFTER data ops.
 
 ## Docs
 

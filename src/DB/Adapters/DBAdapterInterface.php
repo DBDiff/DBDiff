@@ -58,4 +58,49 @@ interface DBAdapterInterface {
      * does not exist for this driver (e.g. collation on Postgres/SQLite).
      */
     public function getDBVariable(Connection $connection, string $variable): ?string;
+
+    /**
+     * Return column names whose type stores raw binary data
+     * (BINARY, VARBINARY, BLOB variants).
+     *
+     * Used by the data-diff layer to avoid corrupting binary values
+     * with text-encoding conversions and to emit UNHEX() in SQL output.
+     *
+     * Drivers that do not have binary-unsafe types may return [].
+     */
+    public function getBinaryColumns(Connection $connection, string $table): array;
+
+    /**
+     * Return the FK dependency map for all tables in the database.
+     *
+     * Returns [childTable => [parentTable1, parentTable2, …], …]
+     * Used to topologically sort AddTable/DropTable diffs so parents
+     * are created before children and children dropped before parents.
+     */
+    public function getForeignKeyMap(Connection $connection): array;
+
+    /**
+     * Return a map of view names to their normalised CREATE VIEW statements.
+     *
+     * Returns [viewName => 'CREATE VIEW ...']
+     * MySQL definitions are stripped of DEFINER, ALGORITHM, SQL SECURITY.
+     */
+    public function getViews(Connection $connection): array;
+
+    /**
+     * Return a map of trigger names to their metadata.
+     *
+     * Returns [triggerName => ['definition' => 'CREATE TRIGGER ...', 'table' => 'tableName']]
+     * MySQL definitions are stripped of DEFINER clauses.
+     */
+    public function getTriggers(Connection $connection): array;
+
+    /**
+     * Return a map of routine names to their normalised CREATE statements.
+     *
+     * Returns [routineName => 'CREATE PROCEDURE|FUNCTION ...']
+     * MySQL definitions are stripped of DEFINER clauses.
+     * SQLite returns [] (no stored routine support).
+     */
+    public function getRoutines(Connection $connection): array;
 }

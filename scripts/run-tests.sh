@@ -21,6 +21,7 @@ TESTSUITE=""
 MYSQL_VERSION=""
 POSTGRES_HOST=""
 SQLITE_ONLY="false"
+DOLT_MODE="false"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -60,10 +61,14 @@ while [[ $# -gt 0 ]]; do
             SQLITE_ONLY="true"
             shift
             ;;
+        --dolt)
+            DOLT_MODE="true"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             echo "Usage: $0 [--record] [--specific <test_method>] [--mysql <version>]"
-            echo "          [--postgres [host]] [--sqlite]"
+            echo "          [--postgres [host]] [--sqlite] [--dolt]"
             echo ""
             echo "Options:"
             echo "  --record                Run in record mode to capture expected outputs"
@@ -74,6 +79,7 @@ while [[ $# -gt 0 ]]; do
             echo "                          Available hosts: db-postgres14, db-postgres15,"
             echo "                          db-postgres16 (default), db-postgres17, db-postgres18"
             echo "  --sqlite                Run SQLite tests (end-to-end + comprehensive)"
+            echo "  --dolt                  Run tests against Dolt (MySQL-compatible)"
             echo ""
             echo "Examples:"
             echo "  $0                                       # Run all tests (MySQL)"
@@ -84,6 +90,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --postgres                           # Run Postgres e2e tests"
             echo "  $0 --postgres localhost                  # Postgres on localhost"
             echo "  $0 --sqlite                             # Run SQLite e2e tests"
+            echo "  $0 --dolt                               # Run tests against Dolt"
             exit 1
             ;;
     esac
@@ -113,6 +120,12 @@ fi
 if [ "$SQLITE_ONLY" = "true" ]; then
     echo "🗂️  Running SQLite tests (end-to-end + comprehensive)"
     TESTSUITE="SQLite"
+fi
+
+if [ "$DOLT_MODE" = "true" ]; then
+    echo "🔀 Running tests against Dolt (MySQL-compatible)"
+    export DBDIFF_ENGINE=dolt
+    TESTSUITE="DBDiff"
 fi
 
 if [ "$TESTSUITE" = "Unit" ]; then

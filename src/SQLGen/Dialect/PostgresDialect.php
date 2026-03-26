@@ -12,4 +12,11 @@ class PostgresDialect extends AbstractAnsiDialect {
     public function getDriver(): string {
         return 'pgsql';
     }
+
+    /**
+     * PostgreSQL requires ON "table" for DROP TRIGGER.
+     */
+    public function dropTrigger(string $trigger, string $table): string {
+        return "DROP TRIGGER IF EXISTS " . $this->quote($trigger) . " ON " . $this->quote($table) . ";";
+    }
 }

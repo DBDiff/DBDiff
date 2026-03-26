@@ -1,0 +1,26 @@
+#---------- UP ----------
+DROP VIEW IF EXISTS "old_report";
+DROP TRIGGER IF EXISTS "trg_old_audit";
+CREATE VIEW "product_names" AS
+  SELECT "id", "name" FROM "products";
+DROP VIEW IF EXISTS "expensive_products";
+CREATE VIEW "expensive_products" AS
+  SELECT "id", "name", "price" FROM "products" WHERE "price" > 10;
+CREATE TRIGGER "trg_products_updated" BEFORE UPDATE ON "products"
+  FOR EACH ROW
+  BEGIN
+    UPDATE "products" SET "updated_at" = datetime('now') WHERE "id" = NEW."id";
+  END;
+#---------- DOWN ----------
+CREATE TRIGGER "trg_old_audit" AFTER DELETE ON "products"
+  FOR EACH ROW
+  BEGIN
+    SELECT 1;
+  END;
+DROP TRIGGER IF EXISTS "trg_products_updated";
+CREATE VIEW "old_report" AS
+  SELECT "id", "name" FROM "products" WHERE "price" < 5;
+DROP VIEW IF EXISTS "expensive_products";
+CREATE VIEW "expensive_products" AS
+  SELECT "id", "name" FROM "products" WHERE "price" > 50;
+DROP VIEW IF EXISTS "product_names";

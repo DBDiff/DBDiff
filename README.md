@@ -20,7 +20,7 @@
 ## Features
 
 - Compares two databases (local or remote) and generates SQL migrations automatically
-- Diffs schema changes, data changes, or both — with deterministic, predictable output
+- Diffs tables, views, triggers, stored procedures/functions, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
@@ -91,6 +91,7 @@ The databases below work with DBDiff's existing drivers with no code changes. **
 | Vitess / VTGate | MySQL wire protocol via VTGate |
 | Percona XtraDB Cluster | MySQL-compatible; Galera replication metadata ignored |
 | TiDB | MySQL-compatible; default port 4000 |
+| [Dolt](https://github.com/dolthub/dolt) | MySQL-compatible, version-controlled; **CI-tested** |
 
 ### PostgreSQL-compatible — `--driver=pgsql`
 
@@ -135,10 +136,10 @@ The quickest way to get started is to download a pre-built release directly from
 | [Pre-built binary](#pre-built-binaries) | ✅ Yes | Quickest start — zero dependencies |
 | [PHAR](#phar) | ✅ Yes | Single portable file; requires PHP ≥ 8.1 |
 | [npm](#npm) | ✅ Yes (via registry) | Node.js projects or CI pipelines |
-| [Docker](#docker) | — | Isolated environments or testing |
+| [Docker / Podman](#docker--podman) | — | Isolated environments, CI, or no local PHP |
 | [Composer (source)](#composer-source-install) | — | Contributing to DBDiff or PHP integration |
 
-> **PHP requirement:** Pre-built binaries, npm packages, and Docker images bundle PHP 8.3 — no system PHP needed. The PHAR and Composer installs require **PHP ≥ 8.1** on your system.
+> **PHP requirement:** Pre-built binaries, npm packages, and Docker/Podman images bundle PHP 8.3 — no system PHP needed. The PHAR and Composer installs require **PHP ≥ 8.1** on your system.
 
 
 ## Pre-built Binaries
@@ -188,18 +189,29 @@ dbdiff --version
 To build a PHAR locally from source, see [Building a PHAR](#building-a-phar).
 
 
-## Docker
+## Docker / Podman
 
-Pre-built multi-arch images (linux/amd64 + linux/arm64) are published to GHCR on every release.
+Pre-built multi-arch images (linux/amd64 + linux/arm64) are published to GHCR on every release. Both Docker and [Podman](https://podman.io/) are fully supported — use whichever is available on your system. No local PHP installation is required.
 
 ### Pull and run (no build required)
 
+**Docker:**
 ```bash
 docker pull ghcr.io/dbdiff/dbdiff
 docker run --rm ghcr.io/dbdiff/dbdiff --version
 docker run --rm ghcr.io/dbdiff/dbdiff --driver=mysql \
   --server1=user:pass@host:3306 server1.mydb:server1.mydb
 ```
+
+**Podman** (drop-in replacement — commands are identical):
+```bash
+podman pull ghcr.io/dbdiff/dbdiff
+podman run --rm ghcr.io/dbdiff/dbdiff --version
+podman run --rm ghcr.io/dbdiff/dbdiff --driver=mysql \
+  --server1=user:pass@host:3306 server1.mydb:server1.mydb
+```
+
+> **Podman on Linux** runs rootless by default — no daemon required. Install via your package manager: `sudo apt install podman` (Debian/Ubuntu) or `brew install podman` (macOS).
 
 ### Image variants
 
@@ -212,6 +224,7 @@ docker run --rm ghcr.io/dbdiff/dbdiff --driver=mysql \
 
 ```bash
 # Slim image (requires dist/dbdiff.phar — run `vendor/bin/box compile` first)
+# Replace 'docker' with 'podman' if using Podman
 docker build -f docker/Dockerfile.slim -t dbdiff:slim .
 docker run --rm dbdiff:slim --version
 
@@ -219,7 +232,7 @@ docker run --rm dbdiff:slim --version
 docker build -f docker/Dockerfile -t dbdiff:full .
 ```
 
-See [DOCKER.md](DOCKER.md) for cross-version testing, Podman usage, and start.sh flags.
+See [DOCKER.md](DOCKER.md) for cross-version testing, Podman setup, and start.sh flags.
 
 
 ## Composer Source Install
@@ -523,6 +536,19 @@ Comparisons run in this order:
 ### Schema
 - Detects differences in column count, name, type, collation or attributes
 - New columns in the source are added to the target
+
+### Views
+- Detects created, dropped, and altered views across source and target
+- ALTER = DROP IF EXISTS + CREATE with the new definition
+
+### Triggers
+- Detects created, dropped, and altered triggers
+- PostgreSQL DROP TRIGGER includes the required ON table clause
+
+### Stored Procedures / Functions
+- Detects created, dropped, and altered routines (MySQL and PostgreSQL)
+- SQLite has no stored procedures — routines are skipped automatically
+- MySQL definitions are normalized (DEFINER, ALGORITHM, SQL SECURITY stripped)
 
 ### Data
 - Compares table storage engine, collation, and row count

@@ -83,6 +83,68 @@ jobs:
     - name: Run comprehensive tests
       run: ./scripts/run-tests.sh --testsuite DBDiff,Unit
 
+  # ── Dolt (MySQL-compatible, version-controlled database) ────────────────────
+  test-dolt:
+    name: PHP ${{ matrix.php-version }} / Dolt
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.3', '8.4']
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_ROOT_PASSWORD: rootpass
+      DB_USER: dbdiff
+      DB_PASSWORD: dbdiff
+      DBDIFF_ENGINE: dolt
+
+    services:
+      dolt:
+        image: dolthub/dolt-sql-server:latest
+        env:
+          DOLT_ROOT_PASSWORD: rootpass
+          DOLT_ROOT_HOST: "%"
+          MYSQL_DATABASE: diff1
+          MYSQL_USER: dbdiff
+          MYSQL_PASSWORD: dbdiff
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="bash -c '(echo > /dev/tcp/localhost/3306) 2>/dev/null'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Wait for Dolt to be query-ready
+      run: |
+        for i in $(seq 1 30); do
+          if mysql -h 127.0.0.1 -u root -prootpass -e "SELECT 1" >/dev/null 2>&1; then
+            echo "Dolt is ready for queries"
+            break
+          fi
+          echo "Waiting for Dolt... ($i/30)"
+          sleep 2
+        done
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: pdo, pdo_mysql, pdo_sqlite, mysqli, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run comprehensive tests against Dolt
+      run: ./scripts/run-tests.sh --testsuite DBDiff,Unit
+
   # ── SQLite standalone (no DB service needed) ─────────────────────────────────
   test-sqlite:
     name: PHP ${{ matrix.php-version }} / SQLite e2e

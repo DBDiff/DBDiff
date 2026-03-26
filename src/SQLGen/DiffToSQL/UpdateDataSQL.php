@@ -3,6 +3,7 @@
 use DBDiff\SQLGen\SQLGenInterface;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
 use DBDiff\SQLGen\Dialect\SQLDialectInterface;
+use DBDiff\DB\Data\BinaryValue;
 use Diff\DiffOp\DiffOpAdd;
 use Diff\DiffOp\DiffOpRemove;
 
@@ -28,12 +29,12 @@ class UpdateDataSQL implements SQLGenInterface {
             } elseif (!method_exists($diff, 'getNewValue') || is_null($diff->getNewValue())) {
                 $diff = "$q = NULL";
             } else {
-                $diff = "$q = '" . addslashes($diff->getNewValue()) . "'";
+                $diff = "$q = " . BinaryValue::formatSQL($diff->getNewValue());
             }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
-            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
+            $value = BinaryValue::formatCondition($d->quote($column), $value);
         });
         return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }
@@ -49,12 +50,12 @@ class UpdateDataSQL implements SQLGenInterface {
             } elseif (!method_exists($diff, 'getOldValue') || is_null($diff->getOldValue())) {
                 $diff = "$q = NULL";
             } else {
-                $diff = "$q = '" . addslashes($diff->getOldValue()) . "'";
+                $diff = "$q = " . BinaryValue::formatSQL($diff->getOldValue());
             }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
-            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
+            $value = BinaryValue::formatCondition($d->quote($column), $value);
         });
         return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }

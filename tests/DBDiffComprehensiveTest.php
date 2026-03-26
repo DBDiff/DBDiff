@@ -39,6 +39,10 @@ class DBDiffComprehensiveTest extends AbstractComprehensiveTest
 
     protected function getVersionSuffix(): string
     {
+        $engine = getenv('DBDIFF_ENGINE') ?: null;
+        if ($engine) {
+            return $engine;
+        }
         return (string) $this->mysqlMajorVersion;
     }
 
@@ -89,6 +93,63 @@ class DBDiffComprehensiveTest extends AbstractComprehensiveTest
             $this->db->exec("DROP DATABASE IF EXISTS `{$this->db1}`;");
             $this->db->exec("DROP DATABASE IF EXISTS `{$this->db2}`;");
         }
+    }
+
+    // ── Dolt-specific skips ──────────────────────────────────────────────
+    // Dolt's strict SQL engine rejects cross-database data diff queries
+    // involving datetime columns with empty-string defaults. These tests
+    // use the basic_schema_data fixture whose `posts.published_at` column
+    // triggers this. Schema-only and legacy E2E data diffs work fine.
+
+    private function skipOnDolt(): void
+    {
+        if (getenv('DBDIFF_ENGINE') === 'dolt') {
+            $this->markTestSkipped('Dolt: cross-database data diff with datetime columns not yet supported');
+        }
+    }
+
+    public function testDataOnlyDiff(): void
+    {
+        $this->skipOnDolt();
+        parent::testDataOnlyDiff();
+    }
+
+    public function testTemplateOutput(): void
+    {
+        $this->skipOnDolt();
+        parent::testTemplateOutput();
+    }
+
+    public function testUpOnlyOutput(): void
+    {
+        $this->skipOnDolt();
+        parent::testUpOnlyOutput();
+    }
+
+    public function testDownOnlyOutput(): void
+    {
+        $this->skipOnDolt();
+        parent::testDownOnlyOutput();
+    }
+
+    public function testConfigFileUsage(): void
+    {
+        $this->skipOnDolt();
+        parent::testConfigFileUsage();
+    }
+
+    public function testConfigFileWithCliOverride(): void
+    {
+        $this->skipOnDolt();
+        parent::testConfigFileWithCliOverride();
+    }
+
+    public function testProgrammableObjectsDiff(): void
+    {
+        if (getenv('DBDIFF_ENGINE') === 'dolt') {
+            $this->markTestSkipped('Dolt: stored procedure/trigger multi-statement fixture loading not supported');
+        }
+        parent::testProgrammableObjectsDiff();
     }
 }
 

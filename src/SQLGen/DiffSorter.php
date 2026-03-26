@@ -7,6 +7,10 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
 
+        "DropView",
+        "DropTrigger",
+        "DropRoutine",
+
         "AddTable",
 
         "DeleteData",
@@ -28,12 +32,29 @@ class DiffSorter {
         "AlterTableDropConstraint",
 
         "InsertData",
-        "UpdateData"
+        "UpdateData",
+
+        "CreateView",
+        "AlterView",
+        "CreateTrigger",
+        "AlterTrigger",
+        "CreateRoutine",
+        "AlterRoutine",
     ];
 
     private $down_order = [
         "SetDBCharset",
         "SetDBCollation",
+
+        "DropRoutine",
+        "AlterRoutine",
+        "CreateRoutine",
+        "DropTrigger",
+        "AlterTrigger",
+        "CreateTrigger",
+        "DropView",
+        "AlterView",
+        "CreateView",
 
         "InsertData",
         "AddTable",
@@ -65,14 +86,14 @@ class DiffSorter {
     }
     
     private function compareUp($a, $b) {
-        return $this->compare($this->up_order, $a, $b);
+        return $this->compare($this->up_order, $a, $b, 'up');
     }
 
     private function compareDown($a, $b) {
-        return $this->compare($this->down_order, $a, $b);
+        return $this->compare($this->down_order, $a, $b, 'down');
     }
 
-    private function compare($order, $a, $b) {
+    private function compare($order, $a, $b, string $direction = 'up') {
         $orderMap = array_flip($order);
         $reflectionA = new \ReflectionClass($a);
         $reflectionB = new \ReflectionClass($b);
@@ -82,6 +103,17 @@ class DiffSorter {
         $indexB = $orderMap[$sqlGenClassB];
         
         if ($indexA === $indexB) {
+            // FK topological ordering for AddTable / DropTable
+            $sortA = $a->sortOrder ?? null;
+            $sortB = $b->sortOrder ?? null;
+            if ($sortA !== null && $sortB !== null && $sortA !== $sortB) {
+                // CREATE operations: ascending (parents first)
+                // DROP operations: descending (children first)
+                $isCreate = ($direction === 'up'   && $sqlGenClassA === 'AddTable')
+                         || ($direction === 'down'  && $sqlGenClassA === 'DropTable');
+                return $isCreate ? ($sortA <=> $sortB) : ($sortB <=> $sortA);
+            }
+
             // Secondary sort by table name if available
             $tableA = $a->table ?? '';
             $tableB = $b->table ?? '';

@@ -21,6 +21,10 @@ class MySQLDialect implements SQLDialectInterface {
         return "ALTER TABLE $t DROP INDEX $k;";
     }
 
+    public function dropTrigger(string $trigger, string $table): string {
+        return "DROP TRIGGER IF EXISTS " . $this->quote($trigger) . ";";
+    }
+
     /**
      * MySQL uses ADD without the COLUMN keyword for backwards-compat.
      * Both forms are valid MySQL SQL; the shorter form matches pre-existing

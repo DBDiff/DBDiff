@@ -394,8 +394,62 @@ services:
       interval: 5s
       start_period: 40s
 
+  # Dolt (MySQL-compatible, version-controlled database)
+  db-dolt:
+    image: docker.io/dolthub/dolt-sql-server:latest
+    restart: always
+    ports:
+      - '${DB_PORT_DOLT}:3306'
+    environment:
+      DOLT_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      DOLT_ROOT_HOST: "%"
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '(echo > /dev/tcp/localhost/3306) 2>/dev/null'"]
+      timeout: 20s
+      retries: 15
+      interval: 5s
+      start_period: 30s
+
+  cli-php83-dolt:
+    depends_on:
+      db-dolt:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_83}
+    environment:
+      - DB_HOST=db-dolt
+      - DBDIFF_ENGINE=dolt
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
+  cli-php84-dolt:
+    depends_on:
+      db-dolt:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION_84}
+    environment:
+      - DB_HOST=db-dolt
+      - DBDIFF_ENGINE=dolt
+    volumes:
+      - .:/usr/src/dbdiff
+      - /usr/src/dbdiff/vendor
+    command: tail -f /dev/null
+
   # PHPMyAdmin services
   phpmyadmin-mysql80:
+
     depends_on:
       db-mysql80:
         condition: service_healthy

@@ -3,6 +3,7 @@
 use DBDiff\SQLGen\SQLGenInterface;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
 use DBDiff\SQLGen\Dialect\SQLDialectInterface;
+use DBDiff\DB\Data\BinaryValue;
 
 
 class InsertDataSQL implements SQLGenInterface {
@@ -20,9 +21,7 @@ class InsertDataSQL implements SQLGenInterface {
         $d      = $this->dialect;
         $row    = $this->obj->diff['diff']->getNewValue();
         $cols   = implode(',', array_map(fn($c) => $d->quote($c), array_keys($row)));
-        $values = array_map(function ($el) {
-            return is_null($el) ? 'NULL' : "'" . addslashes($el) . "'";
-        }, $row);
+        $values = array_map(fn($el) => BinaryValue::formatSQL($el), $row);
         return "INSERT INTO $t ($cols) VALUES(" . implode(',', $values) . ");";
     }
 
@@ -31,7 +30,7 @@ class InsertDataSQL implements SQLGenInterface {
         $d    = $this->dialect;
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
-            $value = $d->quote($column) . " = '" . addslashes($value) . "'";
+            $value = BinaryValue::formatCondition($d->quote($column), $value);
         });
         return "DELETE FROM $t WHERE " . implode(' AND ', $keys) . ';';
     }
