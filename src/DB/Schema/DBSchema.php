@@ -188,23 +188,7 @@ class DBSchema {
      */
     private function topologicalSort(array $tables, array $fkMap): array
     {
-        $tableSet = array_flip($tables);
-
-        // Build adjacency: deps[child] = [parents], children[parent] = [children]
-        $deps     = [];
-        $children = [];
-        foreach ($tables as $t) {
-            $deps[$t]     = [];
-            $children[$t] = [];
-        }
-        foreach ($tables as $table) {
-            foreach ($fkMap[$table] ?? [] as $parent) {
-                if (isset($tableSet[$parent]) && $parent !== $table) {
-                    $deps[$table][]    = $parent;
-                    $children[$parent][] = $table;
-                }
-            }
-        }
+        [$deps, $children] = $this->buildAdjacency($tables, $fkMap);
 
         $inDegree = array_map('count', $deps);
 
@@ -233,6 +217,27 @@ class DBSchema {
         $remaining = array_diff($tables, $sorted);
         sort($remaining);
         return array_merge($sorted, $remaining);
+    }
+
+    /**
+     * Build adjacency maps for topological sort.
+     *
+     * @return array{array<string,string[]>, array<string,string[]>}
+     */
+    private function buildAdjacency(array $tables, array $fkMap): array
+    {
+        $tableSet = array_flip($tables);
+        $deps     = array_fill_keys($tables, []);
+        $children = array_fill_keys($tables, []);
+        foreach ($tables as $table) {
+            foreach ($fkMap[$table] ?? [] as $parent) {
+                if (isset($tableSet[$parent]) && $parent !== $table) {
+                    $deps[$table][]      = $parent;
+                    $children[$parent][] = $table;
+                }
+            }
+        }
+        return [$deps, $children];
     }
 }
 
