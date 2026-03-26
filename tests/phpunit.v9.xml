@@ -8,6 +8,7 @@
     <testsuites>
         <testsuite name="Unit">
             <directory suffix="Test.php">./Migration</directory>
+            <directory suffix="Test.php">./DataDiff</directory>
         </testsuite>
         <testsuite name="DBDiff">
             <file>./DBDiffComprehensiveTest.php</file>

@@ -1,5 +1,5 @@
 -- SQLite: multi_table fixture - database 1 (source)
--- Data is identical between db1 and db2; only schema differs.
+-- Data differences mirror the MySQL/Postgres fixtures.
 
 CREATE TABLE users (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
