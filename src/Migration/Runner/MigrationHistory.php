@@ -22,11 +22,13 @@ class MigrationHistory
 
     private Connection $connection;
     private string     $table;
+    private bool       $supabaseSync;
 
-    public function __construct(Connection $connection, string $table = '_dbdiff_migrations')
+    public function __construct(Connection $connection, string $table = '_dbdiff_migrations', bool $supabaseSync = false)
     {
-        $this->connection = $connection;
-        $this->table      = $table;
+        $this->connection    = $connection;
+        $this->table         = $table;
+        $this->supabaseSync  = $supabaseSync;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -162,6 +164,8 @@ class MigrationHistory
             'applied_by'   => get_current_user(),
             'success'      => true,
         ]);
+
+        $this->syncToSupabase($file->getBaseName());
     }
 
     public function recordFailure(MigrationFile $file, int $executionMs): void
@@ -196,6 +200,7 @@ class MigrationHistory
     public function remove(string $version): void
     {
         $this->connection->table($this->table)->where('version', $version)->delete();
+        $this->unsyncFromSupabase($version);
     }
 
     /**
@@ -227,5 +232,87 @@ class MigrationHistory
             'applied_by'   => get_current_user(),
             'success'      => true,
         ]);
+    }
+
+    // ── Supabase integration (Phase 4) ────────────────────────────────────────
+
+    /**
+     * Return the set of migration base names ('{version}_{description}') that
+     * Supabase's own tracking table reports as applied.
+     *
+     * Reads from supabase_migrations.schema_migrations, which Supabase populates
+     * when you run `supabase db push` or `supabase migration up`.  Each row's
+     * `version` column stores the full migration filename without the `.sql`
+     * extension, e.g. '20260303120000_create_users'.
+     *
+     * Returns an empty array (without throwing) when:
+     *   - the supabase_migrations schema does not exist (non-Supabase DB)
+     *   - the current role lacks SELECT on the table
+     *   - any other query error
+     *
+     * @return string[]  e.g. ['20260101000000_init', '20260303120000_create_users']
+     */
+    public function getSupabaseAppliedVersions(): array
+    {
+        try {
+            return $this->connection
+                ->table('supabase_migrations.schema_migrations')
+                ->orderBy('version')
+                ->pluck('version')
+                ->map(fn ($v) => (string) $v)
+                ->toArray();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    // ── Private Supabase sync helpers ────────────────────────────────────────
+
+    /**
+     * Insert a version into supabase_migrations.schema_migrations when
+     * supabaseSync is enabled and the connection is PostgreSQL.
+     *
+     * Silently skips if the table doesn't exist or the insert fails —
+     * never lets a sync error block the primary migration workflow.
+     *
+     * @param string $baseName  e.g. '20260303120000_create_users'
+     */
+    private function syncToSupabase(string $baseName): void
+    {
+        if (!$this->supabaseSync || $this->connection->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        try {
+            // Use raw INSERT with ON CONFLICT to be idempotent
+            $this->connection->statement(
+                'INSERT INTO supabase_migrations.schema_migrations (version) VALUES (?) ON CONFLICT DO NOTHING',
+                [$baseName]
+            );
+        } catch (\Throwable) {
+            // The supabase_migrations schema may not exist (e.g. plain Postgres
+            // without Supabase).  Swallow the error — the DBDiff history table
+            // is the primary source of truth.
+        }
+    }
+
+    /**
+     * Remove a version from supabase_migrations.schema_migrations during rollback.
+     * Uses the version prefix to match since the Supabase table stores base names.
+     */
+    private function unsyncFromSupabase(string $version): void
+    {
+        if (!$this->supabaseSync || $this->connection->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        try {
+            $this->connection->statement(
+                'DELETE FROM supabase_migrations.schema_migrations WHERE version LIKE ?',
+                [$version . '_%']
+            );
+        } catch (\Throwable) {
+            // Swallow — same rationale as syncToSupabase()
+        }
     }
 }

@@ -380,3 +380,53 @@ jobs:
           | grep -q '0' || { echo 'FAIL: posts table should be dropped after down'; exit 1; }
 
         echo "OK: Full migration lifecycle passed on Supabase Postgres"
+
+    # ── 4. getSupabaseAppliedVersions() — happy path against real Postgres ──
+    - name: Verify getSupabaseAppliedVersions reads supabase_migrations schema
+      run: |
+        # Create the supabase_migrations schema and tracking table that Supabase
+        # normally creates.  Supabase tracks applied migrations by plain version
+        # strings in this table.
+        PGPASSWORD=supabase-test-pass psql -h 127.0.0.1 -U postgres -d supa_migrate <<'SQL'
+          CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+          CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+            version text NOT NULL PRIMARY KEY
+          );
+          INSERT INTO supabase_migrations.schema_migrations (version) VALUES
+            ('20260101120000_create_users'),
+            ('20260102120000_create_posts');
+        SQL
+
+        php -r "
+          require 'vendor/autoload.php';
+          use Illuminate\Database\Capsule\Manager as Capsule;
+          use DBDiff\Migration\Runner\MigrationHistory;
+
+          \$capsule = new Capsule;
+          \$capsule->addConnection([
+            'driver'   => 'pgsql',
+            'host'     => '127.0.0.1',
+            'port'     => 5432,
+            'database' => 'supa_migrate',
+            'username' => 'postgres',
+            'password' => 'supabase-test-pass',
+            'charset'  => 'utf8',
+            'schema'   => 'public',
+          ], 'supa');
+          \$conn = \$capsule->getConnection('supa');
+
+          \$history  = new MigrationHistory(\$conn);
+          \$versions = \$history->getSupabaseAppliedVersions();
+
+          echo 'Supabase versions: ' . implode(', ', \$versions) . PHP_EOL;
+
+          if (count(\$versions) !== 2)          { echo 'FAIL: expected 2 versions'; exit(1); }
+          if (!\in_array('20260101120000_create_users', \$versions))  { echo 'FAIL: missing users'; exit(1); }
+          if (!\in_array('20260102120000_create_posts', \$versions))  { echo 'FAIL: missing posts'; exit(1); }
+
+          echo 'OK: getSupabaseAppliedVersions() returned correct data';
+        "
+
+    # ── 5. Unit tests (fast, no Supabase service required) ──────────────────
+    - name: Run unit tests
+      run: ./scripts/run-tests.sh --unit
