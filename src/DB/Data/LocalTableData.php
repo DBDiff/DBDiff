@@ -180,7 +180,7 @@ class LocalTableData {
 
     /**
      * Build a sha3() hash expression over the given columns for a table alias.
-     * Example: sha3(COALESCE(CAST("a"."col1" AS TEXT), '') || X'00' || ..., 256)
+     * Example: sha3(COALESCE(CAST("a"."col1" AS TEXT), '') || X'1f' || ..., 256)
      */
     private function buildSQLiteSha3Expr(array $columns, string $alias): string
     {
@@ -188,7 +188,7 @@ class LocalTableData {
             fn($c) => "COALESCE(CAST(\"$alias\".\"$c\" AS TEXT), '')",
             $columns
         );
-        return "sha3(" . implode(" || X'00' || ", $parts) . ", 256)";
+        return "sha3(" . implode(" || X'1f' || ", $parts) . ", 256)";
     }
 
     /**

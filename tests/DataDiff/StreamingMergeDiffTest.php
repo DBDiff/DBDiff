@@ -422,7 +422,7 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
         $expr = $merge->buildHashExpression(['col1', 'col2']);
         $this->assertStringContainsString('hex(', $expr);
         $this->assertStringContainsString('COALESCE', $expr);
-        $this->assertStringContainsString("X'00'", $expr);
+        $this->assertStringContainsString("X'1f'", $expr);
     }
 
     public function testBuildHashExpressionPostgres(): void

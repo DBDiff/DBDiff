@@ -211,8 +211,8 @@ class StreamingMergeDiff
      * Build a driver-appropriate SQL hash expression for the given columns.
      *
      * MySQL:    SHA2(CONCAT(CAST(col AS CHAR CHARACTER SET utf8), …), 256)
-     * Postgres: md5(COALESCE(col::text, '') || '\x00' || …)
-     * SQLite:   hex(COALESCE(CAST(col AS TEXT), '') || X'00' || …)
+     * Postgres: md5(COALESCE(col::text, '') || E'\x1f' || …)
+     * SQLite:   hex(COALESCE(CAST(col AS TEXT), '') || X'1f' || …)
      */
     public function buildHashExpression(array $columns): string
     {
@@ -227,11 +227,11 @@ class StreamingMergeDiff
 
             case 'pgsql':
                 $parts = array_map(fn($c) => "COALESCE(\"$c\"::text, '')", $columns);
-                return "md5(" . implode(" || E'\\x00' || ", $parts) . ")";
+                return "md5(" . implode(" || E'\\x1f' || ", $parts) . ")";
 
             case 'sqlite':
                 $parts = array_map(fn($c) => "COALESCE(CAST(\"$c\" AS TEXT), '')", $columns);
-                return "hex(" . implode(" || X'00' || ", $parts) . ")";
+                return "hex(" . implode(" || X'1f' || ", $parts) . ")";
 
             default:
                 throw new \RuntimeException("Unsupported driver: {$this->driver}");
