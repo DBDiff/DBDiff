@@ -224,7 +224,9 @@ class StreamingMergeDiff
     /**
      * Build a driver-appropriate SQL hash expression for the given columns.
      *
-     * MySQL:    SHA2(CONCAT(CAST(col AS CHAR CHARACTER SET utf8), …), 256)
+     * MySQL:    SHA2(CONCAT(COALESCE(CAST(col AS CHAR CHARACTER SET utf8), ''), CHAR(31), …), 256)
+     *           CHAR(31) is the unit-separator (0x1f); COALESCE ensures NULL columns
+     *           do not propagate NULL through CONCAT (which would mask real changes).
      * Postgres: md5(COALESCE(col::text, '') || E'\x1f' || …)
      * SQLite:   hex(COALESCE(CAST(col AS TEXT), '') || X'1f' || …)
      */
@@ -235,7 +237,7 @@ class StreamingMergeDiff
         }
 
         return match ($this->driver) {
-            'mysql'  => 'SHA2(CONCAT(' . implode(', ', array_map(fn($c) => "CAST(`$c` AS CHAR CHARACTER SET utf8)", $columns)) . '), 256)',
+            'mysql'  => 'SHA2(CONCAT(' . implode(", CHAR(31), ", array_map(fn($c) => "COALESCE(CAST(`$c` AS CHAR CHARACTER SET utf8), '')", $columns)) . '), 256)',
             'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "COALESCE(\"$c\"::text, '')", $columns)) . ")",
             'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "COALESCE(CAST(\"$c\" AS TEXT), '')", $columns)) . ")",
             default  => throw new DataException("Unsupported driver: {$this->driver}"),

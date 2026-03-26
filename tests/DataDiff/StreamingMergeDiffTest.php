@@ -449,6 +449,13 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
         $expr = $merge->buildHashExpression(['col1', 'col2']);
         $this->assertStringContainsString('SHA2(', $expr);
         $this->assertStringContainsString('CONCAT(', $expr);
+        // NULL-safety: each column must be wrapped in COALESCE so a single NULL
+        // column does not collapse the entire hash expression to NULL and cause
+        // changed rows to be silently skipped.
+        $this->assertStringContainsString('COALESCE(', $expr);
+        // Column separator: CHAR(31) (unit separator, 0x1f) prevents cross-column
+        // hash collisions where different value distributions produce the same string.
+        $this->assertStringContainsString('CHAR(31)', $expr);
     }
 
     public function testBuildHashExpressionEmpty(): void
