@@ -3,6 +3,7 @@
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
+use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
@@ -72,75 +73,88 @@ class StreamingMergeDiff
             count($insertPKs), count($deletePKs), count($updatePKs), $table
         ));
 
-        $diffSequence = [];
+        return array_merge(
+            $this->collectInserts($table, $key, $sourceColumns, $insertPKs),
+            $this->collectDeletes($table, $key, $targetColumns, $deletePKs),
+            $this->collectUpdates($table, $key, $commonCols, $hashCols, $updatePKs)
+        );
+    }
 
-        // Inserts (rows in source but not target)
+    private function collectInserts(string $table, array $key, array $sourceColumns, array $insertPKs): array
+    {
+        $result = [];
         foreach (array_chunk($insertPKs, self::BATCH_SIZE) as $batch) {
             $rows = $this->fetchRowsByPK($this->source, $table, $key, $sourceColumns, $batch);
             foreach ($rows as $row) {
-                $diffSequence[] = new InsertData($table, [
+                $result[] = new InsertData($table, [
                     'keys' => Arr::only($row, $key),
                     'diff' => new \Diff\DiffOp\DiffOpAdd($row),
                 ]);
             }
         }
+        return $result;
+    }
 
-        // Deletes (rows in target but not source)
+    private function collectDeletes(string $table, array $key, array $targetColumns, array $deletePKs): array
+    {
+        $result = [];
         foreach (array_chunk($deletePKs, self::BATCH_SIZE) as $batch) {
             $rows = $this->fetchRowsByPK($this->target, $table, $key, $targetColumns, $batch);
             foreach ($rows as $row) {
-                $diffSequence[] = new DeleteData($table, [
+                $result[] = new DeleteData($table, [
                     'keys' => Arr::only($row, $key),
                     'diff' => new \Diff\DiffOp\DiffOpRemove($row),
                 ]);
             }
         }
+        return $result;
+    }
 
-        // Updates (rows in both but with different hashes)
-        if (!empty($updatePKs) && !empty($hashCols)) {
-            foreach (array_chunk($updatePKs, self::BATCH_SIZE) as $batch) {
-                $srcRows = $this->fetchRowsByPK($this->source, $table, $key, $commonCols, $batch);
-                $tgtRows = $this->fetchRowsByPK($this->target, $table, $key, $commonCols, $batch);
-
-                // Index target rows by PK for O(1) lookup
-                $tgtIndex = [];
-                foreach ($tgtRows as $row) {
-                    $pkStr = $this->buildPKString($row, $key);
-                    $tgtIndex[$pkStr] = $row;
-                }
-
-                foreach ($srcRows as $srcRow) {
-                    $pkStr = $this->buildPKString($srcRow, $key);
-                    $tgtRow = $tgtIndex[$pkStr] ?? null;
-                    if ($tgtRow === null) {
-                        continue;
-                    }
-
-                    $diff = [];
-                    $keys = [];
-                    foreach ($hashCols as $col) {
-                        if (in_array($col, $key)) {
-                            $keys[$col] = $srcRow[$col];
-                        }
-                        $sv = (string) ($srcRow[$col] ?? '');
-                        $tv = (string) ($tgtRow[$col] ?? '');
-                        if ($sv !== $tv) {
-                            $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
-                        }
-                    }
-                    foreach ($key as $k) {
-                        if (!isset($keys[$k])) {
-                            $keys[$k] = $srcRow[$k];
-                        }
-                    }
-                    if (!empty($diff)) {
-                        $diffSequence[] = new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
-                    }
+    private function collectUpdates(string $table, array $key, array $commonCols, array $hashCols, array $updatePKs): array
+    {
+        if (empty($updatePKs) || empty($hashCols)) {
+            return [];
+        }
+        $result = [];
+        foreach (array_chunk($updatePKs, self::BATCH_SIZE) as $batch) {
+            $srcRows  = $this->fetchRowsByPK($this->source, $table, $key, $commonCols, $batch);
+            $tgtRows  = $this->fetchRowsByPK($this->target, $table, $key, $commonCols, $batch);
+            $tgtIndex = [];
+            foreach ($tgtRows as $row) {
+                $tgtIndex[$this->buildPKString($row, $key)] = $row;
+            }
+            foreach ($srcRows as $srcRow) {
+                $update = $this->buildSingleUpdate($table, $key, $hashCols, $srcRow, $tgtIndex);
+                if ($update !== null) {
+                    $result[] = $update;
                 }
             }
         }
+        return $result;
+    }
 
-        return $diffSequence;
+    private function buildSingleUpdate(string $table, array $key, array $hashCols, array $srcRow, array $tgtIndex): ?UpdateData
+    {
+        $tgtRow = $tgtIndex[$this->buildPKString($srcRow, $key)] ?? null;
+        if ($tgtRow === null) {
+            return null;
+        }
+        $diff = [];
+        $keys = [];
+        foreach ($hashCols as $col) {
+            if (in_array($col, $key)) {
+                $keys[$col] = $srcRow[$col];
+            }
+            if ((string) ($srcRow[$col] ?? '') !== (string) ($tgtRow[$col] ?? '')) {
+                $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
+            }
+        }
+        foreach ($key as $k) {
+            if (!isset($keys[$k])) {
+                $keys[$k] = $srcRow[$k];
+            }
+        }
+        return empty($diff) ? null : new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
     }
 
     /**
@@ -220,22 +234,12 @@ class StreamingMergeDiff
             return "'empty'";
         }
 
-        switch ($this->driver) {
-            case 'mysql':
-                $cast = array_map(fn($c) => "CAST(`$c` AS CHAR CHARACTER SET utf8)", $columns);
-                return 'SHA2(CONCAT(' . implode(', ', $cast) . '), 256)';
-
-            case 'pgsql':
-                $parts = array_map(fn($c) => "COALESCE(\"$c\"::text, '')", $columns);
-                return "md5(" . implode(" || E'\\x1f' || ", $parts) . ")";
-
-            case 'sqlite':
-                $parts = array_map(fn($c) => "COALESCE(CAST(\"$c\" AS TEXT), '')", $columns);
-                return "hex(" . implode(" || X'1f' || ", $parts) . ")";
-
-            default:
-                throw new \RuntimeException("Unsupported driver: {$this->driver}");
-        }
+        return match ($this->driver) {
+            'mysql'  => 'SHA2(CONCAT(' . implode(', ', array_map(fn($c) => "CAST(`$c` AS CHAR CHARACTER SET utf8)", $columns)) . '), 256)',
+            'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "COALESCE(\"$c\"::text, '')", $columns)) . ")",
+            'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "COALESCE(CAST(\"$c\" AS TEXT), '')", $columns)) . ")",
+            default  => throw new DataException("Unsupported driver: {$this->driver}"),
+        };
     }
 
     /**

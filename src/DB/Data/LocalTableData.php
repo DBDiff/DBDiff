@@ -34,16 +34,17 @@ class LocalTableData {
             return $this->getDiffPgsql($table, $key);
         }
 
-        // MySQL: CHECKSUM TABLE pre-scan to skip identical tables.
+        return $this->getDiffMySQL($table, $key);
+    }
+
+    private function getDiffMySQL($table, $key): array
+    {
         if ($this->skipIfIdentical($table)) {
             Logger::info("Table `$table` is identical (CHECKSUM match) — skipping data diff");
             return [];
         }
 
-        $diffSequence1 = $this->getOldNewDiff($table, $key);
-        $diffSequence2 = $this->getChangeDiff($table, $key);
-
-        return array_merge($diffSequence1, $diffSequence2);
+        return array_merge($this->getOldNewDiff($table, $key), $this->getChangeDiff($table, $key));
     }
 
     /**
