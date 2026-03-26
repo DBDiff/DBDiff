@@ -4,6 +4,9 @@ use DBDiff\Migration\Config\MigrationConfig;
 use DBDiff\Migration\Exceptions\ConfigException;
 use PHPUnit\Framework\TestCase;
 
+// SupabaseProjectDetector is needed for the auto-detection tests
+use DBDiff\Migration\Config\SupabaseProjectDetector;
+
 /**
  * Unit tests for MigrationConfig.
  *
@@ -21,11 +24,31 @@ class MigrationConfigTest extends TestCase
     /** @var string[] Temp files to clean up after each test */
     private array $tmpFiles = [];
 
+    /** @var string[] Temp directories to remove after each test */
+    private array $tmpDirs = [];
+
+    /** Saved cwd — restored in tearDown() so chdir() tests are hermetic. */
+    private string $savedCwd;
+
+    protected function setUp(): void
+    {
+        $this->savedCwd = getcwd();
+    }
+
     protected function tearDown(): void
     {
+        // Restore working directory before cleaning up files/dirs
+        chdir($this->savedCwd);
+
         foreach ($this->tmpFiles as $f) {
             if (file_exists($f)) {
                 unlink($f);
+            }
+        }
+
+        foreach (array_reverse($this->tmpDirs) as $dir) {
+            if (is_dir($dir)) {
+                $this->removeDirRecursive($dir);
             }
         }
     }
@@ -38,6 +61,31 @@ class MigrationConfigTest extends TestCase
         file_put_contents($path, $content);
         $this->tmpFiles[] = $path;
         return $path;
+    }
+
+    /**
+     * Create a temporary project directory that looks like a Supabase project
+     * (has supabase/config.toml).  Returns the project root path.
+     */
+    private function makeSupabaseProject(): string
+    {
+        $root = sys_get_temp_dir() . '/dbdiff_cfg_supa_' . uniqid();
+        mkdir($root . '/supabase', 0755, true);
+        file_put_contents($root . '/supabase/config.toml', "[api]\nport = 54321\n");
+        $this->tmpDirs[] = $root;
+        return $root;
+    }
+
+    private function removeDirRecursive(string $dir): void
+    {
+        foreach (scandir($dir) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            is_dir($path) ? $this->removeDirRecursive($path) : unlink($path);
+        }
+        rmdir($dir);
     }
 
     // ── Defaults ─────────────────────────────────────────────────────────────
@@ -304,5 +352,86 @@ YAML);
         $cfg = new MigrationConfig(null, ['migrations_dir' => '/some/path/']);
 
         $this->assertSame('/some/path', $cfg->resolveMigrationsDir());
+    }
+
+    // ── Supabase auto-detection ───────────────────────────────────────────────
+
+    public function testDefaultMigrationFormatIsNative(): void
+    {
+        $cfg = new MigrationConfig(null, []);
+
+        $this->assertSame('native', $cfg->migrationFormat);
+        $this->assertFalse($cfg->isSupabaseProject);
+    }
+
+    public function testAutoDetectsSupabaseProjectWhenConfigTomlPresent(): void
+    {
+        $root = $this->makeSupabaseProject();
+        chdir($root);
+
+        $cfg = new MigrationConfig(null, []);
+
+        $this->assertTrue($cfg->isSupabaseProject);
+        $this->assertSame($root, $cfg->supabaseProjectRoot);
+        $this->assertStringEndsWith('supabase/migrations', $cfg->migrationsDir);
+        $this->assertSame('supabase', $cfg->migrationFormat);
+    }
+
+    public function testIsSupabaseProjectFalseWithoutConfigToml(): void
+    {
+        // sys_get_temp_dir() most likely has no supabase/config.toml
+        $dir = sys_get_temp_dir() . '/dbdiff_nosupa_' . uniqid();
+        mkdir($dir, 0755, true);
+        $this->tmpDirs[] = $dir;
+        chdir($dir);
+
+        $cfg = new MigrationConfig(null, []);
+
+        $this->assertFalse($cfg->isSupabaseProject);
+        $this->assertSame('native', $cfg->migrationFormat);
+    }
+
+    public function testExplicitMigrationsDirNotClobberedByAutoDetection(): void
+    {
+        $root = $this->makeSupabaseProject();
+        chdir($root);
+
+        $cfg = new MigrationConfig(null, ['migrations_dir' => '/custom/migrations']);
+
+        $this->assertTrue($cfg->isSupabaseProject);
+        // Explicit override must win over auto-detection
+        $this->assertSame('/custom/migrations', $cfg->migrationsDir);
+    }
+
+    public function testExplicitMigrationFormatNotClobberedByAutoDetection(): void
+    {
+        $root = $this->makeSupabaseProject();
+        chdir($root);
+
+        $cfg = new MigrationConfig(null, ['migration_format' => 'native']);
+
+        $this->assertTrue($cfg->isSupabaseProject);
+        // Explicit override must win over auto-detection
+        $this->assertSame('native', $cfg->migrationFormat);
+    }
+
+    public function testMigrationFormatFromYaml(): void
+    {
+        $yaml = "migrations:\n  format: supabase\n";
+        $file = $this->writeTempYaml($yaml);
+
+        $cfg = new MigrationConfig($file, []);
+
+        $this->assertSame('supabase', $cfg->migrationFormat);
+    }
+
+    public function testMigrationFormatNativeFromYaml(): void
+    {
+        $yaml = "migrations:\n  format: native\n";
+        $file = $this->writeTempYaml($yaml);
+
+        $cfg = new MigrationConfig($file, []);
+
+        $this->assertSame('native', $cfg->migrationFormat);
     }
 }

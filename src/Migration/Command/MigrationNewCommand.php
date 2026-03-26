@@ -12,9 +12,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * dbdiff migration:new <name>
  *
- * Scaffolds a new migration file pair in the configured migrations directory:
+ * Scaffolds a new migration file in the configured migrations directory.
+ *
+ * DBDiff native format (default):
  *   {timestamp}_{name}.up.sql
  *   {timestamp}_{name}.down.sql
+ *
+ * Supabase format (--format=supabase, or auto when inside a Supabase project):
+ *   {timestamp}_{name}.sql    (single file — no DOWN concept)
  *
  * Both files are created with a helpful comment header and an empty body.
  * Edit them before running `dbdiff migration:up`.
@@ -29,6 +34,7 @@ class MigrationNewCommand extends Command
         $this
             ->addArgument('name', InputArgument::REQUIRED, 'Short description for the migration (e.g. "create_users_table")')
             ->addOption('migrations-dir', null, InputOption::VALUE_REQUIRED, 'Override the migrations directory')
+            ->addOption('format',         null, InputOption::VALUE_REQUIRED, 'Migration format: native (default) or supabase (plain .sql, no DOWN file)')
             ->addOption('config',         null, InputOption::VALUE_REQUIRED, 'Path to dbdiff.yml');
         $this->addDbUrlOption();
     }
@@ -39,17 +45,35 @@ class MigrationNewCommand extends Command
         $dir    = $input->getOption('migrations-dir') ?? $config->resolveMigrationsDir();
         $name   = $input->getArgument('name');
 
+        // Determine format: explicit flag > config auto-detection > default 'native'
+        $format = $input->getOption('format') ?? $config->migrationFormat;
+
+        if (!in_array($format, ['native', 'supabase'], true)) {
+            $output->writeln("<error>Unknown --format value '{$format}'. Use 'native' or 'supabase'.</error>");
+            return Command::FAILURE;
+        }
+
         try {
-            $file = MigrationFile::scaffold($dir, $name);
+            if ($format === 'supabase') {
+                $file = MigrationFile::scaffoldSupabase($dir, $name);
+                $output->writeln("<info>Created:</info> {$file->upPath}");
+            } else {
+                $file = MigrationFile::scaffold($dir, $name);
+                $output->writeln("<info>Created UP  :</info> {$file->upPath}");
+                $output->writeln("<info>Created DOWN:</info> {$file->downPath}");
+            }
         } catch (\RuntimeException $e) {
             $output->writeln("<error>{$e->getMessage()}</error>");
             return Command::FAILURE;
         }
 
-        $output->writeln("<info>Created UP  :</info> {$file->upPath}");
-        $output->writeln("<info>Created DOWN:</info> {$file->downPath}");
         $output->writeln('');
-        $output->writeln('Edit the files above, then run <comment>dbdiff migration:up</comment> to apply.');
+
+        if ($format === 'supabase') {
+            $output->writeln('Edit the file above, then apply with <comment>dbdiff migration:up</comment> or <comment>supabase db push</comment>.');
+        } else {
+            $output->writeln('Edit the files above, then run <comment>dbdiff migration:up</comment> to apply.');
+        }
 
         return Command::SUCCESS;
     }

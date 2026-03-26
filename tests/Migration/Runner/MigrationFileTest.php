@@ -311,4 +311,143 @@ class MigrationFileTest extends TestCase
 
         $this->assertCount(0, $found);
     }
+
+    // ── scaffoldSupabase() ────────────────────────────────────────────────────
+
+    public function testScaffoldSupabaseCreatesSingleSqlFile(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFileExists($mf->upPath);
+        $this->assertStringEndsWith('.sql', $mf->upPath);
+        $this->assertStringNotContainsString('.up.sql', $mf->upPath);
+    }
+
+    public function testScaffoldSupabaseHasNoDown(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFalse($mf->hasDown());
+        $this->assertNull($mf->getDownSql());
+    }
+
+    public function testScaffoldSupabaseDownPathDoesNotExist(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertFileDoesNotExist($mf->downPath);
+    }
+
+    public function testScaffoldSupabaseFilenameConvention(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('20260101120000_create_users.sql', basename($mf->upPath));
+    }
+
+    public function testScaffoldSupabaseSlugsDescription(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'Add Build Log Table', '20260101120000');
+
+        $this->assertStringContainsString('add_build_log_table', basename($mf->upPath));
+    }
+
+    public function testScaffoldSupabaseCreatesDirectoryIfMissing(): void
+    {
+        $newDir = $this->tmpDir . '/sub/dir';
+        $mf     = MigrationFile::scaffoldSupabase($newDir, 'init', '20260101120000');
+
+        $this->assertFileExists($mf->upPath);
+        // cleanup
+        unlink($mf->upPath);
+        rmdir($newDir);
+        rmdir(dirname($newDir));
+    }
+
+    public function testScaffoldSupabaseThrowsWhenFileAlreadyExists(): void
+    {
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'init', '20260101120000');
+
+        $this->expectException(\DBDiff\Migration\Exceptions\MigrationException::class);
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'init', '20260101120000');
+    }
+
+    public function testScaffoldSupabaseVersionStoredOnObject(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('20260101120000', $mf->version);
+    }
+
+    public function testScaffoldSupabaseDescriptionStoredOnObject(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $this->assertSame('create_users', $mf->description);
+    }
+
+    public function testScaffoldSupabaseFileIsPickedUpByScanDir(): void
+    {
+        MigrationFile::scaffoldSupabase($this->tmpDir, 'create users', '20260101120000');
+
+        $found = MigrationFile::scanDir($this->tmpDir);
+
+        $this->assertCount(1, $found);
+        $this->assertSame('20260101120000', $found[0]->version);
+    }
+
+    // ── lintSupabaseTransaction() ───────────────────────────────────────────
+
+    public function testLintDetectsBeginAndCommit(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'has txn', '20260101120000');
+        file_put_contents($mf->upPath, "BEGIN;\nCREATE TABLE t (id INT);\nCOMMIT;");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(2, $warnings);
+        $this->assertStringContainsString('BEGIN', $warnings[0]);
+        $this->assertStringContainsString('COMMIT', $warnings[1]);
+    }
+
+    public function testLintDetectsRollback(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'has rollback', '20260101120000');
+        file_put_contents($mf->upPath, "CREATE TABLE t (id INT);\nROLLBACK;");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('ROLLBACK', $warnings[0]);
+    }
+
+    public function testLintDetectsStartTransaction(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'start txn', '20260101120000');
+        file_put_contents($mf->upPath, "START TRANSACTION;\nCREATE TABLE t (id INT);");
+
+        $warnings = $mf->lintSupabaseTransaction();
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('START TRANSACTION', $warnings[0]);
+    }
+
+    public function testLintReturnsEmptyForCleanSql(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'clean', '20260101120000');
+        file_put_contents($mf->upPath, 'CREATE TABLE clean (id INT);');
+
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
+
+    public function testLintIgnoresTransactionKeywordsInComments(): void
+    {
+        $mf = MigrationFile::scaffoldSupabase($this->tmpDir, 'commented', '20260101120000');
+        file_put_contents($mf->upPath, "-- BEGIN migration changes\n/* COMMIT later */\nCREATE TABLE t (id INT);");
+
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
+
+    public function testLintReturnsEmptyForMissingFile(): void
+    {
+        $mf = new MigrationFile('20260101120000', 'gone', '/nonexistent/file.sql', '/nonexistent/down.sql');
+        $this->assertSame([], $mf->lintSupabaseTransaction());
+    }
 }
