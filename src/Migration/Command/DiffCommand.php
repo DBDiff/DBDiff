@@ -88,8 +88,8 @@ class DiffCommand extends Command
             // Apply PHP memory limit. The entry point (dbdiff / dbdiff.php) already
             // sets a 1G default; this lets the YAML config or --memory-limit flag
             // raise or lower it per-run without needing access to php.ini.
-            if (!empty($params->memory_limit)) {
-                ini_set('memory_limit', $params->memory_limit);
+            if (!empty($params->memoryLimit)) {
+                ini_set('memory_limit', $params->memoryLimit);
             }
 
             // Pre-populate so internal code (DBSchema, TableSchema, etc.)
@@ -126,7 +126,7 @@ class DiffCommand extends Command
         $params->template    = $input->getOption('template') ?? '';
         $params->config      = $input->getOption('config');
         $params->description   = $input->getOption('description') ?: '';
-        $params->memory_limit  = $input->getOption('memory-limit');
+        $params->memoryLimit   = $input->getOption('memory-limit');
 
         return $params;
     }
@@ -340,14 +340,20 @@ class DiffCommand extends Command
 
         $yaml = \Symfony\Component\Yaml\Yaml::parseFile($configFile) ?? [];
 
+        // Map YAML snake_case keys to camelCase param properties where they differ.
+        $keyMap = ['memory_limit' => 'memoryLimit'];
+
         foreach ($yaml as $key => $value) {
             if (str_contains($key, '-')) {
                 [$section, $field] = explode('-', $key, 2);
                 $arr = (array) ($params->$section ?? []);
                 $arr[$field] = $value;
                 $params->$section = $arr;
-            } elseif (empty($params->$key)) {
-                $params->$key = $value;
+            } else {
+                $prop = $keyMap[$key] ?? $key;
+                if (empty($params->$prop)) {
+                    $params->$prop = $value;
+                }
             }
         }
     }

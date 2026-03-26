@@ -72,7 +72,7 @@ class DefaultParams {
      Accepts any PHP shorthand: 512M, 1G, 2G, -1 (unlimited), etc.
      Set to null to leave the system php.ini value unchanged.
     */
-    public ?string $memory_limit = null;
+    public ?string $memoryLimit = null;
 
     /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
