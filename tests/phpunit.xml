@@ -11,8 +11,8 @@
          displayDetailsOnTestsThatTriggerNotices="true"
          displayDetailsOnTestsThatTriggerWarnings="true"
          failOnDeprecation="false"
-         failOnNotice="false"
-         failOnWarning="false"
+         failOnNotice="true"
+         failOnWarning="true"
 >
     <testsuites>
         <testsuite name="Unit">

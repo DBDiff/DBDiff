@@ -370,9 +370,9 @@ jobs:
           \$url = 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/postgres';
           \$parsed = \DBDiff\Migration\Config\DsnParser::parse(\$url);
           echo 'Driver:  ' . \$parsed['driver'] . PHP_EOL;
-          echo 'Host:    ' . \$parsed['server']['host'] . PHP_EOL;
-          echo 'Port:    ' . \$parsed['server']['port'] . PHP_EOL;
-          echo 'DB:      ' . \$parsed['db'] . PHP_EOL;
+          echo 'Host:    ' . \$parsed['host'] . PHP_EOL;
+          echo 'Port:    ' . \$parsed['port'] . PHP_EOL;
+          echo 'DB:      ' . \$parsed['name'] . PHP_EOL;
 
           // Verify actual PDO connection
           \$dsn = 'pgsql:host=127.0.0.1;port=5432;dbname=postgres';

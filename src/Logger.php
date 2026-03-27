@@ -3,9 +3,8 @@
 
 class Logger {
     
-    public static function error($msg, $die=false) {
+    public static function error($msg) {
         echo "\033[0;31m✖ ".$msg."\033[0m\n";
-        if ($die) die();
     }
 
     public static function success($msg) {

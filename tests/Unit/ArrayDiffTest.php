@@ -14,6 +14,11 @@ use Diff\DiffOp\DiffOpRemove;
  */
 class ArrayDiffTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        \DBDiff\Params\ParamsFactory::reset();
+    }
+
     /**
      * Minimal stub that mimics TableIterator but returns plain arrays.
      */

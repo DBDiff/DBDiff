@@ -11,6 +11,13 @@ class ArrayDiff {
 
     public static $size = 1000;
 
+    protected array $key;
+    protected $dbiterator1;
+    protected $dbiterator2;
+    protected array $sourceBucket;
+    protected array $targetBucket;
+    protected array $diffBucket;
+
     function __construct($key, $dbiterator1, $dbiterator2) {
         $this->key = $key;
         $this->dbiterator1 = $dbiterator1;
@@ -69,6 +76,7 @@ class ArrayDiff {
                     }
                     $entry1 = null;
                     $entry2 = null;
+                    break; // key matched — no further comparisons needed for this source row
                 }
             }
         }

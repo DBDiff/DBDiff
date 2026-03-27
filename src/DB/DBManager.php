@@ -30,6 +30,10 @@ class DBManager {
         $this->driver  = $params->driver ?? 'mysql';
         $this->adapter = AdapterFactory::create($this->driver);
 
+        if (!isset($params->input) || !is_iterable($params->input)) {
+            throw new DBException('Database connection parameters not configured. Provide server1/server2 or --server1-url/--server2-url.');
+        }
+
         foreach ($params->input as $key => $input) {
             if ($key === 'kind') {
                 continue;
@@ -52,6 +56,12 @@ class DBManager {
     }
 
     public function testResources($params): void {
+        if (!isset($params->input['source'])) {
+            throw new DBException('Database connection [source] not configured.');
+        }
+        if (!isset($params->input['target'])) {
+            throw new DBException('Database connection [target] not configured.');
+        }
         $this->testResource($params->input['source'], 'source');
         $this->testResource($params->input['target'], 'target');
     }
