@@ -113,17 +113,36 @@ class DBDiffComprehensiveSQLiteTest extends AbstractComprehensiveTest
      */
     private function parseSqlStatements(string $sql): array
     {
-        $lines      = explode("\n", $sql);
-        $stripped   = [];
+        $lines    = explode("\n", $sql);
+        $stripped = [];
         foreach ($lines as $line) {
             $clean = preg_replace('/--.*$/', '', $line);
             if (trim($clean) !== '') {
                 $stripped[] = $clean;
             }
         }
-        return array_filter(
-            explode(';', implode("\n", $stripped)),
-            static fn(string $s): bool => trim($s) !== ''
-        );
+
+        // Reassemble, then split respecting BEGIN…END blocks
+        $body       = implode("\n", $stripped);
+        $statements = [];
+        $current    = '';
+        $depth      = 0;
+
+        foreach (preg_split('/;/', $body) as $fragment) {
+            $current .= ($current !== '' ? ';' : '') . $fragment;
+            $depth   += preg_match_all('/\bBEGIN\b/i', $fragment);
+            $depth   -= preg_match_all('/\bEND\b/i', $fragment);
+            if ($depth <= 0) {
+                if (trim($current) !== '') {
+                    $statements[] = $current;
+                }
+                $current = '';
+                $depth   = 0;
+            }
+        }
+        if (trim($current) !== '') {
+            $statements[] = $current;
+        }
+        return $statements;
     }
 }

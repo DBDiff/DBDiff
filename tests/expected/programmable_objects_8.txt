@@ -1,0 +1,22 @@
+#---------- UP ----------
+DROP VIEW IF EXISTS `old_report`;
+DROP TRIGGER IF EXISTS `trg_old_audit`;
+DROP PROCEDURE IF EXISTS `cleanup_products`;
+CREATE VIEW `product_names` AS select `products`.`id` AS `id`,`products`.`name` AS `name` from `products`;
+DROP VIEW IF EXISTS `expensive_products`;
+CREATE VIEW `expensive_products` AS select `products`.`id` AS `id`,`products`.`name` AS `name`,`products`.`price` AS `price` from `products` where (`products`.`price` > 10);
+CREATE TRIGGER `trg_products_updated` BEFORE UPDATE ON `products` FOR EACH ROW SET NEW.`updated_at` = NOW();
+CREATE FUNCTION `get_product_count`() RETURNS int
+    READS SQL DATA
+    DETERMINISTIC
+RETURN (SELECT COUNT(*) FROM `products`);
+#---------- DOWN ----------
+CREATE PROCEDURE `cleanup_products`()
+DELETE FROM `products` WHERE `price` = 0;
+DROP FUNCTION IF EXISTS `get_product_count`;
+CREATE TRIGGER `trg_old_audit` AFTER DELETE ON `products` FOR EACH ROW SET @dummy = 1;
+DROP TRIGGER IF EXISTS `trg_products_updated`;
+CREATE VIEW `old_report` AS select `products`.`id` AS `id`,`products`.`name` AS `name` from `products` where (`products`.`price` < 5);
+DROP VIEW IF EXISTS `expensive_products`;
+CREATE VIEW `expensive_products` AS select `products`.`id` AS `id`,`products`.`name` AS `name` from `products` where (`products`.`price` > 50);
+DROP VIEW IF EXISTS `product_names`;

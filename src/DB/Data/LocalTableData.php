@@ -4,6 +4,7 @@ use DBDiff\Params\ParamsFactory;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
+use DBDiff\DB\Data\BinaryValue;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use Illuminate\Database\Events\StatementPrepared;
@@ -298,8 +299,13 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        $wrapConvert = function($arr, $p) {
-            return array_map(function($el) use ($p) {
+        $binaryCols = $this->manager->getBinaryColumns('source', $table);
+
+        $wrapConvert = function($arr, $p) use ($binaryCols) {
+            return array_map(function($el) use ($p, $binaryCols) {
+                if (in_array($el, $binaryCols)) {
+                    return "HEX(`{$p}`.`{$el}`) as `{$el}`";
+                }
                 return "CONVERT(`{$p}`.`{$el}` USING utf8) as `{$el}`";
             }, $arr);
         };
@@ -329,6 +335,9 @@ class LocalTableData {
             LEFT JOIN `{$db1}`.`{$table}` as a ON $keyCols WHERE $keyNulls1
         ");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
+
+        $this->wrapBinaryValues($result1, $binaryCols);
+        $this->wrapBinaryValues($result2, $binaryCols);
 
         foreach ($result1 as $row) {
             $diffSequence[] = new InsertData($table, [
@@ -361,15 +370,23 @@ class LocalTableData {
             $columns1 = array_diff($columns1, $params->fieldsToIgnore[$table]);
             $columns2 = array_diff($columns2, $params->fieldsToIgnore[$table]);
         }
-        
-        $wrapAs = function($arr, $p1, $p2) {
-            return array_map(function($el) use ($p1, $p2) {
+
+        $binaryCols = $this->manager->getBinaryColumns('source', $table);
+
+        $wrapAs = function($arr, $p1, $p2) use ($binaryCols) {
+            return array_map(function($el) use ($p1, $p2, $binaryCols) {
+                if (in_array($el, $binaryCols)) {
+                    return "HEX(`{$p1}`.`{$el}`) as `{$p2}{$el}`";
+                }
                 return "`{$p1}`.`{$el}` as `{$p2}{$el}`";
             }, $arr);
         };
 
-        $wrapCast = function($arr, $p) {
-            return array_map(function($el) use ($p) {
+        $wrapCast = function($arr, $p) use ($binaryCols) {
+            return array_map(function($el) use ($p, $binaryCols) {
+                if (in_array($el, $binaryCols)) {
+                    return "HEX(IFNULL(`{$p}`.`{$el}`, ''))";
+                }
                 return "CAST(IFNULL(`{$p}`.`{$el}`, '\\0') AS CHAR CHARACTER SET utf8)";
             }, $arr);
         };
@@ -403,7 +420,9 @@ class LocalTableData {
                 ON $keyCols
             ) t WHERE hash1 <> hash2 OR nullmap1 <> nullmap2");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
-        
+
+        $this->wrapBinaryValuesChangeDiff($result, $binaryCols);
+
         foreach ($result as $row) {
             $diff = []; $keys = [];
             foreach ($row as $k => $value) {
@@ -431,6 +450,39 @@ class LocalTableData {
         }
 
         return $diffSequence;
+    }
+
+    private function wrapBinaryValues(array &$rows, array $binaryCols): void
+    {
+        if (empty($binaryCols)) {
+            return;
+        }
+        foreach ($rows as &$row) {
+            foreach ($binaryCols as $col) {
+                if (isset($row[$col]) && $row[$col] !== null) {
+                    $row[$col] = new BinaryValue($row[$col]);
+                }
+            }
+        }
+    }
+
+    private function wrapBinaryValuesChangeDiff(array &$rows, array $binaryCols): void
+    {
+        if (empty($binaryCols)) {
+            return;
+        }
+        foreach ($rows as &$row) {
+            foreach ($binaryCols as $col) {
+                $sKey = 's_' . $col;
+                $tKey = 't_' . $col;
+                if (isset($row[$sKey]) && $row[$sKey] !== null) {
+                    $row[$sKey] = new BinaryValue($row[$sKey]);
+                }
+                if (isset($row[$tKey]) && $row[$tKey] !== null) {
+                    $row[$tKey] = new BinaryValue($row[$tKey]);
+                }
+            }
+        }
     }
 
     private function setFetchMode($fetchMode = \PDO::FETCH_ASSOC)

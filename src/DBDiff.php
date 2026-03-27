@@ -3,7 +3,6 @@
 use DBDiff\Params\ParamsFactory;
 use DBDiff\DB\DiffCalculator;
 use DBDiff\SQLGen\SQLGenerator;
-use DBDiff\Exceptions\BaseException;
 use DBDiff\Logger;
 use DBDiff\Templater;
 
@@ -38,12 +37,8 @@ class DBDiff {
             Logger::success("Completed");
 
         } catch (\Exception $e) {
-            if ($e instanceof BaseException) {
-                Logger::error($e->getMessage(), true);
-            } else {
-                Logger::error("Unexpected error: " . $e->getMessage());
-                throw $e;
-            }
+            Logger::error($e->getMessage());
+            throw $e;
         }
     }
 

@@ -262,14 +262,13 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
     }
 
     /**
-     * Bug #6 regression: views must never appear in the diff output.
+     * Bug #6 regression: views must not appear as TABLE diffs.
      *
      * The source DB contains a VIEW `active_products` alongside a `products`
-     * table.  After the fix, `getTables()` excludes views so only the real
-     * schema differences between the `products` tables are emitted — no
-     * DROP TABLE / CREATE TABLE for the view.
+     * table.  Views are now diffed as proper CREATE/DROP VIEW operations.
+     * They must never appear as DROP TABLE / CREATE TABLE operations.
      */
-    public function testViewsExcludedFromDiff(): void
+    public function testViewsNotDiffedAsTables(): void
     {
         $this->loadFixture('views_ignored');
         $output = $this->runDBDiff(array_merge(
@@ -277,11 +276,11 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
             ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
         ));
 
-        // Core regression: the view name must never appear in any generated SQL.
-        $this->assertStringNotContainsString(
-            'active_products',
+        // The view must NOT appear as a table operation.
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?:CREATE|DROP)\s+TABLE[^;]*active_products/i',
             $output,
-            'Bug #6 regression: views must not appear in the diff output'
+            'Bug #6 regression: views must not appear as TABLE operations'
         );
         // The real table difference (price column) should still be detected.
         $this->assertStringContainsString(
@@ -289,6 +288,39 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
             $output,
             'The schema diff for the base table must still be generated'
         );
+    }
+
+    /**
+     * Programmable objects: views, triggers, stored routines.
+     *
+     * Source has objects the target lacks (→ Create), target has objects
+     * the source lacks (→ Drop), and one view exists in both with a
+     * different definition (→ Alter).
+     */
+    public function testProgrammableObjectsDiff(): void
+    {
+        $this->loadFixture('programmable_objects');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+        $this->assertExpectedOutput('programmable_objects', $output);
+
+        // Views
+        $this->assertStringContainsString('product_names', $output, 'CreateView for product_names');
+        $this->assertStringContainsString('expensive_products', $output, 'AlterView for expensive_products');
+        $this->assertStringContainsString('old_report', $output, 'DropView for old_report');
+
+        // View SQL must use VIEW keyword (not TABLE)
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?:CREATE|DROP)\s+TABLE[^;]*(?:product_names|expensive_products|old_report)/i',
+            $output,
+            'Views must use VIEW keyword, not TABLE'
+        );
+
+        // Triggers
+        $this->assertStringContainsString('trg_products_updated', $output, 'CreateTrigger for trg_products_updated');
+        $this->assertStringContainsString('trg_old_audit', $output, 'DropTrigger for trg_old_audit');
     }
 
     /**

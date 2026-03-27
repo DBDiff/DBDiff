@@ -1,0 +1,71 @@
+SQL_UP = u"""
+CREATE TABLE `cc` (
+  `id` int NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'e';
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 't';
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'x';
+DELETE FROM `zz` WHERE `id` = '1' AND `name` = 'name';
+DROP TABLE `zz`;
+ALTER TABLE `aa` DEFAULT COLLATE latin1_swedish_ci;
+ALTER TABLE `asas` DEFAULT COLLATE latin1_spanish_ci;
+ALTER TABLE `bb` DEFAULT COLLATE latin1_swedish_ci;
+ALTER TABLE `aa` ADD `as` int NOT NULL;
+ALTER TABLE `aa` ADD `qw` int NOT NULL;
+ALTER TABLE `bb` ADD `jj` int NOT NULL;
+ALTER TABLE `aa` CHANGE `name` `name` varchar(255) NOT NULL;
+ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) DEFAULT NULL;
+ALTER TABLE `aa` DROP `zx`;
+ALTER TABLE `aa` ADD KEY `as` (`as`);
+ALTER TABLE `aa` ADD UNIQUE KEY `name` (`name`);
+ALTER TABLE `bb` ADD PRIMARY KEY (`id`);
+ALTER TABLE `aa` DROP INDEX `id`;
+ALTER TABLE `aa` ADD PRIMARY KEY (`id`);
+ALTER TABLE `aa` DROP INDEX `namekey`;
+ALTER TABLE `aa` DROP INDEX `pass`;
+ALTER TABLE `aa` ADD CONSTRAINT `as` FOREIGN KEY (`as`) REFERENCES `bb` (`id`);
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','c','d');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','v','w');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','x','y');
+INSERT INTO `cc` (`id`) VALUES('11');
+UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
+"""
+SQL_DOWN = u"""
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'c';
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'v';
+DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'x';
+DELETE FROM `cc` WHERE `id` = '11';
+DROP TABLE `cc`;
+CREATE TABLE `zz` (
+  `id` int NOT NULL,
+  `name` varchar(13) COLLATE latin1_german1_ci NOT NULL DEFAULT 'lol',
+  `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `bool` tinyint(1) NOT NULL,
+  PRIMARY KEY (`id`,`name`),
+  UNIQUE KEY `name` (`name`,`time`),
+  KEY `time` (`time`,`bool`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+ALTER TABLE `aa` DEFAULT COLLATE latin1_spanish_ci;
+ALTER TABLE `asas` DEFAULT COLLATE latin1_bin;
+ALTER TABLE `bb` DEFAULT COLLATE latin1_bin;
+ALTER TABLE `aa` DROP `as`;
+ALTER TABLE `aa` DROP `qw`;
+ALTER TABLE `bb` DROP `jj`;
+ALTER TABLE `aa` CHANGE `name` `name` varchar(255) COLLATE latin1_swedish_ci NOT NULL DEFAULT 'aa';
+ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) COLLATE latin1_swedish_ci NOT NULL;
+ALTER TABLE `aa` ADD `zx` int NOT NULL;
+ALTER TABLE `aa` DROP INDEX `as`;
+ALTER TABLE `aa` DROP INDEX `name`;
+ALTER TABLE `bb` DROP INDEX `id`;
+ALTER TABLE `aa` DROP INDEX `id`;
+ALTER TABLE `aa` ADD PRIMARY KEY (`id`,`name`);
+ALTER TABLE `aa` ADD UNIQUE KEY `namekey` (`name`,`pass`,`zx`);
+ALTER TABLE `aa` ADD UNIQUE KEY `pass` (`pass`);
+ALTER TABLE `aa` DROP CONSTRAINT `as`;
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','e','r');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','t','y');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','x','d');
+INSERT INTO `zz` (`id`,`name`,`time`,`bool`) VALUES('1','name','2015-05-10 17:54:05','1');
+UPDATE `asas` SET `lastname` = 'b' WHERE `id` = '1' AND `firstname` = 'a';
+"""

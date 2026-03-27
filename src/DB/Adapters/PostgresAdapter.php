@@ -102,6 +102,77 @@ class PostgresAdapter implements DBAdapterInterface {
         return null;
     }
 
+    public function getBinaryColumns(Connection $connection, string $table): array {
+        // PostgreSQL bytea columns are rare in typical use; the streaming-merge
+        // path handles them via ::text cast. Returning [] for now.
+        return [];
+    }
+
+    public function getForeignKeyMap(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT tc.table_name, ccu.table_name AS referenced_table
+             FROM information_schema.table_constraints tc
+             JOIN information_schema.constraint_column_usage ccu
+               ON tc.constraint_name = ccu.constraint_name
+              AND tc.constraint_schema = ccu.constraint_schema
+             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'"
+        );
+        $map = [];
+        foreach ($result as $row) {
+            $map[$row['table_name']][] = $row['referenced_table'];
+        }
+        return empty($map) ? $map : array_map(fn($p) => array_values(array_unique($p)), $map);
+    }
+
+    public function getViews(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT viewname, definition FROM pg_views WHERE schemaname = 'public' ORDER BY viewname"
+        );
+        $views = [];
+        foreach ($result as $row) {
+            $body = rtrim(trim($row['definition']), ';');
+            $views[$row['viewname']] = 'CREATE VIEW "' . $row['viewname'] . '" AS ' . $body;
+        }
+        return $views;
+    }
+
+    public function getTriggers(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT t.tgname AS name, c.relname AS table_name,
+                    pg_get_triggerdef(t.oid) AS definition
+             FROM pg_trigger t
+             JOIN pg_class c ON t.tgrelid = c.oid
+             JOIN pg_namespace n ON c.relnamespace = n.oid
+             WHERE NOT t.tgisinternal
+               AND n.nspname = 'public'
+             ORDER BY t.tgname"
+        );
+        $triggers = [];
+        foreach ($result as $row) {
+            $triggers[$row['name']] = [
+                'definition' => $row['definition'],
+                'table'      => $row['table_name'],
+            ];
+        }
+        return $triggers;
+    }
+
+    public function getRoutines(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT p.proname AS name, pg_get_functiondef(p.oid) AS definition
+             FROM pg_proc p
+             JOIN pg_namespace n ON p.pronamespace = n.oid
+             WHERE n.nspname = 'public'
+               AND p.prokind IN ('f', 'p')
+             ORDER BY p.proname"
+        );
+        $routines = [];
+        foreach ($result as $row) {
+            $routines[$row['name']] = rtrim(trim($row['definition']), ';');
+        }
+        return $routines;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

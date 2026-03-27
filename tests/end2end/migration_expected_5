@@ -28,10 +28,10 @@ ALTER TABLE `aa` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` DROP INDEX `namekey`;
 ALTER TABLE `aa` DROP INDEX `pass`;
 ALTER TABLE `aa` ADD CONSTRAINT `as` FOREIGN KEY (`as`) REFERENCES `bb` (`id`);
-INSERT INTO `asas` VALUES('2','c','d');
-INSERT INTO `asas` VALUES('3','x','y');
-INSERT INTO `asas` VALUES('4','v','w');
-INSERT INTO `cc` VALUES('11');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('2','c','d');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('3','x','y');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('4','v','w');
+INSERT INTO `cc` (`id`) VALUES('11');
 UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
 """
 SQL_DOWN = u"""
@@ -69,9 +69,9 @@ ALTER TABLE `aa` ADD PRIMARY KEY (`id`,`name`);
 ALTER TABLE `aa` ADD UNIQUE KEY `namekey` (`name`,`pass`,`zx`);
 ALTER TABLE `aa` ADD UNIQUE KEY `pass` (`pass`);
 ALTER TABLE `aa` DROP CONSTRAINT `as`;
-INSERT INTO `asas` VALUES('2','x','d');
-INSERT INTO `asas` VALUES('6','t','y');
-INSERT INTO `asas` VALUES('7','e','r');
-INSERT INTO `zz` VALUES('1','name','2015-05-10 17:54:05','1');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('2','x','d');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('6','t','y');
+INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('7','e','r');
+INSERT INTO `zz` (`id`,`name`,`time`,`bool`) VALUES('1','name','2015-05-10 17:54:05','1');
 UPDATE `asas` SET `lastname` = 'b' WHERE `id` = '1' AND `firstname` = 'a';
 """

@@ -76,6 +76,53 @@ class SQLiteAdapter implements DBAdapterInterface {
         return null;
     }
 
+    public function getBinaryColumns(Connection $connection, string $table): array {
+        // SQLite stores all data as text; no binary-encoding issue.
+        return [];
+    }
+
+    public function getForeignKeyMap(Connection $connection): array {
+        $tables = $this->getTables($connection);
+        $map = [];
+        foreach ($tables as $table) {
+            $fks = $connection->select("PRAGMA foreign_key_list(\"$table\")");
+            foreach ($fks as $fk) {
+                $map[$table][] = $fk['table'];
+            }
+        }
+        return empty($map) ? $map : array_map(fn($p) => array_values(array_unique($p)), $map);
+    }
+
+    public function getViews(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"
+        );
+        $views = [];
+        foreach ($result as $row) {
+            $views[$row['name']] = $row['sql'];
+        }
+        return $views;
+    }
+
+    public function getTriggers(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT name, sql, tbl_name FROM sqlite_master WHERE type = 'trigger' ORDER BY name"
+        );
+        $triggers = [];
+        foreach ($result as $row) {
+            $triggers[$row['name']] = [
+                'definition' => $row['sql'],
+                'table'      => $row['tbl_name'],
+            ];
+        }
+        return $triggers;
+    }
+
+    public function getRoutines(Connection $connection): array {
+        // SQLite has no stored procedures or functions.
+        return [];
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

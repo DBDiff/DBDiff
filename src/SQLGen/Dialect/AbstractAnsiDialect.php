@@ -37,6 +37,10 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
         return "DROP INDEX $k;";
     }
 
+    public function dropTrigger(string $trigger, string $table): string {
+        return "DROP TRIGGER IF EXISTS " . $this->quote($trigger) . ";";
+    }
+
     public function addColumn(string $table, string $colDef): string {
         $t = $this->quote($table);
         return "ALTER TABLE $t ADD COLUMN $colDef;";

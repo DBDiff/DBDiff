@@ -24,6 +24,14 @@ interface SQLDialectInterface {
     public function dropIndex(string $table, string $key): string;
 
     /**
+     * DROP TRIGGER statement.
+     * MySQL:          DROP TRIGGER IF EXISTS `trigger`
+     * Postgres:       DROP TRIGGER IF EXISTS "trigger" ON "table"
+     * SQLite:         DROP TRIGGER IF EXISTS "trigger"
+     */
+    public function dropTrigger(string $trigger, string $table): string;
+
+    /**
      * ADD COLUMN statement.
      * $colDef is the full column DDL fragment (already quoted), e.g.
      *   MySQL:         `col` varchar(255) NOT NULL

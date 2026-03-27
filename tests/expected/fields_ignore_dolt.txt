@@ -1,0 +1,4 @@
+#---------- UP ----------
+ALTER TABLE `test_table` DROP `new_important_field`;
+#---------- DOWN ----------
+ALTER TABLE `test_table` ADD `new_important_field` varchar(255) DEFAULT 'new_value';

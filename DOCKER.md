@@ -111,11 +111,14 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 - `cli-php84-mysql93` - PHP 8.4 with MySQL 9.3
 - `cli-php83-postgres16` - PHP 8.3 with PostgreSQL 16
 - `cli-php84-postgres16` - PHP 8.4 with PostgreSQL 16
+- `cli-php83-dolt` - PHP 8.3 with Dolt (MySQL-compatible)
+- `cli-php84-dolt` - PHP 8.4 with Dolt (MySQL-compatible)
 
 ### Database Services
 - `db-mysql80` - MySQL 8.0 (accessible on localhost:3306)
 - `db-mysql84` - MySQL 8.4 (accessible on localhost:3307)
 - `db-mysql93` - MySQL 9.3 (accessible on localhost:3308)
+- `db-dolt` - Dolt (accessible on localhost:3310)
 - `db-postgres16` - PostgreSQL 16 (accessible on localhost:5432)
 
 ### PHPMyAdmin Services
