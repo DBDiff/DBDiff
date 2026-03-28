@@ -378,6 +378,7 @@ jobs:
             else
               echo "Publishing ${pkg_dir} ..."
               npm publish "${pkg_dir}" --access public --provenance
+              sleep 5
             fi
           done
         env:
