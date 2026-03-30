@@ -1,17 +1,21 @@
 #!/bin/bash
 # 
-# DBDiff Pull Request Manager
+# DBDiff Pull Request & Issue Manager
 # 
 # Usage: ./scripts/manage_prs.sh [--apply] [--auto-close] [--resolve-conflicts]
+#        ./scripts/manage_prs.sh --batch-close <file> [--apply]
 # 
+# Modes:
+#   (default)              Iterate open PRs, update branches, merge if ready
+#   --batch-close <file>   Close issues & PRs listed in <file> with comments
+#
+# Batch file format (one per line, # comments and blank lines ignored):
+#   issue|<number>|<comment>
+#   pr|<number>|<comment>
+#
 # Dependencies: gh (GitHub CLI), jq
 #
-# This script is designed to be defensive and robust. It will:
-# 1. Iterate through open PRs.
-# 2. Attempt to update branches (handling API errors gracefully).
-# 3. Check statuses (handling confusing JSON structures safely).
-# 4. Merge if conditions are met.
-# 5. Provide a detailed summary at the end.
+# Dry-runs by default. Pass --apply to execute changes.
 
 set -o pipefail
 
@@ -21,11 +25,15 @@ set -o pipefail
 DRY_RUN=true
 AUTO_CLOSE=false
 RESOLVE_CONFLICTS=false
+BATCH_CLOSE_FILE=""
 TOTAL_PRS=0
 UPDATED_PRS=0
 MERGED_PRS=0
 SKIPPED_PRS=0
 FAILED_PRS=0
+CLOSED_ISSUES=0
+CLOSED_PRS=0
+FAILED_CLOSES=0
 ERRORS=()
 
 # -----------------------------------------------------------------------------
@@ -49,11 +57,17 @@ print_summary() {
     echo "========================================================"
     echo "               EXECUTION SUMMARY                        "
     echo "========================================================"
-    printf "Total PRs Found:      %d\n" "$TOTAL_PRS"
-    printf "Branches Updated:     %d\n" "$UPDATED_PRS"
-    printf "PRs Merged:           %d\n" "$MERGED_PRS"
-    printf "Skipped (No Action):  %d\n" "$SKIPPED_PRS"
-    printf "Failed/Errors:        %d\n" "$FAILED_PRS"
+    if [ -n "$BATCH_CLOSE_FILE" ]; then
+        printf "Issues Closed:        %d\n" "$CLOSED_ISSUES"
+        printf "PRs Closed:           %d\n" "$CLOSED_PRS"
+        printf "Failed/Errors:        %d\n" "$FAILED_CLOSES"
+    else
+        printf "Total PRs Found:      %d\n" "$TOTAL_PRS"
+        printf "Branches Updated:     %d\n" "$UPDATED_PRS"
+        printf "PRs Merged:           %d\n" "$MERGED_PRS"
+        printf "Skipped (No Action):  %d\n" "$SKIPPED_PRS"
+        printf "Failed/Errors:        %d\n" "$FAILED_PRS"
+    fi
     echo "========================================================"
     
     if [ ${#ERRORS[@]} -gt 0 ]; then
@@ -93,6 +107,18 @@ while [[ "$#" -gt 0 ]]; do
         --apply) DRY_RUN=false ;;
         --auto-close) AUTO_CLOSE=true ;;
         --resolve-conflicts) RESOLVE_CONFLICTS=true ;;
+        --batch-close)
+            shift
+            if [[ -z "$1" || "$1" == --* ]]; then
+                echo "Error: --batch-close requires a file path argument."
+                exit 1
+            fi
+            BATCH_CLOSE_FILE="$1"
+            if [[ ! -f "$BATCH_CLOSE_FILE" ]]; then
+                echo "Error: batch file not found: $BATCH_CLOSE_FILE"
+                exit 1
+            fi
+            ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -105,7 +131,97 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Main Execution
+# Batch Close — close issues & PRs from an external file
+# -----------------------------------------------------------------------------
+# File format (one entry per line, # comments and blank lines ignored):
+#   issue|<number>|<comment>
+#   pr|<number>|<comment>
+# -----------------------------------------------------------------------------
+
+batch_close() {
+    local file="$1"
+    local issue_count=0
+    local pr_count=0
+
+    # Count entries
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        local type="${line%%|*}"
+        case "$type" in
+            issue) issue_count=$((issue_count+1)) ;;
+            pr)    pr_count=$((pr_count+1)) ;;
+        esac
+    done < "$file"
+
+    log "Batch Close — file: $file"
+    log "Issues to close: $issue_count"
+    log "PRs to close:    $pr_count"
+    echo ""
+
+    # Process entries
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+
+        local type="${line%%|*}"
+        local rest="${line#*|}"
+        local num="${rest%%|*}"
+        local comment="${rest#*|}"
+
+        echo "--------------------------------------------------------"
+
+        case "$type" in
+            issue)
+                log "Issue #$num"
+
+                if [ "$DRY_RUN" = true ]; then
+                    echo "   [DRY-RUN] Would close with comment:"
+                    echo "   ${comment:0:120}..."
+                else
+                    if gh issue close "$num" --comment "$comment" --reason completed 2>/dev/null; then
+                        log "Closed issue #$num"
+                        CLOSED_ISSUES=$((CLOSED_ISSUES+1))
+                    else
+                        error_log "Failed to close issue #$num"
+                        FAILED_CLOSES=$((FAILED_CLOSES+1))
+                    fi
+                    sleep 1
+                fi
+                ;;
+            pr)
+                log "PR #$num"
+
+                if [ "$DRY_RUN" = true ]; then
+                    echo "   [DRY-RUN] Would close with comment:"
+                    echo "   ${comment:0:120}..."
+                else
+                    if gh pr close "$num" --comment "$comment" 2>/dev/null; then
+                        log "Closed PR #$num"
+                        CLOSED_PRS=$((CLOSED_PRS+1))
+                    else
+                        error_log "Failed to close PR #$num"
+                        FAILED_CLOSES=$((FAILED_CLOSES+1))
+                    fi
+                    sleep 1
+                fi
+                ;;
+            *)
+                warn "Unknown type '$type' on line: $line"
+                ;;
+        esac
+    done < "$file"
+}
+
+# -----------------------------------------------------------------------------
+# Mode dispatch
+# -----------------------------------------------------------------------------
+
+if [ -n "$BATCH_CLOSE_FILE" ]; then
+    batch_close "$BATCH_CLOSE_FILE"
+    exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# Main Execution — PR management (original behaviour)
 # -----------------------------------------------------------------------------
 
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
