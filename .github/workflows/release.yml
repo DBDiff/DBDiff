@@ -134,8 +134,8 @@ jobs:
             artifact: dbdiff-darwin-arm64
 
           # ── Windows ───────────────────────────────────────────────────────
-          # win32-arm64 excluded: SPC v2.8.2 hard-codes phpsdk-vs17-x64.bat
-          # which passes "x64_amd64" to vcvarsall.bat — invalid on ARM64 hosts.
+          # win32-arm64 excluded: SPC hard-codes phpsdk-vs17-x64.bat which
+          # passes "x64_amd64" to vcvarsall.bat — invalid on ARM64 hosts.
           # It also always downloads postgresql-16-windows-x64-binaries.zip
           # regardless of runner arch.  Re-add once SPC gains ARM64 support.
           - target:   win32-x64
@@ -216,17 +216,11 @@ jobs:
           # directories and any missing prerequisites are auto-installed.
           .\spc.exe doctor --auto-fix
           # Pre-create the source tree that SPC extracts PHP into.
-          # SPC v2.8.2 uses `7za -so | tar -C source\<name>` which requires the
+          # SPC uses `7za -so | tar -C source\<name>` which requires the
           # target directory to already exist — failing otherwise with
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
-          # Workaround for upstream SPC bug: nmake_micro_wrapper.bat omits zlibstatic.lib
-          # from LIBS_MICRO even when zlib is in the dependency list. SPC reads
-          # SPC_EXTRA_LIBS and appends it to both LIBS_MICRO and LIBS_CLI, so
-          # setting it here bridges the gap until the upstream fix lands.
-          # See: https://github.com/crazywhalecc/static-php-cli/issues/1052
-          $env:SPC_EXTRA_LIBS = "zlibstatic.lib"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
 
       - name: Combine PHP + PHAR → binary (Windows)
@@ -358,9 +352,8 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           # Packages published without a native binary — bin/dbdiff.js falls
           # back to running the bundled dbdiff.phar with system PHP for these.
-          # win32-x64:   SPC v2.8.2 fails to link zlibstatic.lib into micro SAPI
           # win32-arm64: SPC hard-codes phpsdk-vs17-x64.bat, invalid on ARM64 hosts
-          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-x64 @dbdiff/cli-win32-arm64"
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
             # Skip packages whose binary was not produced, unless they are in
@@ -378,6 +371,7 @@ jobs:
             else
               echo "Publishing ${pkg_dir} ..."
               npm publish "${pkg_dir}" --access public --provenance
+              sleep 5
             fi
           done
         env:

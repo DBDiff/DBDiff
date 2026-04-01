@@ -655,7 +655,7 @@ Please read the [Contributing Guide](https://github.com/dbdiff/dbdiff/blob/maste
 
 Could you spare 2 minutes to share your feedback?
 
-https://forms.gle/gjdJxZxdVsz7BRxg7
+[https://forms.gle/gjdJxZxdVsz7BRxg7](https://forms.gle/gjdJxZxdVsz7BRxg7)
 
 
 ## License
