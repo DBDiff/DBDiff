@@ -10,8 +10,12 @@
 #   --batch-close <file>   Close issues & PRs listed in <file> with comments
 #
 # Batch file format (one per line, # comments and blank lines ignored):
-#   issue|<number>|<comment>
-#   pr|<number>|<comment>
+#   issue|<number>|<labels>|<comment>
+#   pr|<number>|<labels>|<comment>
+#   create|<labels>|<title>|<body>
+#
+# Labels are comma-separated (e.g. bug,fixed) or - for none.
+# 'create' entries open a new issue (useful for tracking features before closing stale PRs).
 #
 # Dependencies: gh (GitHub CLI), jq
 #
@@ -33,6 +37,8 @@ SKIPPED_PRS=0
 FAILED_PRS=0
 CLOSED_ISSUES=0
 CLOSED_PRS=0
+CREATED_ISSUES=0
+SKIPPED_CLOSES=0
 FAILED_CLOSES=0
 ERRORS=()
 
@@ -58,8 +64,10 @@ print_summary() {
     echo "               EXECUTION SUMMARY                        "
     echo "========================================================"
     if [ -n "$BATCH_CLOSE_FILE" ]; then
+        printf "Issues Created:       %d\n" "$CREATED_ISSUES"
         printf "Issues Closed:        %d\n" "$CLOSED_ISSUES"
         printf "PRs Closed:           %d\n" "$CLOSED_PRS"
+        printf "Skipped (Already Done):%d\n" "$SKIPPED_CLOSES"
         printf "Failed/Errors:        %d\n" "$FAILED_CLOSES"
     else
         printf "Total PRs Found:      %d\n" "$TOTAL_PRS"
@@ -131,31 +139,102 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Batch Close — close issues & PRs from an external file
+# Validate batch file structure
 # -----------------------------------------------------------------------------
-# File format (one entry per line, # comments and blank lines ignored):
-#   issue|<number>|<comment>
-#   pr|<number>|<comment>
+
+validate_batch_file() {
+    local file="$1"
+    local errors=0
+    local line_num=0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line_num=$((line_num+1))
+        [[ -z "$line" || "$line" == \#* ]] && continue
+
+        local type="${line%%|*}"
+
+        case "$type" in
+            issue|pr|create) ;;
+            *)
+                error_log "Line $line_num: unknown type '$type' (expected: issue, pr, create)"
+                errors=$((errors+1))
+                continue
+                ;;
+        esac
+
+        local rest="${line#*|}"
+        local field2="${rest%%|*}"
+        rest="${rest#*|}"
+        local field3="${rest%%|*}"
+        local field4="${rest#*|}"
+
+        if [[ "$type" == "issue" || "$type" == "pr" ]]; then
+            if ! [[ "$field2" =~ ^[0-9]+$ ]]; then
+                error_log "Line $line_num: '$field2' is not a valid issue/PR number"
+                errors=$((errors+1))
+            fi
+            if [[ -z "$field3" ]]; then
+                error_log "Line $line_num: missing labels field (use - for none)"
+                errors=$((errors+1))
+            fi
+            if [[ -z "$field4" ]]; then
+                error_log "Line $line_num: missing comment"
+                errors=$((errors+1))
+            fi
+        else
+            # create: field2=labels, field3=title, field4=body
+            if [[ -z "$field3" ]]; then
+                error_log "Line $line_num: missing title for create entry"
+                errors=$((errors+1))
+            fi
+            if [[ -z "$field4" ]]; then
+                error_log "Line $line_num: missing body for create entry"
+                errors=$((errors+1))
+            fi
+        fi
+    done < "$file"
+
+    if [[ $errors -gt 0 ]]; then
+        error_log "Validation failed: $errors error(s) found"
+        return 1
+    fi
+
+    log "Validation passed"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Batch Close — close issues & PRs from an external file
 # -----------------------------------------------------------------------------
 
 batch_close() {
     local file="$1"
+
+    # Validate structure before processing
+    if ! validate_batch_file "$file"; then
+        error_log "Aborting — fix the errors above and retry."
+        exit 1
+    fi
+
     local issue_count=0
     local pr_count=0
+    local create_count=0
 
     # Count entries
     while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" == \#* ]] && continue
         local type="${line%%|*}"
         case "$type" in
-            issue) issue_count=$((issue_count+1)) ;;
-            pr)    pr_count=$((pr_count+1)) ;;
+            issue)  issue_count=$((issue_count+1)) ;;
+            pr)     pr_count=$((pr_count+1)) ;;
+            create) create_count=$((create_count+1)) ;;
         esac
     done < "$file"
 
     log "Batch Close — file: $file"
-    log "Issues to close: $issue_count"
-    log "PRs to close:    $pr_count"
+    log "Issues to create: $create_count"
+    log "Issues to close:  $issue_count"
+    log "PRs to close:     $pr_count"
     echo ""
 
     # Process entries
@@ -165,18 +244,83 @@ batch_close() {
         local type="${line%%|*}"
         local rest="${line#*|}"
         local num="${rest%%|*}"
+        rest="${rest#*|}"
+        local labels="${rest%%|*}"
         local comment="${rest#*|}"
 
         echo "--------------------------------------------------------"
 
+        # Apply labels to existing issues/PRs (skip 'create' — handled at creation)
+        if [[ "$type" != "create" && "$labels" != "-" && -n "$labels" ]]; then
+            local label_args=()
+            IFS=',' read -ra label_list <<< "$labels"
+            for lbl in "${label_list[@]}"; do
+                label_args+=(--add-label "$lbl")
+            done
+
+            if [ "$DRY_RUN" = true ]; then
+                echo "   [DRY-RUN] Would label #$num: $labels"
+            else
+                gh issue edit "$num" "${label_args[@]}" 2>/dev/null || \
+                    warn "Failed to label #$num"
+            fi
+        fi
+
         case "$type" in
+            create)
+                # create|<labels>|<title>|<body>
+                # Re-parse: num is actually labels, labels is actually title,
+                # comment is actually body
+                local create_labels="$num"
+                local create_title="$labels"
+                local create_body="${comment//\\n/$'\n'}"
+
+                log "Create issue: $create_title"
+
+                if [ "$DRY_RUN" = true ]; then
+                    echo "   [DRY-RUN] Would create issue:"
+                    echo "   Title:  $create_title"
+                    echo "   Labels: $create_labels"
+                    echo "   Body:   ${create_body:0:200}..."
+                else
+                    # Idempotency: skip if an issue with the exact title already exists
+                    local existing
+                    existing=$(gh issue list --state all --search "in:title \"${create_title}\"" --json number,title -q ".[] | select(.title == \"${create_title}\") | .number" 2>/dev/null | head -1)
+                    if [[ -n "$existing" ]]; then
+                        log "Issue '$create_title' already exists as #$existing — skipping"
+                        SKIPPED_CLOSES=$((SKIPPED_CLOSES+1))
+                        continue
+                    fi
+
+                    local create_args=(--title "$create_title" --body "$create_body")
+                    [[ "$create_labels" != "-" && -n "$create_labels" ]] && \
+                        create_args+=(--label "$create_labels")
+                    if gh issue create "${create_args[@]}" 2>/dev/null; then
+                        log "Created issue: $create_title"
+                        CREATED_ISSUES=$((CREATED_ISSUES+1))
+                    else
+                        error_log "Failed to create issue: $create_title"
+                        FAILED_CLOSES=$((FAILED_CLOSES+1))
+                    fi
+                    sleep 1
+                fi
+                ;;
             issue)
                 log "Issue #$num"
 
                 if [ "$DRY_RUN" = true ]; then
                     echo "   [DRY-RUN] Would close with comment:"
-                    echo "   ${comment:0:120}..."
+                    echo "   $comment"
                 else
+                    # Idempotency: skip if already closed
+                    local issue_state
+                    issue_state=$(gh issue view "$num" --json state -q .state 2>/dev/null)
+                    if [[ "$issue_state" == "CLOSED" ]]; then
+                        log "Issue #$num already closed — skipping"
+                        SKIPPED_CLOSES=$((SKIPPED_CLOSES+1))
+                        continue
+                    fi
+
                     if gh issue close "$num" --comment "$comment" --reason completed 2>/dev/null; then
                         log "Closed issue #$num"
                         CLOSED_ISSUES=$((CLOSED_ISSUES+1))
@@ -192,8 +336,17 @@ batch_close() {
 
                 if [ "$DRY_RUN" = true ]; then
                     echo "   [DRY-RUN] Would close with comment:"
-                    echo "   ${comment:0:120}..."
+                    echo "   $comment"
                 else
+                    # Idempotency: skip if already closed or merged
+                    local pr_state
+                    pr_state=$(gh pr view "$num" --json state -q .state 2>/dev/null)
+                    if [[ "$pr_state" == "CLOSED" || "$pr_state" == "MERGED" ]]; then
+                        log "PR #$num already ${pr_state,,} — skipping"
+                        SKIPPED_CLOSES=$((SKIPPED_CLOSES+1))
+                        continue
+                    fi
+
                     if gh pr close "$num" --comment "$comment" 2>/dev/null; then
                         log "Closed PR #$num"
                         CLOSED_PRS=$((CLOSED_PRS+1))

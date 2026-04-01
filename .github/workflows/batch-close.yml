@@ -1,0 +1,57 @@
+name: Batch Close Issues & PRs
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_template:
+        description: |
+          Paste the batch close template (type|number|labels|comment format).
+          See scripts/batch-close-template.txt for reference.
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run — preview only, no changes made'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  batch-close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write batch file
+        env:
+          BATCH_CONTENT: ${{ inputs.batch_template }}
+        run: printf '%s\n' "$BATCH_CONTENT" > /tmp/batch-close.txt
+
+      - name: Validate & Execute
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS="--batch-close /tmp/batch-close.txt"
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            ARGS="$ARGS --apply"
+          fi
+          bash scripts/manage_prs.sh $ARGS 2>&1 | tee /tmp/batch-output.txt
+          # Propagate the script exit code
+          exit ${PIPESTATUS[0]}
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## Batch Close Results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "> **Mode:** Dry Run (no changes made)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> **Mode:** Apply (changes were made)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/batch-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

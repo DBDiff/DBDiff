@@ -1,0 +1,107 @@
+name: Bug Report
+description: Report a bug in DBDiff
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the sections below so we can reproduce and fix it.
+
+  - type: input
+    id: dbdiff-version
+    attributes:
+      label: DBDiff version
+      description: Output of `dbdiff --version`
+      placeholder: "e.g. 3.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+      description: Output of `php --version` (if using PHAR)
+      placeholder: "e.g. 8.3.12"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation method
+      options:
+        - Pre-compiled binary
+        - PHAR archive
+        - Composer (source)
+        - npm (@dbdiff/cli)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      multiple: true
+      options:
+        - MySQL
+        - MariaDB
+        - PostgreSQL
+        - SQLite
+        - Supabase
+        - PlanetScale
+        - TiDB
+        - Vitess
+        - Aurora
+        - Dolt
+    validations:
+      required: true
+
+  - type: input
+    id: db-version
+    attributes:
+      label: Database version
+      placeholder: "e.g. MySQL 8.0.35, PostgreSQL 16.1"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. Ubuntu 24.04, macOS 15.1, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      description: The exact dbdiff command you ran
+      render: shell
+      placeholder: "dbdiff diff --server1-url=... --server2-url=..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened (include error messages or SQL output)
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Anything else — config file, schema excerpts, screenshots
+    validations:
+      required: false

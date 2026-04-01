@@ -1,0 +1,331 @@
+name: Issue & PR Triage
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request_target:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created]
+  schedule:
+    # Run stale check weekly on Mondays at 06:00 UTC
+    - cron: '0 6 * * 1'
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  triage:
+    if: >-
+      (github.event.action == 'opened') &&
+      (github.event_name == 'issues' || github.event_name == 'pull_request_target')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const item = context.payload.issue || context.payload.pull_request;
+            const body = (item.body || '').toLowerCase();
+            const title = item.title.toLowerCase();
+            const text = title + ' ' + body;
+            const isIssue = !!context.payload.issue;
+            const number = item.number;
+
+            // ── Auto-label based on content ──────────────────────────
+            const labels = [];
+
+            // Type detection
+            if (/\b(bug|error|crash|broken|fix|fatal|exception|segfault)\b/.test(text)) {
+              labels.push('bug');
+            }
+            if (/\b(feature|enhancement|request|add support|would be nice|proposal)\b/.test(text)) {
+              labels.push('enhancement');
+            }
+            if (/\b(question|how to|how do|is it possible|can i|does .+ support)\b/.test(text)) {
+              labels.push('question');
+            }
+
+            // Database detection
+            if (/\b(mysql|mariadb|aurora|planetscale|vitess|tidb|dolt)\b/.test(text)) {
+              labels.push('mysql');
+            }
+            if (/\b(postgres|postgresql|pgsql|supabase)\b/.test(text)) {
+              labels.push('postgres');
+            }
+            if (/\bsqlite\b/.test(text)) {
+              labels.push('sqlite');
+            }
+
+            // Dependency PRs
+            if (!isIssue) {
+              const files = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+                per_page: 10
+              });
+              const filenames = files.data.map(f => f.filename);
+              if (filenames.some(f => /composer\.(json|lock)|package(-lock)?\.json/.test(f))) {
+                labels.push('dependencies');
+              }
+              if (filenames.some(f => f.endsWith('.php'))) {
+                labels.push('php');
+              }
+            }
+
+            // Ensure labels exist (db labels may not yet)
+            const dbLabels = { mysql: 'e3d049', postgres: '336791', sqlite: '044a64' };
+            for (const [name, color] of Object.entries(dbLabels)) {
+              if (!labels.includes(name)) continue;
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                  description: `Related to ${name.charAt(0).toUpperCase() + name.slice(1)}`
+                });
+              }
+            }
+
+            if (labels.length) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: number,
+                labels
+              });
+            }
+
+            // ── Ask for missing info on bug reports ──────────────────
+            if (isIssue && labels.includes('bug')) {
+              const missing = [];
+              if (!/dbdiff.*(version|v\d)|v\d.*dbdiff|\d+\.\d+\.\d+/.test(body)) {
+                missing.push('DBDiff version (`dbdiff --version`)');
+              }
+              if (!/\b(mysql|postgres|sqlite|mariadb|supabase)\b/.test(body)) {
+                missing.push('Database type and version');
+              }
+              if (!/\b(steps|reproduce|repro|command|ran|running)\b/.test(body)) {
+                missing.push('Steps to reproduce or the command you ran');
+              }
+
+              if (missing.length) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  body: [
+                    `Thanks for opening this issue! To help us investigate, could you provide:`,
+                    '',
+                    ...missing.map(m => `- ${m}`),
+                    '',
+                    `This helps us reproduce and fix the problem faster.`
+                  ].join('\n')
+                });
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  labels: ['needs-info']
+                });
+              }
+            }
+
+            // ── Find similar open issues and link them ───────────────
+            if (isIssue) {
+              // Extract significant words from the title (3+ chars, no stop words)
+              const stopWords = new Set(['the','and','for','that','this','with','from','have','has',
+                'not','but','are','was','were','been','does','will','can','should','would','into',
+                'when','how','all','some','any','about','after','also','getting','using']);
+              const words = title.split(/\W+/).filter(w => w.length >= 3 && !stopWords.has(w));
+
+              if (words.length >= 2) {
+                // Search for similar open issues using the most distinctive words
+                const searchTerms = words.slice(0, 4).join(' ');
+                const searchResult = await github.rest.search.issuesAndPullRequests({
+                  q: `repo:${context.repo.owner}/${context.repo.repo} is:open ${searchTerms}`,
+                  per_page: 6
+                });
+
+                const similar = searchResult.data.items.filter(i => i.number !== number);
+                if (similar.length > 0 && similar.length <= 5) {
+                  const links = similar.map(i => `- #${i.number} — ${i.title}`).join('\n');
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: number,
+                    body: [
+                      `**Possibly related open issues:**`,
+                      '',
+                      links,
+                      '',
+                      `If any of these cover the same problem, consider adding your details there instead.`
+                    ].join('\n')
+                  });
+                }
+              }
+            }
+
+            // ── Detect good-first-issue candidates ───────────────────
+            // Small, self-contained bug reports mentioning a single file or
+            // narrow surface area — good for new contributors.
+            if (isIssue && labels.includes('bug') && !labels.includes('enhancement')) {
+              const goodFirstSignals = [
+                /\b(typo|spelling|docs?|readme|comment|docblock)\b/,
+                /\b(off[- ]?by[- ]?one|wrong (message|error|output|string))\b/,
+                /\b(default|config|option|flag).*(wrong|incorrect|missing)\b/,
+                /\b(missing|absent|lacking).*(error|message|output|validation)\b/,
+              ];
+              const hits = goodFirstSignals.filter(r => r.test(text)).length;
+              // Also check if the body mentions a single file path
+              const fileRefs = (item.body || '').match(/\b(src|tests?)\/[\w\/.-]+\.\w+/g) || [];
+              const isNarrow = fileRefs.length >= 1 && fileRefs.length <= 2;
+
+              if (hits >= 1 || isNarrow) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  labels: ['good first issue']
+                });
+              }
+            }
+
+  re-evaluate:
+    if: >-
+      github.event.action == 'edited' ||
+      github.event.action == 'reopened' ||
+      (github.event_name == 'issue_comment' && github.event.action == 'created')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!issue) return; // PR comments don't carry issue payload in all events
+
+            const number = issue.number;
+            const currentLabels = issue.labels.map(l => l.name);
+            const body = (issue.body || '').toLowerCase();
+
+            // ── Remove 'needs-info' if the missing info has been provided ──
+            if (currentLabels.includes('needs-info')) {
+              const hasVersion = /dbdiff.*(version|v\d)|v\d.*dbdiff|\d+\.\d+\.\d+/.test(body);
+              const hasDb = /\b(mysql|postgres|sqlite|mariadb|supabase)\b/.test(body);
+              const hasRepro = /\b(steps|reproduce|repro|command|ran|running)\b/.test(body);
+
+              if (hasVersion && hasDb && hasRepro) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: number,
+                    name: 'needs-info'
+                  });
+                  core.info(`Removed 'needs-info' from #${number} — info now provided`);
+                } catch (e) {
+                  // Label may already have been removed manually
+                  core.info(`Could not remove 'needs-info' from #${number}: ${e.message}`);
+                }
+              }
+            }
+
+            // ── Remove 'stale' on any new activity (edit, comment, reopen) ──
+            if (currentLabels.includes('stale')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                  name: 'stale'
+                });
+                core.info(`Removed 'stale' from #${number} — new activity detected`);
+              } catch (e) {
+                core.info(`Could not remove 'stale' from #${number}: ${e.message}`);
+              }
+            }
+
+  stale:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const STALE_DAYS = 90;
+            const CLOSE_DAYS = 14;
+            const now = new Date();
+
+            // ── Mark stale issues/PRs ────────────────────────────────
+            // Find open issues with no activity in STALE_DAYS, excluding
+            // items already labelled 'stale' or 'enhancement'.
+            const staleDate = new Date(now - STALE_DAYS * 86400000).toISOString().split('T')[0];
+            const staleQuery = `repo:${context.repo.owner}/${context.repo.repo} is:open updated:<${staleDate} -label:stale -label:enhancement -label:fixed`;
+
+            const staleResults = await github.rest.search.issuesAndPullRequests({
+              q: staleQuery,
+              per_page: 30
+            });
+
+            for (const item of staleResults.data.items) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: item.number,
+                labels: ['stale']
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: item.number,
+                body: [
+                  `This issue has had no activity for ${STALE_DAYS} days and has been marked as **stale**.`,
+                  '',
+                  `It will be closed in ${CLOSE_DAYS} days if there is no further activity.`,
+                  `If this is still relevant, please comment or remove the \`stale\` label.`
+                ].join('\n')
+              });
+            }
+
+            // ── Close issues that have been stale for CLOSE_DAYS ─────
+            const closeDate = new Date(now - CLOSE_DAYS * 86400000).toISOString().split('T')[0];
+            const closeQuery = `repo:${context.repo.owner}/${context.repo.repo} is:open label:stale updated:<${closeDate}`;
+
+            const closeResults = await github.rest.search.issuesAndPullRequests({
+              q: closeQuery,
+              per_page: 30
+            });
+
+            for (const item of closeResults.data.items) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: item.number,
+                body: `Closed due to inactivity. If this is still relevant, please reopen or open a new issue.`
+              });
+
+              if (item.pull_request) {
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: item.number,
+                  state: 'closed'
+                });
+              } else {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: item.number,
+                  state: 'closed',
+                  state_reason: 'not_planned'
+                });
+              }
+            }

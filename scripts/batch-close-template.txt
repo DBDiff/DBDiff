@@ -1,0 +1,27 @@
+# Batch Close — Template
+# Usage: bash scripts/manage_prs.sh --batch-close scripts/<your-file>.txt
+#        Add --apply to execute (default is dry-run).
+#
+# Format: type|number|labels|comment
+#   type    = "issue", "pr", or "create"
+#   number  = GitHub issue/PR number (ignored for 'create')
+#   labels  = Comma-separated labels to apply (e.g. bug,fixed) or - for none
+#   comment = Closing comment posted on the issue/PR
+#
+# For 'create' entries (open a new issue before closing a stale PR):
+#   create|<labels>|<title>|<body>
+#
+# Lines starting with # are ignored. Blank lines are ignored.
+# Pipe characters (|) inside the comment/body are fine — only the first three are split on.
+# Entries are processed in order — place 'create' before the 'pr' close it relates to.
+
+# ── Examples ─────────────────────────────────────────────────────────────────
+
+# issue|42|bug,fixed|Fixed — see PR #100. Thank you for reporting!
+# issue|99|enhancement|The feature was added in PR #200. Thank you!
+# pr|55|bug,fixed|Thank you for raising this PR. This was independently fixed. See PR #100.
+# pr|78|stale|-|Thank you for the PR. The codebase has diverged significantly. Closing as stale.
+#
+# Create a tracking issue, then close the stale PR:
+# create|enhancement|Feature: wildcard table exclusion|Support glob patterns in `--ignore`.\n\nOriginally proposed in PR #59.
+# pr|59|enhancement,stale|Thank you for raising this PR. Closing as stale.
