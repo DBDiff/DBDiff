@@ -34,24 +34,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ARGS="--batch-close /tmp/batch-close.txt"
+          ARGS=(--batch-close /tmp/batch-close.txt)
           if [ "${{ inputs.dry_run }}" = "false" ]; then
-            ARGS="$ARGS --apply"
+            ARGS+=(--apply)
           fi
-          bash scripts/manage_prs.sh $ARGS 2>&1 | tee /tmp/batch-output.txt
+          bash scripts/manage_prs.sh "${ARGS[@]}" 2>&1 | tee /tmp/batch-output.txt
           # Propagate the script exit code
-          exit ${PIPESTATUS[0]}
+          exit "${PIPESTATUS[0]}"
 
       - name: Post summary
         if: always()
         run: |
-          echo "## Batch Close Results" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            echo "> **Mode:** Dry Run (no changes made)" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "> **Mode:** Apply (changes were made)" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/batch-output.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Batch Close Results"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "> **Mode:** Dry Run (no changes made)"
+            else
+              echo "> **Mode:** Apply (changes were made)"
+            fi
+            echo ""
+            echo '```'
+            cat /tmp/batch-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
