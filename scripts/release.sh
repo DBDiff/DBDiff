@@ -70,10 +70,22 @@ echo "  ${PHAR_VERSION}"
 echo "Tagging version $VERSION..."
 git tag -a "$VERSION" -m "Release $VERSION"
 
-echo ""
+# Detect pre-release (version contains a hyphen, e.g. v3.0.0-alpha.1)
+PRERELEASE_ID=""
+VERSION_BARE="${VERSION#v}"
+if [[ "$VERSION_BARE" == *-* ]]; then
+    PRERELEASE_ID="${VERSION_BARE#*-}"
+    PRERELEASE_ID="${PRERELEASE_ID%%.*}"
+fi
+
 echo "Done. To complete the release:"
 echo "  1. git push origin $VERSION"
-echo "  2. Trigger the GitHub Actions 'Release DBDiff' workflow with version: ${VERSION#v}"
+echo "  2. Trigger the GitHub Actions 'Release DBDiff' workflow with version: ${VERSION_BARE}"
+if [ -n "$PRERELEASE_ID" ]; then
+    echo "     Pre-release detected — the GitHub Release will be marked as pre-release."
+    echo "     npm packages will be published under the dist-tag: $PRERELEASE_ID"
+    echo "     (Install with: npm install @dbdiff/cli@$PRERELEASE_ID)"
+fi
 echo "     (This builds platform binaries, publishes to npm, and creates the GitHub Release)"
 echo ""
 echo "Or use the manual one-off binary builder:"

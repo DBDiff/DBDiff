@@ -18,6 +18,7 @@
             "src/Version.php"
         ]
     },
+    "minimum-stability": "alpha",
     "prefer-stable": true,
     "config": {
         "platform": {

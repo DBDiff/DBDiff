@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer version — no "v" prefix (e.g. 2.1.0)'
+        description: 'SemVer version — no "v" prefix (e.g. 3.0.0 or 3.0.0-alpha.1 for pre-releases)'
         required: true
 
 # ─── Constants ──────────────────────────────────────────────────────────────
@@ -288,6 +288,25 @@ jobs:
           pattern: dbdiff-*
           merge-multiple: false
 
+      # Detect whether this is a pre-release version (contains a hyphen, e.g. 3.0.0-alpha.1).
+      # Sets IS_PRERELEASE and NPM_TAG for use in subsequent steps.
+      - name: Detect pre-release
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "IS_PRERELEASE=true" >> "$GITHUB_ENV"
+            # Extract the identifier between the first '-' and any subsequent '.'
+            # e.g. 3.0.0-alpha.1 → alpha,  3.0.0-rc.2 → rc,  3.0.0-next → next
+            PRERELEASE_ID="${VERSION#*-}"
+            PRERELEASE_ID="${PRERELEASE_ID%%.*}"
+            echo "NPM_TAG=${PRERELEASE_ID}" >> "$GITHUB_ENV"
+            echo "Pre-release detected — GitHub Release will be marked pre-release; npm tag: ${PRERELEASE_ID}"
+          else
+            echo "IS_PRERELEASE=false" >> "$GITHUB_ENV"
+            echo "NPM_TAG=latest" >> "$GITHUB_ENV"
+            echo "Stable release — npm tag: latest"
+          fi
+
       # Stamp the version into every package.json (root + 8 platform packages)
       - name: Inject version into package.json files
         run: |
@@ -370,7 +389,7 @@ jobs:
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
             else
               echo "Publishing ${pkg_dir} ..."
-              npm publish "${pkg_dir}" --access public --provenance
+              npm publish "${pkg_dir}" --access public --provenance --tag "$NPM_TAG"
               sleep 5
             fi
           done
@@ -383,7 +402,7 @@ jobs:
           if npm view "@dbdiff/cli@${VERSION}" version &>/dev/null; then
             echo "@dbdiff/cli@${VERSION} already on registry — skipping"
           else
-            npm publish packages/@dbdiff/cli --access public --provenance
+            npm publish packages/@dbdiff/cli --access public --provenance --tag "$NPM_TAG"
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -429,7 +448,8 @@ jobs:
           tag_name:  v${{ github.event.inputs.version }}
           name:      v${{ github.event.inputs.version }}
           generate_release_notes: true
-          make_latest: true
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+          make_latest: ${{ env.IS_PRERELEASE != 'true' }}
           files: |
             binaries/dbdiff-*/dbdiff-*
             binaries/dbdiff-phar/dbdiff.phar
