@@ -3,11 +3,13 @@ name: Batch Close Issues & PRs
 on:
   workflow_dispatch:
     inputs:
-      batch_template:
-        description: |
-          Paste the batch close template (type|number|labels|comment format).
-          See scripts/batch-close-template.txt for reference.
-        required: true
+      batch_file:
+        description: 'Path to a batch file in the repo (e.g. scripts/v3-close-batch.txt) OR a single-line entry for a one-off close (e.g. issue|42|bug,fixed|Fixed in PR #157.)'
+        required: false
+        type: string
+      batch_content:
+        description: 'TRIGGER FROM LOCAL CLI ONLY — do not use this field from the web UI (newlines are stripped). Run locally: gh workflow run batch-close.yml -f batch_content="$(cat scripts/v3-close-batch.txt)" -f dry_run=true'
+        required: false
         type: string
       dry_run:
         description: 'Dry run — preview only, no changes made'
@@ -25,10 +27,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write batch file
+      - name: Resolve batch file
         env:
-          BATCH_CONTENT: ${{ inputs.batch_template }}
-        run: printf '%s\n' "$BATCH_CONTENT" > /tmp/batch-close.txt
+          BATCH_CONTENT: ${{ inputs.batch_content }}
+        run: |
+          if [[ -n "${{ inputs.batch_file }}" ]]; then
+            # Mode 1: file path in repo (web UI or CLI)
+            if [[ ! -f "${{ inputs.batch_file }}" ]]; then
+              echo "::error::Batch file not found: ${{ inputs.batch_file }}"
+              exit 1
+            fi
+            cp "${{ inputs.batch_file }}" /tmp/batch-close.txt
+            echo "source=repo file (${{ inputs.batch_file }})" >> "$GITHUB_ENV"
+          elif [[ -n "$BATCH_CONTENT" ]]; then
+            # Mode 2: raw content via CLI (gh workflow run -f batch_content="...")
+            printf '%s\n' "$BATCH_CONTENT" > /tmp/batch-close.txt
+            echo "source=CLI content" >> "$GITHUB_ENV"
+          else
+            echo "::error::Provide either batch_file (path) or batch_content (raw text)"
+            exit 1
+          fi
+          echo "Batch file lines: $(wc -l < /tmp/batch-close.txt)"
+          echo "Non-comment entries: $(grep -cvE '^\s*(#|$)' /tmp/batch-close.txt || true)"
 
       - name: Validate & Execute
         env:
@@ -47,6 +67,7 @@ jobs:
         run: |
           {
             echo "## Batch Close Results"
+            echo "> **Source:** ${{ env.source }}"
             if [ "${{ inputs.dry_run }}" = "true" ]; then
               echo "> **Mode:** Dry Run (no changes made)"
             else
