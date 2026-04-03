@@ -1,4 +1,6 @@
 SQL_UP = u"""
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
+ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
 CREATE TABLE "cc" (
   "id" integer NOT NULL,
   PRIMARY KEY ("id")
@@ -20,11 +22,11 @@ DROP INDEX "aa_name_pass_zx_key";
 DROP INDEX "aa_pass_key";
 ALTER TABLE "aa" ADD CONSTRAINT "aa_name_key" UNIQUE ("name");
 ALTER TABLE "aa" ADD CONSTRAINT "fk_aa_bb" FOREIGN KEY ("as") REFERENCES "bb" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
-ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
-ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
 INSERT INTO "cc" ("id") VALUES('11');
 """
 SQL_DOWN = u"""
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_key";
+ALTER TABLE "aa" DROP CONSTRAINT "fk_aa_bb";
 DELETE FROM "cc" WHERE "id" = '11';
 DROP TABLE "cc";
 CREATE TABLE "zz" (
@@ -48,8 +50,6 @@ ALTER TABLE "aa" ADD COLUMN "zx" integer NOT NULL;
 DROP INDEX "aa_name_key";
 CREATE UNIQUE INDEX aa_name_pass_zx_key ON public.aa USING btree (name, pass, zx);
 CREATE UNIQUE INDEX aa_pass_key ON public.aa USING btree (pass);
-ALTER TABLE "aa" DROP CONSTRAINT "aa_name_key";
-ALTER TABLE "aa" DROP CONSTRAINT "fk_aa_bb";
 ALTER TABLE "aa" ADD CONSTRAINT "aa_name_pass_zx_key" UNIQUE ("name", "pass", "zx");
 ALTER TABLE "aa" ADD CONSTRAINT "aa_pass_key" UNIQUE ("pass");
 INSERT INTO "zz" ("id","name","bool") VALUES('1','name','1');

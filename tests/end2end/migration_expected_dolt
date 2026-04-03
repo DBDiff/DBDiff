@@ -20,7 +20,7 @@ ALTER TABLE `aa` DROP `zx`;
 ALTER TABLE `aa` ADD KEY `as` (`as`);
 ALTER TABLE `aa` ADD UNIQUE KEY `name` (`name`);
 ALTER TABLE `bb` ADD PRIMARY KEY (`id`);
-ALTER TABLE `aa` DROP INDEX `id`;
+ALTER TABLE `aa` DROP PRIMARY KEY;
 ALTER TABLE `aa` ADD PRIMARY KEY (`id`);
 ALTER TABLE `aa` DROP INDEX `namekey`;
 ALTER TABLE `aa` DROP INDEX `pass`;
@@ -32,6 +32,7 @@ INSERT INTO `cc` (`id`) VALUES('11');
 UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
 """
 SQL_DOWN = u"""
+ALTER TABLE `aa` DROP FOREIGN KEY `as`;
 DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'c';
 DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'v';
 DELETE FROM `asas` WHERE `id` = '0' AND `firstname` = 'x';
@@ -57,12 +58,11 @@ ALTER TABLE `aa` CHANGE `pass` `pass` varchar(255) COLLATE latin1_swedish_ci NOT
 ALTER TABLE `aa` ADD `zx` int NOT NULL;
 ALTER TABLE `aa` DROP INDEX `as`;
 ALTER TABLE `aa` DROP INDEX `name`;
-ALTER TABLE `bb` DROP INDEX `id`;
-ALTER TABLE `aa` DROP INDEX `id`;
+ALTER TABLE `bb` DROP PRIMARY KEY;
+ALTER TABLE `aa` DROP PRIMARY KEY;
 ALTER TABLE `aa` ADD PRIMARY KEY (`id`,`name`);
 ALTER TABLE `aa` ADD UNIQUE KEY `namekey` (`name`,`pass`,`zx`);
 ALTER TABLE `aa` ADD UNIQUE KEY `pass` (`pass`);
-ALTER TABLE `aa` DROP CONSTRAINT `as`;
 INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','e','r');
 INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','t','y');
 INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('0','x','d');

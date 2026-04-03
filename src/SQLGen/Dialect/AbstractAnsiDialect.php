@@ -80,4 +80,10 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
     protected function changeColumnWarning(string $col): string {
         return "-- WARNING: column \"$col\" changed; data may be lost.";
     }
+
+    public function dropConstraint(string $table, string $name, string $schema): string {
+        $t = $this->quote($table);
+        $n = $this->quote($name);
+        return "ALTER TABLE $t DROP CONSTRAINT $n;";
+    }
 }

@@ -15,18 +15,18 @@ class AlterTableChangeConstraintSQL implements SQLGenInterface {
         $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
-    private function buildChange(string $schema): string {
+    private function buildChange(string $dropSchema, string $addSchema): string {
         $t    = $this->dialect->quote($this->obj->table);
-        $name = $this->dialect->quote($this->obj->name);
-        return "ALTER TABLE $t DROP CONSTRAINT $name;\nALTER TABLE $t ADD $schema;";
+        $drop = $this->dialect->dropConstraint($this->obj->table, $this->obj->name, $dropSchema);
+        return "$drop\nALTER TABLE $t ADD $addSchema;";
     }
 
     public function getUp(): string {
-        return $this->buildChange($this->obj->diff->getNewValue());
+        return $this->buildChange($this->obj->diff->getOldValue(), $this->obj->diff->getNewValue());
     }
 
     public function getDown(): string {
-        return $this->buildChange($this->obj->diff->getOldValue());
+        return $this->buildChange($this->obj->diff->getNewValue(), $this->obj->diff->getOldValue());
     }
 
 }
