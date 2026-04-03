@@ -225,7 +225,7 @@ jobs:
           # dependency of pdo_pgsql, but the standalone pgsql ext fails its
           # runtime sanity check on Windows (extension_loaded('pgsql') → false).
           # DBDiff only uses pdo_pgsql (via PDO), so skipping the check is safe.
-          .\.spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
+          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
 
       - name: Combine PHP + PHAR → binary (Windows)
         if: runner.os == 'Windows'
