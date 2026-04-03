@@ -12,10 +12,25 @@ template: templates/simple-db-migrate.tmpl
 type: all
 include: all
 nocomments: true
+
+# Include list — only diff these tables (supports globs: *, ?)
+# tables:
+#   - users
+#   - orders
+#   - wp_*
+
+# Exclude list — skip tables entirely (supports globs)
 tablesToIgnore:
 - table1
 - table2
 - table3
+
+# Exclude from data diff only — schema still compared (supports globs)
+# tablesDataToIgnore:
+#   - audit_log
+#   - event_stream
+
+# Per-table column exclusion (keys support globs)
 fieldsToIgnore:
     table1:
         - field1
@@ -24,3 +39,15 @@ fieldsToIgnore:
     table4:
         - field1
         - field4
+
+# Per-table row filtering — skip rows matching column-value regex
+# rowsToIgnore:
+#   wp_options:
+#     - { column: option_name, pattern: "_transient_.*" }
+#   sessions:
+#     - { column: status, pattern: "expired|archived" }
+
+# Per-table scope override: schema, data, or all (default)
+# tableScope:
+#   audit_log: schema
+#   config: data

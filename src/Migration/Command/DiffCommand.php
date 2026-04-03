@@ -73,7 +73,12 @@ class DiffCommand extends Command
             ->addOption('debug',       null, InputOption::VALUE_NONE,     'Enable verbose error output')
             ->addOption('memory-limit', null, InputOption::VALUE_REQUIRED,
                 'PHP memory limit for this run (e.g. 512M, 1G, 2G, -1 for unlimited). '
-                . 'Overrides the 1G default set by the CLI entry point and any value in your config file.');
+                . 'Overrides the 1G default set by the CLI entry point and any value in your config file.')
+            // ── Filtering options ─────────────────────────────────────────────
+            ->addOption('tables',        null, InputOption::VALUE_REQUIRED,
+                'Comma-separated list of tables to include (supports globs: *, ?). Overrides tablesToIgnore.')
+            ->addOption('ignore-tables', null, InputOption::VALUE_REQUIRED,
+                'Comma-separated list of tables to exclude (supports globs: *, ?).');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -128,6 +133,13 @@ class DiffCommand extends Command
         $params->config      = $input->getOption('config');
         $params->description   = $input->getOption('description') ?: '';
         $params->memoryLimit   = $input->getOption('memory-limit');
+
+        if ($input->getOption('tables')) {
+            $params->tables = array_map('trim', explode(',', $input->getOption('tables')));
+        }
+        if ($input->getOption('ignore-tables')) {
+            $params->tablesToIgnore = array_map('trim', explode(',', $input->getOption('ignore-tables')));
+        }
 
         return $params;
     }

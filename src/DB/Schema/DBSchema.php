@@ -3,6 +3,7 @@
 use Diff\Differ\ListDiffer;
 
 use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use DBDiff\Diff\SetDBCollation;
 use DBDiff\Diff\SetDBCharset;
 use DBDiff\Diff\DropTable;
@@ -57,10 +58,8 @@ class DBSchema {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
-        if (isset($params->tablesToIgnore)) {
-            $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
-            $targetTables = array_diff($targetTables, $params->tablesToIgnore);
-        }
+        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'schema');
+        $targetTables = TableFilter::filterTables($targetTables, $params, 'schema');
 
         $addedTables = array_values(array_diff($sourceTables, $targetTables));
         $deletedTables = array_values(array_diff($targetTables, $sourceTables));

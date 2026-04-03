@@ -71,11 +71,10 @@ class TableSchema {
         
         // Filter out ignored fields
         $params = \DBDiff\Params\ParamsFactory::get();
-        if (isset($params->fieldsToIgnore[$table])) {
-            foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
-                unset($sourceColumns[$fieldToIgnore]);
-                unset($targetColumns[$fieldToIgnore]);
-            }
+        $ignoredFields = \DBDiff\Params\TableFilter::getFieldsToIgnore($table, $params);
+        foreach ($ignoredFields as $fieldToIgnore) {
+            unset($sourceColumns[$fieldToIgnore]);
+            unset($targetColumns[$fieldToIgnore]);
         }
 
         $differ = new MapDiffer();

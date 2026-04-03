@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
 use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
@@ -137,8 +138,9 @@ class LocalTableData {
         // ── Changed rows (→ UPDATE in UP) ─────────────────────────────────
         $params     = ParamsFactory::get();
         $commonCols = array_values(array_intersect($columns1, $columns2));
-        if (isset($params->fieldsToIgnore[$table])) {
-            $commonCols = array_values(array_diff($commonCols, $params->fieldsToIgnore[$table]));
+        $ignoredFields = TableFilter::getFieldsToIgnore($table, $params);
+        if (!empty($ignoredFields)) {
+            $commonCols = array_values(array_diff($commonCols, $ignoredFields));
         }
 
         $result3 = [];
@@ -215,6 +217,14 @@ class LocalTableData {
     /** Turn the three raw result sets into Diff objects. */
     private function buildDiffSequence(string $table, array $result1, array $result2, array $result3, array $key): array
     {
+        // Apply rowsToIgnore filtering
+        $params = ParamsFactory::get();
+        $rowRules = TableFilter::getRowIgnoreRules($table, $params);
+        if (!empty($rowRules)) {
+            $result1 = TableFilter::filterRows($result1, $rowRules);
+            $result2 = TableFilter::filterRows($result2, $rowRules);
+        }
+
         $diffSequence = [];
 
         foreach ($result1 as $row) {
@@ -282,7 +292,7 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        $fieldsToIgnore = $params->fieldsToIgnore[$table] ?? [];
+        $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
         $merge = new StreamingMergeDiff($this->source, $this->target, 'pgsql');
         return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);
@@ -339,6 +349,14 @@ class LocalTableData {
         $this->wrapBinaryValues($result1, $binaryCols);
         $this->wrapBinaryValues($result2, $binaryCols);
 
+        // Apply rowsToIgnore filtering
+        $params = ParamsFactory::get();
+        $rowRules = TableFilter::getRowIgnoreRules($table, $params);
+        if (!empty($rowRules)) {
+            $result1 = TableFilter::filterRows($result1, $rowRules);
+            $result2 = TableFilter::filterRows($result2, $rowRules);
+        }
+
         foreach ($result1 as $row) {
             $diffSequence[] = new InsertData($table, [
                 'keys' => Arr::only($row, $key),
@@ -366,9 +384,10 @@ class LocalTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        if (isset($params->fieldsToIgnore[$table])) {
-            $columns1 = array_diff($columns1, $params->fieldsToIgnore[$table]);
-            $columns2 = array_diff($columns2, $params->fieldsToIgnore[$table]);
+        $ignoredFields = TableFilter::getFieldsToIgnore($table, $params);
+        if (!empty($ignoredFields)) {
+            $columns1 = array_diff($columns1, $ignoredFields);
+            $columns2 = array_diff($columns2, $ignoredFields);
         }
 
         $binaryCols = $this->manager->getBinaryColumns('source', $table);
