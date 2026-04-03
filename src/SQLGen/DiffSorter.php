@@ -11,6 +11,8 @@ class DiffSorter {
         "DropTrigger",
         "DropRoutine",
 
+        "AlterTableDropConstraint",
+
         "AddTable",
 
         "DeleteData",
@@ -29,7 +31,6 @@ class DiffSorter {
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
-        "AlterTableDropConstraint",
 
         "InsertData",
         "UpdateData",
@@ -56,6 +57,9 @@ class DiffSorter {
         "AlterView",
         "CreateView",
 
+        "AlterTableAddConstraint",
+        "AlterTableChangeConstraint",
+
         "InsertData",
         "AddTable",
 
@@ -72,8 +76,6 @@ class DiffSorter {
         "AlterTableChangeKey",
         "AlterTableDropKey",
 
-        "AlterTableAddConstraint",
-        "AlterTableChangeConstraint",
         "AlterTableDropConstraint",
 
         "DeleteData",

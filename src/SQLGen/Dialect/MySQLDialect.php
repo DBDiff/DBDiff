@@ -17,6 +17,9 @@ class MySQLDialect implements SQLDialectInterface {
 
     public function dropIndex(string $table, string $key): string {
         $t = $this->quote($table);
+        if ($key === 'PRIMARY') {
+            return "ALTER TABLE $t DROP PRIMARY KEY;";
+        }
         $k = $this->quote($key);
         return "ALTER TABLE $t DROP INDEX $k;";
     }
@@ -47,5 +50,18 @@ class MySQLDialect implements SQLDialectInterface {
         // MySQL CHANGE keeps the same column name; the newDef already contains
         // the backtick-quoted name as the first token.
         return "ALTER TABLE $t CHANGE $c $newDef;";
+    }
+
+    /**
+     * MySQL requires DROP FOREIGN KEY for FK constraints.
+     * Detects the constraint type from the schema DDL fragment.
+     */
+    public function dropConstraint(string $table, string $name, string $schema): string {
+        $t = $this->quote($table);
+        $n = $this->quote($name);
+        if (stripos($schema, 'FOREIGN KEY') !== false) {
+            return "ALTER TABLE $t DROP FOREIGN KEY $n;";
+        }
+        return "ALTER TABLE $t DROP CONSTRAINT $n;";
     }
 }
