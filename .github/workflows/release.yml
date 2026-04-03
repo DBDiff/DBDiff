@@ -509,20 +509,22 @@ jobs:
       - name: Summarize npm publish results
         if: always()
         run: |
-          echo "### npm Publish Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.npmjs-platform.outcome }}" = "success" ] && [ "${{ steps.npmjs-root.outcome }}" = "success" ]; then
-            echo "✅ **npmjs.org**: All packages published successfully" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "⚠️ **npmjs.org**: Some packages failed to publish (likely tombstone / E409 — contact npm support)" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "📦 **GitHub Packages**: Published as fallback registry" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "If npmjs.org is blocked, users can install from GitHub Packages:" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo 'npm install @dbdiff/cli --registry=https://npm.pkg.github.com' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### npm Publish Summary"
+            echo ""
+            if [ "${{ steps.npmjs-platform.outcome }}" = "success" ] && [ "${{ steps.npmjs-root.outcome }}" = "success" ]; then
+              echo "✅ **npmjs.org**: All packages published successfully"
+            else
+              echo "⚠️ **npmjs.org**: Some packages failed to publish (likely tombstone / E409 — contact npm support)"
+            fi
+            echo ""
+            echo "📦 **GitHub Packages**: Published as fallback registry"
+            echo ""
+            echo "If npmjs.org is blocked, users can install from GitHub Packages:"
+            echo '```'
+            echo 'npm install @dbdiff/cli --registry=https://npm.pkg.github.com'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # JOB 4 — Build and push Docker images
