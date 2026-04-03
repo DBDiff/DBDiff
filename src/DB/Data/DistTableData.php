@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
 use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
@@ -24,7 +25,7 @@ class DistTableData {
         $columns1 = $this->manager->getColumns('source', $table);
         $columns2 = $this->manager->getColumns('target', $table);
 
-        $fieldsToIgnore = $params->fieldsToIgnore[$table] ?? [];
+        $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
         $merge = new StreamingMergeDiff($this->source, $this->target, $driver);
         return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);

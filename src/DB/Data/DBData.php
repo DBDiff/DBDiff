@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
 use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use DBDiff\Diff\SetDBCollation;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
@@ -23,10 +24,8 @@ class DBData {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
-        if (isset($params->tablesToIgnore)) {
-            $sourceTables = array_diff($sourceTables, $params->tablesToIgnore);
-            $targetTables = array_diff($targetTables, $params->tablesToIgnore);
-        }
+        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'data');
+        $targetTables = TableFilter::filterTables($targetTables, $params, 'data');
 
         $commonTables = array_intersect($sourceTables, $targetTables);
         foreach ($commonTables as $table) {

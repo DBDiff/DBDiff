@@ -298,6 +298,8 @@ _Flags always override settings in `.dbdiff`._
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Output file path. Defaults to `migration.sql`. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
+| `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*` |
+| `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
 
@@ -502,13 +504,43 @@ driver: mysql     # mysql | pgsql | sqlite
 type: all
 include: all
 nocomments: true
+
+# ── Filtering ─────────────────────────────────────────────────────────────
+# Include list — only these tables are diffed (supports globs: *, ?).
+# When set, only matching tables are included. Omit to diff all tables.
+# tables:
+#   - users
+#   - orders
+#   - wp_*
+
+# Exclude list — skip these tables entirely (supports globs).
 tablesToIgnore:
   - table1
   - table2
+
+# Exclude from data diff only — schema is still diffed (supports globs).
+# tablesDataToIgnore:
+#   - audit_log
+#   - event_stream
+
+# Per-table column exclusion (keys support globs: *, ?).
 fieldsToIgnore:
   table1:
     - field1
     - field2
+
+# Per-table row filtering — skip rows matching a column-value regex.
+# rowsToIgnore:
+#   wp_options:
+#     - { column: option_name, pattern: "_transient_.*" }
+#     - { column: option_name, pattern: "_site_transient_.*" }
+#   sessions:
+#     - { column: status, pattern: "expired|archived" }
+
+# Per-table scope override: schema, data, or all (default).
+# tableScope:
+#   audit_log: schema
+#   config: data
 
 # ── Migration runner (dbdiff migration:up) ────────────────────────────────
 database:
@@ -522,6 +554,61 @@ database:
 migrations:
   dir: ./migrations
   history_table: _dbdiff_migrations
+```
+
+
+## Filtering
+
+DBDiff offers fine-grained control over what enters the diff. All list values support **glob patterns** (`*` matches any characters, `?` matches a single character).
+
+| Dimension | Config key | CLI flag | Scope |
+|---|---|---|---|
+| Table include list | `tables` | `--tables` | schema + data |
+| Table exclude list | `tablesToIgnore` | `--ignore-tables` | schema + data |
+| Data-only exclude | `tablesDataToIgnore` | — | data only |
+| Column exclusion | `fieldsToIgnore` | — | schema + data |
+| Row filtering | `rowsToIgnore` | — | data only |
+| Per-table scope | `tableScope` | — | override |
+
+**Priority**: include list is applied first (only matching tables pass), then the exclude list narrows further. `tablesDataToIgnore` removes tables from data comparison only. `tableScope` can override a table to `schema`, `data`, or `all`.
+
+**Glob examples**: `wp_*` matches all WordPress tables, `*_backup` matches any table ending in `_backup`, `log_?` matches `log_a` through `log_z`.
+
+```yaml
+# Only diff tables matching these patterns
+tables:
+  - users
+  - orders
+  - wp_*
+
+# Skip these tables entirely
+tablesToIgnore:
+  - cache_*
+  - _dbdiff_migrations
+
+# Skip data diff for these (schema is still compared)
+tablesDataToIgnore:
+  - audit_log
+
+# Exclude columns per table (keys support globs)
+fieldsToIgnore:
+  users:
+    - updated_at
+    - last_login
+  wp_*:
+    - ID
+
+# Skip rows matching column-value regex
+rowsToIgnore:
+  wp_options:
+    - { column: option_name, pattern: "_transient_.*" }
+  sessions:
+    - { column: status, pattern: "expired|archived" }
+
+# Override scope per table: schema | data | all
+tableScope:
+  audit_log: schema
+  config: data
 ```
 
 

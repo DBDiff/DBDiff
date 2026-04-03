@@ -5,6 +5,8 @@ use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
+use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use Illuminate\Support\Arr;
 
 
@@ -27,8 +29,12 @@ class TableData {
         $diffSequence = [];
         $iterator = $this->getIterator('source', $table);
         $key = $this->manager->getKey('source', $table);
+        $rowRules = TableFilter::getRowIgnoreRules($table, ParamsFactory::get());
         while ($iterator->hasNext()) {
             $data = $iterator->next(ArrayDiff::$size);
+            if (!empty($rowRules)) {
+                $data = TableFilter::filterRows($data, $rowRules);
+            }
             foreach ($data as $entry) {
                 $diffSequence[] = new InsertData($table, [
                     'keys' => Arr::only($entry, $key),
@@ -44,8 +50,12 @@ class TableData {
         $diffSequence = [];
         $iterator = $this->getIterator('target', $table);
         $key = $this->manager->getKey('target', $table);
+        $rowRules = TableFilter::getRowIgnoreRules($table, ParamsFactory::get());
         while ($iterator->hasNext()) {
             $data = $iterator->next(ArrayDiff::$size);
+            if (!empty($rowRules)) {
+                $data = TableFilter::filterRows($data, $rowRules);
+            }
             foreach ($data as $entry) {
                 $diffSequence[] = new DeleteData($table, [
                     'keys' => Arr::only($entry, $key),

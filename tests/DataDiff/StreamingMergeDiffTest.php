@@ -12,6 +12,8 @@ use DBDiff\DB\Data\StreamingMergeDiff;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
+use DBDiff\Params\DefaultParams;
+use DBDiff\Params\ParamsFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\StatementPrepared;
@@ -26,12 +28,21 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
         if (!extension_loaded('pdo_sqlite')) {
             $this->markTestSkipped('pdo_sqlite extension not loaded.');
         }
+        // Provide a default params object so ParamsFactory::get() works
+        // without CLI argv parsing.
+        ParamsFactory::set(new DefaultParams);
+
         $this->capsule = new Capsule;
         $dispatcher = new Dispatcher();
         $dispatcher->listen(StatementPrepared::class, function ($event) {
             $event->statement->setFetchMode(\PDO::FETCH_ASSOC);
         });
         $this->capsule->setEventDispatcher($dispatcher);
+    }
+
+    protected function tearDown(): void
+    {
+        ParamsFactory::reset();
     }
 
     // ── Helper: create an in-memory SQLite connection ─────────────────────

@@ -34,6 +34,46 @@ include: up              # up | down | both
 nocomments: false
 format: native           # native | flyway | liquibase-xml | liquibase-yaml | laravel
 
+# ── Filtering ─────────────────────────────────────────────────────────────────
+# All list values support glob patterns: * (any chars), ? (single char).
+
+# Include list — only diff these tables. Omit to diff all tables.
+# tables:
+#   - users
+#   - orders
+#   - wp_*
+
+# Exclude list — skip these tables entirely.
+# tablesToIgnore:
+#   - _dbdiff_migrations
+#   - cache_*
+
+# Exclude from data diff only — schema is still compared.
+# tablesDataToIgnore:
+#   - audit_log
+#   - event_stream
+
+# Per-table column exclusion (keys support globs).
+# fieldsToIgnore:
+#   users:
+#     - updated_at
+#     - last_login
+#   wp_*:
+#     - ID
+
+# Per-table row filtering — skip rows matching a column-value regex.
+# rowsToIgnore:
+#   wp_options:
+#     - { column: option_name, pattern: "_transient_.*" }
+#     - { column: option_name, pattern: "_site_transient_.*" }
+#   sessions:
+#     - { column: status, pattern: "expired|archived" }
+
+# Per-table scope override: schema, data, or all (default).
+# tableScope:
+#   audit_log: schema
+#   config: data
+
 # ── PHP memory limit ──────────────────────────────────────────────────────────
 # The CLI entry point (dbdiff / dbdiff.php / PHAR) sets a default of 1G, which
 # is sufficient for most databases. Raise it here if you're diffing very large

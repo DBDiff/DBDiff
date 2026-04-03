@@ -75,6 +75,46 @@ class DefaultParams {
     public ?string $memoryLimit = null;
 
     /*
+     Include list — only these tables are diffed (supports globs: *, ?).
+     Takes priority over tablesToIgnore. When set, only tables matching at
+     least one pattern are included. Null means "all tables".
+    */
+    public $tables = null;
+
+    /*
+     Exclude list — skip these tables entirely from both schema and data diffs.
+     Supports glob patterns (*, ?). Null means "exclude nothing".
+    */
+    public $tablesToIgnore = null;
+
+    /*
+     Per-table column exclusion. Keys are table names (or glob patterns),
+     values are arrays of column names to exclude from both schema and data diffs.
+    */
+    public $fieldsToIgnore = null;
+
+    /*
+     Exclude from data diff only — schema is still diffed for these tables.
+     Supports glob patterns (*, ?). Null means "no data-only exclusions".
+    */
+    public $tablesDataToIgnore = null;
+
+    /*
+     Per-table row filtering — skip rows matching a column-value regex.
+     YAML-only (too complex for CLI flags).
+     Format: ['table_name' => [['column' => 'col', 'pattern' => 'regex'], ...]]
+    */
+    public $rowsToIgnore = null;
+
+    /*
+     Per-table scope override: 'schema', 'data', or 'all' (default).
+     YAML-only. When set, a table scoped to 'schema' will be excluded from
+     data diffs, and vice-versa.
+     Format: ['table_name' => 'schema'|'data'|'all']
+    */
+    public $tableScope = null;
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

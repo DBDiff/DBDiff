@@ -5,6 +5,8 @@ use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
+use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 
@@ -82,9 +84,13 @@ class StreamingMergeDiff
 
     private function collectInserts(string $table, array $key, array $sourceColumns, array $insertPKs): array
     {
+        $rowRules = TableFilter::getRowIgnoreRules($table, ParamsFactory::get());
         $result = [];
         foreach (array_chunk($insertPKs, self::BATCH_SIZE) as $batch) {
             $rows = $this->fetchRowsByPK($this->source, $table, $key, $sourceColumns, $batch);
+            if (!empty($rowRules)) {
+                $rows = TableFilter::filterRows($rows, $rowRules);
+            }
             foreach ($rows as $row) {
                 $result[] = new InsertData($table, [
                     'keys' => Arr::only($row, $key),
@@ -97,9 +103,13 @@ class StreamingMergeDiff
 
     private function collectDeletes(string $table, array $key, array $targetColumns, array $deletePKs): array
     {
+        $rowRules = TableFilter::getRowIgnoreRules($table, ParamsFactory::get());
         $result = [];
         foreach (array_chunk($deletePKs, self::BATCH_SIZE) as $batch) {
             $rows = $this->fetchRowsByPK($this->target, $table, $key, $targetColumns, $batch);
+            if (!empty($rowRules)) {
+                $rows = TableFilter::filterRows($rows, $rowRules);
+            }
             foreach ($rows as $row) {
                 $result[] = new DeleteData($table, [
                     'keys' => Arr::only($row, $key),

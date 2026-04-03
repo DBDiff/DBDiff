@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
 use DBDiff\Params\ParamsFactory;
+use DBDiff\Params\TableFilter;
 use Diff\Differ\MapDiffer;
 use Diff\DiffOp\DiffOpAdd;
 use Diff\DiffOp\DiffOpRemove;
@@ -59,11 +60,10 @@ class ArrayDiff {
 
                     // unset the fields to ignore
                     $params = ParamsFactory::get();
-                    if (isset($params->fieldsToIgnore[$table])) {
-                        foreach ($params->fieldsToIgnore[$table] as $fieldToIgnore) {
-                            unset($entry1[$fieldToIgnore]);
-                            unset($entry2[$fieldToIgnore]);
-                        }
+                    $ignoredFields = TableFilter::getFieldsToIgnore($table, $params);
+                    foreach ($ignoredFields as $fieldToIgnore) {
+                        unset($entry1[$fieldToIgnore]);
+                        unset($entry2[$fieldToIgnore]);
                     }
 
                     $differ = new MapDiffer();
