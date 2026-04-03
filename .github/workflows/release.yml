@@ -231,7 +231,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $phpBytes  = [IO.File]::ReadAllBytes("buildroot\bin\micro.sfx.exe")
+          $phpBytes  = [IO.File]::ReadAllBytes("buildroot\bin\micro.sfx")
           $pharBytes = [IO.File]::ReadAllBytes("dist\dbdiff.phar")
           [IO.File]::WriteAllBytes("dbdiff.exe", $phpBytes + $pharBytes)
 
