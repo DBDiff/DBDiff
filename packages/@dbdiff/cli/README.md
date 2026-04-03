@@ -13,6 +13,9 @@ npx @dbdiff/cli --help
 
 # Project dev dependency
 npm install --save-dev @dbdiff/cli
+
+# Install from GitHub Packages (mirror registry)
+npm install -g @dbdiff/cli --registry=https://npm.pkg.github.com
 ```
 
 ## Usage
