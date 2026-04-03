@@ -22,9 +22,8 @@ class AlterTableDropConstraintSQL implements SQLGenInterface {
                 "Cannot generate DROP CONSTRAINT for table `{$this->obj->table}`: constraint name is empty"
             );
         }
-        $t    = $this->dialect->quote($this->obj->table);
-        $name = $this->dialect->quote($this->obj->name);
-        return "ALTER TABLE $t DROP CONSTRAINT $name;";
+        $schema = $this->obj->diff->getOldValue();
+        return $this->dialect->dropConstraint($this->obj->table, $this->obj->name, $schema);
     }
 
     public function getDown(): string {

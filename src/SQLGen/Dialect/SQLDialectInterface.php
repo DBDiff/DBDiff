@@ -61,4 +61,14 @@ interface SQLDialectInterface {
      * Returns the complete statement(s) including trailing semicolons.
      */
     public function changeColumn(string $table, string $col, string $newDef): string;
+
+    /**
+     * DROP CONSTRAINT statement.
+     * $schema is the full constraint DDL used to detect the constraint type.
+     *
+     * MySQL requires DROP FOREIGN KEY for FK constraints; DROP CONSTRAINT
+     * only works for CHECK constraints.  Postgres and SQLite use the
+     * standard DROP CONSTRAINT for all types.
+     */
+    public function dropConstraint(string $table, string $name, string $schema): string;
 }

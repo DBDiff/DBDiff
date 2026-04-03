@@ -64,11 +64,13 @@ class MySQLAdapter implements DBAdapterInterface {
             $name = $matches[1];
             $line = trim($line, ',');
             if (Str::startsWith($line, '`')) {
-                $columns[$name] = $line;
+                $columns[$name] = $this->normalizeColumnDef($line);
             } elseif (Str::startsWith($line, 'CONSTRAINT')) {
                 $constraints[$name] = $line;
+            } elseif (Str::startsWith($line, 'PRIMARY KEY')) {
+                $keys['PRIMARY'] = $line;
             } else {
-                $keys[$name] = $line;
+                $keys[$name] = $this->normalizeKeyDef($line);
             }
         }
 
@@ -177,5 +179,45 @@ class MySQLAdapter implements DBAdapterInterface {
         $definition = preg_replace('/\s*DEFINER\s*=\s*`[^`]*`@`[^`]*`/i', '', $definition);
         $definition = preg_replace('/\s*SQL\s+SECURITY\s+(?:DEFINER|INVOKER)/i', '', $definition);
         return rtrim(trim($definition), ';');
+    }
+
+    /**
+     * Normalise a column DDL fragment so that two MySQL versions produce
+     * identical strings for semantically identical columns.
+     *
+     * 1. Strip integer display widths removed in MySQL 8.0.17+.
+     * 2. Canonicalise CURRENT_TIMESTAMP (case + parentheses).
+     */
+    private function normalizeColumnDef(string $def): string {
+        // Integer display widths: int(11) → int, tinyint(4) → tinyint, etc.
+        $def = preg_replace(
+            '/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/i',
+            '$1',
+            $def
+        );
+
+        // Normalise CURRENT_TIMESTAMP variants (with optional precision).
+        // current_timestamp() → CURRENT_TIMESTAMP
+        // current_timestamp(3) → CURRENT_TIMESTAMP(3)
+        $def = preg_replace_callback(
+            '/\bcurrent_timestamp(?:\((\d*)\))?/i',
+            function ($m) {
+                $precision = $m[1] ?? '';
+                return ($precision !== '') ? "CURRENT_TIMESTAMP($precision)" : 'CURRENT_TIMESTAMP';
+            },
+            $def
+        );
+
+        return $def;
+    }
+
+    /**
+     * Normalise an index / key DDL fragment.
+     *
+     * Strip trailing USING BTREE — it is the default index type and its
+     * inclusion varies between MySQL versions, causing false positives.
+     */
+    private function normalizeKeyDef(string $def): string {
+        return preg_replace('/\s+USING BTREE$/i', '', $def);
     }
 }
