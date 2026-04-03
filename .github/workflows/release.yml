@@ -443,10 +443,23 @@ jobs:
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
             else
               echo "Publishing ${pkg_name}@${VERSION} to npmjs.org ..."
-              if npm publish "${pkg_dir}" --access public --provenance --tag "$NPM_TAG"; then
+              publish_ok=false
+              for attempt in 1 2 3; do
+                if npm publish "${pkg_dir}" --access public --provenance --tag "$NPM_TAG"; then
+                  publish_ok=true
+                  break
+                fi
+                # E409 often means an orphaned packument from a prior interrupted publish.
+                # The registry resolves the conflict within ~60 s — retry up to 3 times.
+                if [ "$attempt" -lt 3 ]; then
+                  echo "  Attempt ${attempt} failed — waiting 60 s before retry ..."
+                  sleep 60
+                fi
+              done
+              if $publish_ok; then
                 sleep 5
               else
-                echo "::warning::Failed to publish ${pkg_name} to npmjs.org (E409 tombstone / registry issue)"
+                echo "::warning::Failed to publish ${pkg_name} to npmjs.org after 3 attempts (E409 / registry issue)"
                 failed=$((failed + 1))
               fi
             fi
@@ -463,7 +476,15 @@ jobs:
           if npm view "@dbdiff/cli@${VERSION}" version &>/dev/null; then
             echo "@dbdiff/cli@${VERSION} already on registry — skipping"
           else
-            npm publish packages/@dbdiff/cli --access public --provenance --tag "$NPM_TAG"
+            for attempt in 1 2 3; do
+              if npm publish packages/@dbdiff/cli --access public --provenance --tag "$NPM_TAG"; then
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                echo "  Attempt ${attempt} failed — waiting 60 s before retry ..."
+                sleep 60
+              fi
+            done
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
