@@ -12,9 +12,11 @@
 # Batch file format (one per line, # comments and blank lines ignored):
 #   issue|<number>|<labels>|<comment>
 #   pr|<number>|<labels>|<comment>
+#   tag|<number>|<labels>|<comment>
 #   create|<labels>|<title>|<body>
 #
 # Labels are comma-separated (e.g. bug,fixed) or - for none.
+# 'tag' entries apply labels and add a comment but do NOT close the issue.
 # 'create' entries open a new issue (useful for tracking features before closing stale PRs).
 #
 # Dependencies: gh (GitHub CLI), jq
@@ -38,6 +40,7 @@ FAILED_PRS=0
 CLOSED_ISSUES=0
 CLOSED_PRS=0
 CREATED_ISSUES=0
+TAGGED_ISSUES=0
 SKIPPED_CLOSES=0
 FAILED_CLOSES=0
 ERRORS=()
@@ -65,6 +68,7 @@ print_summary() {
     echo "========================================================"
     if [ -n "$BATCH_CLOSE_FILE" ]; then
         printf "Issues Created:       %d\n" "$CREATED_ISSUES"
+        printf "Issues Tagged:        %d\n" "$TAGGED_ISSUES"
         printf "Issues Closed:        %d\n" "$CLOSED_ISSUES"
         printf "PRs Closed:           %d\n" "$CLOSED_PRS"
         printf "Skipped (Already Done):%d\n" "$SKIPPED_CLOSES"
@@ -154,7 +158,7 @@ validate_batch_file() {
         local type="${line%%|*}"
 
         case "$type" in
-            issue|pr|create) ;;
+            issue|pr|tag|create) ;;
             *)
                 error_log "Line $line_num: unknown type '$type' (expected: issue, pr, create)"
                 errors=$((errors+1))
@@ -168,7 +172,7 @@ validate_batch_file() {
         local field3="${rest%%|*}"
         local field4="${rest#*|}"
 
-        if [[ "$type" == "issue" || "$type" == "pr" ]]; then
+        if [[ "$type" == "issue" || "$type" == "pr" || "$type" == "tag" ]]; then
             if ! [[ "$field2" =~ ^[0-9]+$ ]]; then
                 error_log "Line $line_num: '$field2' is not a valid issue/PR number"
                 errors=$((errors+1))
@@ -218,6 +222,7 @@ batch_close() {
 
     local issue_count=0
     local pr_count=0
+    local tag_count=0
     local create_count=0
 
     # Count entries
@@ -227,12 +232,14 @@ batch_close() {
         case "$type" in
             issue)  issue_count=$((issue_count+1)) ;;
             pr)     pr_count=$((pr_count+1)) ;;
+            tag)    tag_count=$((tag_count+1)) ;;
             create) create_count=$((create_count+1)) ;;
         esac
     done < "$file"
 
     log "Batch Close — file: $file"
     log "Issues to create: $create_count"
+    log "Issues to tag:    $tag_count"
     log "Issues to close:  $issue_count"
     log "PRs to close:     $pr_count"
     echo ""
@@ -251,7 +258,7 @@ batch_close() {
         echo "--------------------------------------------------------"
 
         # Apply labels to existing issues/PRs (skip 'create' — handled at creation)
-        if [[ "$type" != "create" && "$labels" != "-" && -n "$labels" ]]; then
+        if [[ "$type" != "create" && "$type" != "tag" && "$labels" != "-" && -n "$labels" ]]; then
             local label_args=()
             IFS=',' read -ra label_list <<< "$labels"
             for lbl in "${label_list[@]}"; do
@@ -267,6 +274,44 @@ batch_close() {
         fi
 
         case "$type" in
+            tag)
+                log "Tag issue #$num"
+
+                # Apply labels
+                if [[ "$labels" != "-" && -n "$labels" ]]; then
+                    local tag_label_args=()
+                    IFS=',' read -ra tag_label_list <<< "$labels"
+                    for lbl in "${tag_label_list[@]}"; do
+                        tag_label_args+=(--add-label "$lbl")
+                    done
+
+                    if [ "$DRY_RUN" = true ]; then
+                        echo "   [DRY-RUN] Would label #$num: $labels"
+                    else
+                        gh issue edit "$num" "${tag_label_args[@]}" 2>/dev/null || \
+                            warn "Failed to label #$num"
+                    fi
+                fi
+
+                # Add comment (if non-empty)
+                if [[ -n "$comment" ]]; then
+                    if [ "$DRY_RUN" = true ]; then
+                        echo "   [DRY-RUN] Would comment on #$num:"
+                        echo "   $comment"
+                    else
+                        if gh issue comment "$num" --body "$comment" 2>/dev/null; then
+                            log "Tagged issue #$num"
+                            TAGGED_ISSUES=$((TAGGED_ISSUES+1))
+                        else
+                            error_log "Failed to comment on issue #$num"
+                            FAILED_CLOSES=$((FAILED_CLOSES+1))
+                        fi
+                        sleep 1
+                    fi
+                else
+                    TAGGED_ISSUES=$((TAGGED_ISSUES+1))
+                fi
+                ;;
             create)
                 # create|<labels>|<title>|<body>
                 # Re-parse: num is actually labels, labels is actually title,

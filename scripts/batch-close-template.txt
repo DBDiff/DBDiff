@@ -3,13 +3,16 @@
 #        Add --apply to execute (default is dry-run).
 #
 # Format: type|number|labels|comment
-#   type    = "issue", "pr", or "create"
+#   type    = "issue", "pr", "tag", or "create"
 #   number  = GitHub issue/PR number (ignored for 'create')
 #   labels  = Comma-separated labels to apply (e.g. bug,fixed) or - for none
-#   comment = Closing comment posted on the issue/PR
+#   comment = Closing comment posted on the issue/PR (or tagging comment for 'tag')
 #
 # For 'create' entries (open a new issue before closing a stale PR):
 #   create|<labels>|<title>|<body>
+#
+# For 'tag' entries (apply labels + comment WITHOUT closing):
+#   tag|<number>|<labels>|<comment>
 #
 # Lines starting with # are ignored. Blank lines are ignored.
 # Pipe characters (|) inside the comment/body are fine — only the first three are split on.
