@@ -175,6 +175,12 @@ dbdiff --version
 
 The correct platform binary is selected automatically at install time. Supported: Linux x64/arm64 (glibc + musl), macOS x64/arm64, Windows x64/arm64.
 
+Packages are also published to **GitHub Packages** as a mirror. If npmjs.org is unavailable:
+
+```bash
+npm install -g @dbdiff/cli --registry=https://npm.pkg.github.com
+```
+
 
 ## PHAR
 

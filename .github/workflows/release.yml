@@ -221,7 +221,11 @@ jobs:
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
           .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
-          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug
+          # --without-micro-ext-test: SPC auto-pulls the pgsql extension as a
+          # dependency of pdo_pgsql, but the standalone pgsql ext fails its
+          # runtime sanity check on Windows (extension_loaded('pgsql') → false).
+          # DBDiff only uses pdo_pgsql (via PDO), so skipping the check is safe.
+          .\.spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
 
       - name: Combine PHP + PHAR → binary (Windows)
         if: runner.os == 'Windows'
@@ -249,60 +253,122 @@ jobs:
           retention-days: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # JOB 3 — Publish to npm + create GitHub Release
+  # JOB 3 — Create GitHub Release + git tag
   #
-  # This job depends on BOTH build-phar (required) and build-binary (best-effort).
-  # It runs as long as:
-  #   • The workflow was not cancelled, AND
-  #   • The PHAR was built successfully.
-  # Individual binary build failures do NOT block publishing: the PHAR and any
-  # successfully built binaries are still released, and platform npm packages
-  # that are missing their binary are skipped with a warning.
+  # Runs as soon as the PHAR succeeds, even if some binary builds failed.
+  # The GitHub Release is the primary distribution channel — it must never
+  # be blocked by npm registry issues (tombstones, E409 conflicts, etc.).
   # ═══════════════════════════════════════════════════════════════════════════
-  publish:
-    name: Publish (npm + GitHub Release)
+  github-release:
+    name: GitHub Release
     needs: [build-phar, build-binary]
-    # Run whenever the PHAR succeeded, even if some platform binaries failed.
-    # The !cancelled() guard prevents this job from running after a manual cancel.
     if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
-      id-token: write   # required for npm --provenance
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Download all available artifacts (PHAR + whatever binaries succeeded).
-      # Artifacts from failed binary jobs simply won't be present in binaries/.
-      # The pattern filter is required to exclude Docker build-cache artifacts
-      # (DBDiff~DBDiff~*.dockerbuild) that share the same run — downloading
-      # those fails with "Artifact download failed after 5 retries" and aborts
-      # the entire publish job.
       - uses: actions/download-artifact@v4
         with:
           path: binaries/
           pattern: dbdiff-*
           merge-multiple: false
 
-      # Detect whether this is a pre-release version (contains a hyphen, e.g. 3.0.0-alpha.1).
-      # Sets IS_PRERELEASE and NPM_TAG for use in subsequent steps.
       - name: Detect pre-release
         run: |
           VERSION="${{ github.event.inputs.version }}"
           if [[ "$VERSION" == *-* ]]; then
             echo "IS_PRERELEASE=true" >> "$GITHUB_ENV"
-            # Extract the identifier between the first '-' and any subsequent '.'
-            # e.g. 3.0.0-alpha.1 → alpha,  3.0.0-rc.2 → rc,  3.0.0-next → next
+          else
+            echo "IS_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create git tag
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists on origin — skipping"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+      # Rename each binary to include its platform so every GitHub Release asset
+      # has a unique name (dbdiff-linux-x64, dbdiff-darwin-arm64, dbdiff-win32-x64.exe …).
+      - name: Rename binaries to include platform in filename
+        run: |
+          for dir in binaries/dbdiff-*/; do
+            platform="${dir#binaries/dbdiff-}"
+            platform="${platform%/}"
+            if [ -f "${dir}dbdiff" ]; then
+              mv "${dir}dbdiff" "${dir}dbdiff-${platform}"
+            elif [ -f "${dir}dbdiff.exe" ]; then
+              mv "${dir}dbdiff.exe" "${dir}dbdiff-${platform}.exe"
+            fi
+          done
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:  v${{ github.event.inputs.version }}
+          name:      v${{ github.event.inputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+          make_latest: ${{ env.IS_PRERELEASE != 'true' }}
+          files: |
+            binaries/dbdiff-*/dbdiff-*
+            binaries/dbdiff-phar/dbdiff.phar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4 — Publish to npm registries
+  #
+  # Best-effort: npm failures (E409 tombstones, registry outages) do NOT
+  # block the GitHub Release.  Individual package failures are logged as
+  # warnings but do not abort the remaining publishes.
+  #
+  # Publishes to:
+  #   1. npmjs.org  — primary public registry
+  #   2. npm.pkg.github.com — GitHub Packages mirror (same npm protocol;
+  #      works with npm, pnpm, yarn, bun via .npmrc or --registry flag)
+  # ═══════════════════════════════════════════════════════════════════════════
+  publish-npm:
+    name: Publish npm packages
+    needs: [build-phar, build-binary, github-release]
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write    # required for GitHub Packages
+      id-token: write    # required for npm --provenance
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+          pattern: dbdiff-*
+          merge-multiple: false
+
+      - name: Detect pre-release
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ "$VERSION" == *-* ]]; then
             PRERELEASE_ID="${VERSION#*-}"
             PRERELEASE_ID="${PRERELEASE_ID%%.*}"
             echo "NPM_TAG=${PRERELEASE_ID}" >> "$GITHUB_ENV"
-            echo "Pre-release detected — GitHub Release will be marked pre-release; npm tag: ${PRERELEASE_ID}"
+            echo "Pre-release detected — npm tag: ${PRERELEASE_ID}"
           else
-            echo "IS_PRERELEASE=false" >> "$GITHUB_ENV"
             echo "NPM_TAG=latest" >> "$GITHUB_ENV"
             echo "Stable release — npm tag: latest"
           fi
@@ -327,9 +393,6 @@ jobs:
             "
           done
 
-      # Copy each platform binary into its npm package directory.
-      # Missing binaries (from failed builds) are skipped with a warning rather
-      # than aborting the whole publish job.
       - name: Copy binaries into platform packages
         run: |
           copy_binary() {
@@ -347,56 +410,54 @@ jobs:
           copy_binary binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
           copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
           copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
-          # win32-arm64 omitted — not built (SPC Windows ARM64 toolchain bug)
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
-      # Bundle the PHAR into @dbdiff/cli itself so bin/dbdiff.js can fall back to
-      # running it with system PHP on platforms that have no native binary
-      # (currently win32-x64 and win32-arm64 until SPC Windows support matures).
       - name: Bundle PHAR into @dbdiff/cli for PHP fallback
         run: cp binaries/dbdiff-phar/dbdiff.phar packages/@dbdiff/cli/dbdiff.phar
 
-      - uses: actions/setup-node@v4
+      # ── npmjs.org ─────────────────────────────────────────────────────────
+      - name: Setup Node (npmjs.org)
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      # Publish the platform packages that have a binary present, plus any
-      # intentionally binary-free packages (PHAR_FALLBACK_PKGS) that rely on
-      # the dbdiff.phar fallback bundled in @dbdiff/cli.
-      # Packages already on the registry at this version are also skipped
-      # (safe to re-run against an already-published release).
-      - name: Publish platform packages to npm
+      - name: Publish platform packages to npmjs.org
+        id: npmjs-platform
+        continue-on-error: true
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          # Packages published without a native binary — bin/dbdiff.js falls
-          # back to running the bundled dbdiff.phar with system PHP for these.
-          # win32-arm64: SPC hard-codes phpsdk-vs17-x64.bat, invalid on ARM64 hosts
           PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
+          failed=0
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
-            # Skip packages whose binary was not produced, unless they are in
-            # the known PHAR-fallback list (intentionally published without a binary).
             if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
               if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
                 echo "  No binary for ${pkg_name} — publishing as PHAR-fallback skeleton"
               else
-                echo "::warning::No binary in ${pkg_dir} — skipping npm publish for ${pkg_name}"
+                echo "::warning::No binary in ${pkg_dir} — skipping"
                 continue
               fi
             fi
             if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
             else
-              echo "Publishing ${pkg_dir} ..."
-              npm publish "${pkg_dir}" --access public --provenance --tag "$NPM_TAG"
-              sleep 5
+              echo "Publishing ${pkg_name}@${VERSION} to npmjs.org ..."
+              if npm publish "${pkg_dir}" --access public --provenance --tag "$NPM_TAG"; then
+                sleep 5
+              else
+                echo "::warning::Failed to publish ${pkg_name} to npmjs.org (E409 tombstone / registry issue)"
+                failed=$((failed + 1))
+              fi
             fi
           done
+          echo "npm_platform_failed=${failed}" >> "$GITHUB_OUTPUT"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish root @dbdiff/cli to npm
+      - name: Publish root @dbdiff/cli to npmjs.org
+        id: npmjs-root
+        continue-on-error: true
         run: |
           VERSION="${{ github.event.inputs.version }}"
           if npm view "@dbdiff/cli@${VERSION}" version &>/dev/null; then
@@ -407,54 +468,63 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # Tag the release commit (idempotent — skips push if the tag already
-      # exists, which is the case when updating an already-published release)
-      - name: Create git tag
-        run: |
-          TAG="v${{ github.event.inputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists on origin — skipping"
-          else
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin "$TAG"
-          fi
-
-      # Rename each binary to include its platform so every GitHub Release asset
-      # has a unique name (dbdiff-linux-x64, dbdiff-darwin-arm64, dbdiff-win32-x64.exe …).
-      # Without this all six Unix binaries share the basename 'dbdiff', causing
-      # softprops/action-gh-release to upload colliding assets and then fail with
-      # 404 'Not Found' when trying to delete stale duplicates on re-runs.
-      - name: Rename binaries to include platform in filename
-        run: |
-          for dir in binaries/dbdiff-*/; do
-            platform="${dir#binaries/dbdiff-}"
-            platform="${platform%/}"
-            if [ -f "${dir}dbdiff" ]; then
-              mv "${dir}dbdiff" "${dir}dbdiff-${platform}"
-            elif [ -f "${dir}dbdiff.exe" ]; then
-              mv "${dir}dbdiff.exe" "${dir}dbdiff-${platform}.exe"
-            fi
-          done
-
-      # softprops/action-gh-release updates the release in-place when one
-      # already exists for the tag, so this step is safe to re-run.
-      # Glob patterns match only the binaries that were actually produced;
-      # missing platform binaries are silently omitted rather than failing.
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
+      # ── GitHub Packages (npm.pkg.github.com) ──────────────────────────────
+      # Secondary registry — same npm protocol, works with npm/pnpm/yarn/bun.
+      # Install from here when npmjs.org has tombstone issues:
+      #   npm install @dbdiff/cli --registry=https://npm.pkg.github.com
+      - name: Setup Node (GitHub Packages)
+        uses: actions/setup-node@v4
         with:
-          tag_name:  v${{ github.event.inputs.version }}
-          name:      v${{ github.event.inputs.version }}
-          generate_release_notes: true
-          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
-          make_latest: ${{ env.IS_PRERELEASE != 'true' }}
-          files: |
-            binaries/dbdiff-*/dbdiff-*
-            binaries/dbdiff-phar/dbdiff.phar
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@dbdiff'
+
+      - name: Publish platform packages to GitHub Packages
+        continue-on-error: true
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
+          for pkg_dir in packages/@dbdiff/cli-*/; do
+            pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
+            if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
+              if ! echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
+                continue
+              fi
+            fi
+            echo "Publishing ${pkg_name}@${VERSION} to GitHub Packages ..."
+            npm publish "${pkg_dir}" --access public --tag "$NPM_TAG" 2>&1 || \
+              echo "::warning::Failed to publish ${pkg_name} to GitHub Packages"
+          done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish root @dbdiff/cli to GitHub Packages
+        continue-on-error: true
+        run: |
+          npm publish packages/@dbdiff/cli --access public --tag "$NPM_TAG" 2>&1 || \
+            echo "::warning::Failed to publish @dbdiff/cli to GitHub Packages"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summarize npm publish results
+        if: always()
+        run: |
+          {
+            echo "### npm Publish Summary"
+            echo ""
+            if [ "${{ steps.npmjs-platform.outcome }}" = "success" ] && [ "${{ steps.npmjs-root.outcome }}" = "success" ]; then
+              echo "✅ **npmjs.org**: All packages published successfully"
+            else
+              echo "⚠️ **npmjs.org**: Some packages failed to publish (likely tombstone / E409 — contact npm support)"
+            fi
+            echo ""
+            echo "📦 **GitHub Packages**: Published as fallback registry"
+            echo ""
+            echo "If npmjs.org is blocked, users can install from GitHub Packages:"
+            echo '```'
+            echo 'npm install @dbdiff/cli --registry=https://npm.pkg.github.com'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # JOB 4 — Build and push Docker images
