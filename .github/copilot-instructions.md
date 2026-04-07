@@ -11,8 +11,8 @@ Supports MySQL 8.0–9.6, PostgreSQL 14–18, SQLite 3, plus MySQL-compatible va
 ```
 src/
   DB/          — Adapters (MySQL, Postgres, SQLite), schema introspection, data diffing
-  Diff/        — 27 diff object models (AddTable, AlterTableChangeColumn, InsertData, CreateView, CreateTrigger, CreateRoutine, etc.)
-  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (27 generators)
+  Diff/        — 30 diff object models (AddTable, AlterTableChangeColumn, InsertData, CreateView, CreateTrigger, CreateRoutine, CreateEnum, etc.)
+  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (30 generators)
   Migration/   — Commands (Symfony Console), Runner, Config, Format/ (Native, Flyway, Liquibase, Laravel)
   Params/      — CLI parameter parsing (CLI flags → config file → defaults)
   Exceptions/  — Exception hierarchy
@@ -66,7 +66,8 @@ podman run --rm -v "$(pwd):/app:Z" -w /app php:8.4-cli vendor/bin/phpunit ...
 - MySQL adapter's `normalizeCreateStatement()` strips DEFINER, ALGORITHM, SQL SECURITY, and trailing semicolons from view/trigger/routine definitions.
 - PostgreSQL `DROP TRIGGER` requires `ON table` — handled by `PostgresDialect::dropTrigger()`.
 - SQLite has no stored procedures/functions — `getRoutines()` returns `[]`.
-- DiffSorter places DROP view/trigger/routine BEFORE table ops, CREATE/ALTER AFTER data ops.
+- Enum types (`CREATE TYPE ... AS ENUM`) are PostgreSQL-only. MySQL/SQLite adapters return `[]` from `getEnums()`.
+- DiffSorter places DROP enum/view/trigger/routine BEFORE table ops, CREATE/ALTER AFTER data ops. Enum drops come before view drops; enum creates come before view creates (tables/views may reference enum types).
 
 ## Docs
 

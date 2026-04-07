@@ -123,6 +123,11 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
+    public function getEnums(Connection $connection): array {
+        // SQLite has no standalone enum types.
+        return [];
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

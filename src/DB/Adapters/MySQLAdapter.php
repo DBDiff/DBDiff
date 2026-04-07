@@ -169,6 +169,11 @@ class MySQLAdapter implements DBAdapterInterface {
         return $routines;
     }
 
+    public function getEnums(Connection $connection): array {
+        // MySQL enums are column-level type constraints, not standalone types.
+        return [];
+    }
+
     /**
      * Strip MySQL-specific DEFINER, ALGORITHM, and SQL SECURITY clauses
      * from a CREATE statement so that definitions can be compared across

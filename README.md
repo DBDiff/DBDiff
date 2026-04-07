@@ -20,7 +20,7 @@
 ## Features
 
 - Compares two databases (local or remote) and generates SQL migrations automatically
-- Diffs tables, views, triggers, stored procedures/functions, and data — with deterministic, predictable output
+- Diffs tables, views, triggers, stored procedures/functions, enum types, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
@@ -642,6 +642,12 @@ Comparisons run in this order:
 - Detects created, dropped, and altered routines (MySQL and PostgreSQL)
 - SQLite has no stored procedures — routines are skipped automatically
 - MySQL definitions are normalized (DEFINER, ALGORITHM, SQL SECURITY stripped)
+
+### Enum Types (PostgreSQL)
+- Detects created, dropped, and altered `CREATE TYPE ... AS ENUM` definitions
+- ALTER = DROP TYPE IF EXISTS + CREATE TYPE with the new labels
+- Enum diffs are ordered before table diffs (tables may reference enum types)
+- MySQL and SQLite do not have standalone enum types — skipped automatically
 
 ### Data
 - Compares table storage engine, collation, and row count

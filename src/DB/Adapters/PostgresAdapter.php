@@ -173,6 +173,28 @@ class PostgresAdapter implements DBAdapterInterface {
         return $routines;
     }
 
+    public function getEnums(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT t.typname AS name,
+                    array_to_string(array_agg(e.enumlabel ORDER BY e.enumsortorder), '||') AS labels
+             FROM pg_type t
+             JOIN pg_enum e ON t.oid = e.enumtypid
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public'
+             GROUP BY t.typname, t.oid
+             ORDER BY t.typname"
+        );
+        $enums = [];
+        foreach ($result as $row) {
+            $labels = array_map(
+                fn($v) => "'" . str_replace("'", "''", $v) . "'",
+                explode('||', $row['labels'])
+            );
+            $enums[$row['name']] = 'CREATE TYPE "' . $row['name'] . '" AS ENUM (' . implode(', ', $labels) . ')';
+        }
+        return $enums;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

@@ -18,6 +18,9 @@ use DBDiff\Diff\AlterTrigger;
 use DBDiff\Diff\CreateRoutine;
 use DBDiff\Diff\DropRoutine;
 use DBDiff\Diff\AlterRoutine;
+use DBDiff\Diff\CreateEnum;
+use DBDiff\Diff\DropEnum;
+use DBDiff\Diff\AlterEnum;
 
 
 
@@ -91,6 +94,9 @@ class DBSchema {
             $diff->sortOrder = $i;
             $diffs[] = $diff;
         }
+
+        // Enums / custom types (must be created before tables that reference them)
+        $diffs = array_merge($diffs, $this->diffEnums());
 
         // Views
         $diffs = array_merge($diffs, $this->diffViews());
@@ -171,6 +177,28 @@ class DBSchema {
         foreach (array_intersect_key($sourceRoutines, $targetRoutines) as $name => $srcDef) {
             if ($srcDef !== $targetRoutines[$name]) {
                 $diffs[] = new AlterRoutine($name, $srcDef, $targetRoutines[$name]);
+            }
+        }
+        return $diffs;
+    }
+
+    /**
+     * Diff enum types between source and target databases.
+     */
+    private function diffEnums(): array {
+        $sourceEnums = $this->manager->getEnums('source');
+        $targetEnums = $this->manager->getEnums('target');
+        $diffs = [];
+
+        foreach (array_diff_key($sourceEnums, $targetEnums) as $name => $def) {
+            $diffs[] = new CreateEnum($name, $def);
+        }
+        foreach (array_diff_key($targetEnums, $sourceEnums) as $name => $def) {
+            $diffs[] = new DropEnum($name, $def);
+        }
+        foreach (array_intersect_key($sourceEnums, $targetEnums) as $name => $srcDef) {
+            if ($srcDef !== $targetEnums[$name]) {
+                $diffs[] = new AlterEnum($name, $srcDef, $targetEnums[$name]);
             }
         }
         return $diffs;

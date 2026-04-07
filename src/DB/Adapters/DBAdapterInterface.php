@@ -103,4 +103,12 @@ interface DBAdapterInterface {
      * SQLite returns [] (no stored routine support).
      */
     public function getRoutines(Connection $connection): array;
+
+    /**
+     * Return a map of enum type names to their CREATE TYPE definitions.
+     *
+     * Returns [typeName => 'CREATE TYPE ... AS ENUM (...)']
+     * MySQL and SQLite return [] (enums are column-level, not standalone types).
+     */
+    public function getEnums(Connection $connection): array;
 }

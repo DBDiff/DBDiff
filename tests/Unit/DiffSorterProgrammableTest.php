@@ -13,6 +13,9 @@ use DBDiff\Diff\CreateTrigger;
 use DBDiff\Diff\DropTrigger;
 use DBDiff\Diff\CreateRoutine;
 use DBDiff\Diff\DropRoutine;
+use DBDiff\Diff\CreateEnum;
+use DBDiff\Diff\DropEnum;
+use DBDiff\Diff\AlterEnum;
 
 class DiffSorterProgrammableTest extends TestCase
 {
@@ -116,5 +119,53 @@ class DiffSorterProgrammableTest extends TestCase
         $names  = array_map(fn($d) => $d->name, $sorted);
 
         $this->assertSame(['a_view', 'm_view', 'z_view'], $names);
+    }
+
+    /**
+     * UP order: DropEnum before DropView (enums may be referenced by views/tables).
+     */
+    public function testUpOrderDropEnumBeforeDropView(): void
+    {
+        $diffs = [
+            new DropView('v1', 'CREATE VIEW ...'),
+            new DropEnum('status', 'CREATE TYPE "status" AS ENUM (\'a\')'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        $this->assertSame(['DropEnum', 'DropView'], $names);
+    }
+
+    /**
+     * UP order: CreateEnum after data ops but before CreateView.
+     */
+    public function testUpOrderCreateEnumBeforeCreateView(): void
+    {
+        $diffs = [
+            new CreateView('v1', 'CREATE VIEW ...'),
+            new CreateEnum('status', 'CREATE TYPE "status" AS ENUM (\'a\')'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        $this->assertSame(['CreateEnum', 'CreateView'], $names);
+    }
+
+    /**
+     * DOWN order: Enum operations come after view/trigger/routine operations.
+     */
+    public function testDownOrderEnumAfterViews(): void
+    {
+        $diffs = [
+            new DropEnum('e1', 'CREATE TYPE "e1" AS ENUM (\'x\')'),
+            new DropView('v1', 'CREATE VIEW ...'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'down');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        $this->assertSame(['DropView', 'DropEnum'], $names);
     }
 }
