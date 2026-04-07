@@ -7,6 +7,7 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
 
+        "DropEnum",
         "DropView",
         "DropTrigger",
         "DropRoutine",
@@ -35,6 +36,8 @@ class DiffSorter {
         "InsertData",
         "UpdateData",
 
+        "CreateEnum",
+        "AlterEnum",
         "CreateView",
         "AlterView",
         "CreateTrigger",
@@ -56,6 +59,9 @@ class DiffSorter {
         "DropView",
         "AlterView",
         "CreateView",
+        "DropEnum",
+        "AlterEnum",
+        "CreateEnum",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",

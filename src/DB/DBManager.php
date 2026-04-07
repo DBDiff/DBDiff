@@ -140,4 +140,8 @@ class DBManager {
     public function getRoutines(string $connection): array {
         return $this->adapter->getRoutines($this->getDB($connection));
     }
+
+    public function getEnums(string $connection): array {
+        return $this->adapter->getEnums($this->getDB($connection));
+    }
 }
