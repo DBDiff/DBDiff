@@ -1,8 +1,12 @@
 #---------- UP ----------
+DROP TYPE IF EXISTS "old_status";
 DROP VIEW IF EXISTS "old_report";
 DROP TRIGGER IF EXISTS "trg_old_audit" ON "products";
 DROP FUNCTION IF EXISTS "cleanup_products";
 DROP FUNCTION IF EXISTS "trg_old_audit_fn";
+CREATE TYPE "order_status" AS ENUM ('pending', 'processing', 'shipped', 'delivered');
+DROP TYPE IF EXISTS "priority";
+CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE VIEW "product_names" AS SELECT products.id,
     products.name
    FROM products;
@@ -58,3 +62,7 @@ CREATE VIEW "expensive_products" AS SELECT products.id,
    FROM products
   WHERE (products.price > (50)::numeric);
 DROP VIEW IF EXISTS "product_names";
+CREATE TYPE "old_status" AS ENUM ('draft', 'published', 'archived');
+DROP TYPE IF EXISTS "priority";
+CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high');
+DROP TYPE IF EXISTS "order_status";
