@@ -168,4 +168,89 @@ class DiffSorterProgrammableTest extends TestCase
 
         $this->assertSame(['DropView', 'DropEnum'], $names);
     }
+
+    /**
+     * UP order: DropEnum before AddTable (tables may reference enum types).
+     */
+    public function testUpOrderDropEnumBeforeAddTable(): void
+    {
+        $stub = $this->createMock(\DBDiff\DB\DBManager::class);
+
+        $diffs = [
+            new AddTable('t1', $stub, 'source'),
+            new DropEnum('old_type', 'CREATE TYPE "old_type" AS ENUM (\'x\')'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        $this->assertSame(['DropEnum', 'AddTable'], $names);
+    }
+
+    /**
+     * UP order: CreateEnum comes after data ops but before CreateView and
+     * after AddTable in the sorted order (tables first, then enums, then views).
+     */
+    public function testUpOrderCreateEnumAfterTableBeforeView(): void
+    {
+        $stub = $this->createMock(\DBDiff\DB\DBManager::class);
+
+        $diffs = [
+            new CreateView('v1', 'CREATE VIEW ...'),
+            new AddTable('t1', $stub, 'source'),
+            new CreateEnum('status', 'CREATE TYPE "status" AS ENUM (\'a\')'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        $addIdx    = array_search('AddTable', $names);
+        $enumIdx   = array_search('CreateEnum', $names);
+        $viewIdx   = array_search('CreateView', $names);
+        $this->assertLessThan($enumIdx, $addIdx, 'AddTable before CreateEnum');
+        $this->assertLessThan($viewIdx, $enumIdx, 'CreateEnum before CreateView');
+    }
+
+    /**
+     * Full lifecycle: enum + view + trigger + table in a single UP sort.
+     */
+    public function testUpFullLifecycleSort(): void
+    {
+        $stub = $this->createMock(\DBDiff\DB\DBManager::class);
+
+        $diffs = [
+            new CreateView('v1', 'CREATE VIEW ...'),
+            new CreateEnum('e1', 'CREATE TYPE "e1" AS ENUM (\'a\')'),
+            new AddTable('t1', $stub, 'source'),
+            new DropView('v2', 'CREATE VIEW ...'),
+            new DropEnum('e2', 'CREATE TYPE "e2" AS ENUM (\'b\')'),
+            new CreateTrigger('trg1', 't1', 'CREATE TRIGGER ...'),
+            new DropTrigger('trg2', 't1', 'CREATE TRIGGER ...'),
+        ];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+        $names  = array_map([$this, 'className'], $sorted);
+
+        // Drops come first: DropEnum → DropView → DropTrigger
+        $dropEnumIdx   = array_search('DropEnum', $names);
+        $dropViewIdx   = array_search('DropView', $names);
+        $dropTrigIdx   = array_search('DropTrigger', $names);
+        $addTableIdx   = array_search('AddTable', $names);
+        $createEnumIdx = array_search('CreateEnum', $names);
+        $createViewIdx = array_search('CreateView', $names);
+        $createTrigIdx = array_search('CreateTrigger', $names);
+
+        // All drops before AddTable
+        $this->assertLessThan($addTableIdx, $dropEnumIdx);
+        $this->assertLessThan($addTableIdx, $dropViewIdx);
+        $this->assertLessThan($addTableIdx, $dropTrigIdx);
+
+        // All creates after AddTable
+        $this->assertGreaterThan($addTableIdx, $createEnumIdx);
+        $this->assertGreaterThan($addTableIdx, $createViewIdx);
+        $this->assertGreaterThan($addTableIdx, $createTrigIdx);
+
+        // CreateEnum before CreateView
+        $this->assertLessThan($createViewIdx, $createEnumIdx);
+    }
 }

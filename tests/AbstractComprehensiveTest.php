@@ -321,6 +321,24 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
         // Triggers
         $this->assertStringContainsString('trg_products_updated', $output, 'CreateTrigger for trg_products_updated');
         $this->assertStringContainsString('trg_old_audit', $output, 'DropTrigger for trg_old_audit');
+
+        // Enums (PostgreSQL only — MySQL/SQLite have no standalone enum types)
+        $driver = $this->configDefaults()['driver'] ?? 'mysql';
+        if ($driver === 'pgsql') {
+            $this->assertStringContainsString('order_status', $output, 'CreateEnum for order_status');
+            $this->assertStringContainsString('old_status', $output, 'DropEnum for old_status');
+            $this->assertStringContainsString('priority', $output, 'AlterEnum for priority');
+            $this->assertMatchesRegularExpression(
+                '/CREATE TYPE "order_status" AS ENUM/i',
+                $output,
+                'CreateEnum uses CREATE TYPE ... AS ENUM syntax'
+            );
+            $this->assertMatchesRegularExpression(
+                '/DROP TYPE IF EXISTS "old_status"/i',
+                $output,
+                'DropEnum uses DROP TYPE IF EXISTS syntax'
+            );
+        }
     }
 
     /**

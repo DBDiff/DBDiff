@@ -40,3 +40,9 @@ CREATE FUNCTION get_product_count() RETURNS integer
 AS $$
   SELECT count(*)::integer FROM products;
 $$;
+
+-- Enum only in source → CreateEnum
+CREATE TYPE order_status AS ENUM ('pending', 'processing', 'shipped', 'delivered');
+
+-- Enum in both but different labels → AlterEnum
+CREATE TYPE priority AS ENUM ('low', 'medium', 'high', 'critical');

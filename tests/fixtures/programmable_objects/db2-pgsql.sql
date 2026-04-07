@@ -38,3 +38,9 @@ CREATE FUNCTION cleanup_products() RETURNS void
 AS $$
   DELETE FROM products WHERE price = 0;
 $$;
+
+-- Enum only in target → DropEnum
+CREATE TYPE old_status AS ENUM ('draft', 'published', 'archived');
+
+-- Enum in both but different labels → AlterEnum
+CREATE TYPE priority AS ENUM ('low', 'medium', 'high');
