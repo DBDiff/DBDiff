@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-	<strong>DBDiff</strong> is an automated database schema and data diff tool. It compares two databases, local or remote, and produces a migration file of the differences automatically.
+	<strong>DBDiff</strong> is an automated database schema and data diff tool for MySQL, Postgres & SQLite. It compares two databases, local or remote, and produces a migration file of the differences automatically.
 </p>
 
 <p align="center">
@@ -20,12 +20,12 @@
 ## Features
 
 - Compares two databases (local or remote) and generates SQL migrations automatically
-- Diffs tables, views, triggers, stored procedures/functions, enum types, and data — with deterministic, predictable output
-- Up and down SQL generated in the same file
-- Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
+- Diffs tables, views, triggers, stored procedures/functions, enum types, and data — with deterministic, predictable output
+- Up and down SQL generated in the same file
+- Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
 - Ignore specific tables or fields via a YAML config file
 - Unicode / UTF-8 aware
