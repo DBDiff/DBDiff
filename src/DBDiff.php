@@ -5,6 +5,8 @@ use DBDiff\DB\DiffCalculator;
 use DBDiff\SQLGen\SQLGenerator;
 use DBDiff\Logger;
 use DBDiff\Templater;
+use DBDiff\Linter\DestructiveLinter;
+use DBDiff\Exceptions\DestructiveChangeException;
 
 
 class DBDiff {
@@ -49,8 +51,15 @@ class DBDiff {
      * can apply any output format (Flyway, Liquibase, Laravel, native…) rather
      * than being forced through the Templater.
      *
+     * When $params->allowDestructive is false (the default) and the diff
+     * contains destructive schema changes (DROP TABLE, DROP COLUMN, etc.), a
+     * DestructiveChangeException is thrown before any SQL is generated.
+     * Pass --allow-destructive on the CLI (or set $params->allowDestructive = true)
+     * to bypass the check.
+     *
      * @param  object $params  A params object (DefaultParams-shaped stdClass or subclass).
-     * @return array{empty: bool, up: string, down: string}
+     * @return array{empty: bool, up: string, down: string, lint?: \DBDiff\Linter\LintResult}
+     * @throws DestructiveChangeException
      */
     public function getDiffResult(object $params): array
     {
@@ -61,10 +70,18 @@ class DBDiff {
             return ['empty' => true, 'up' => '', 'down' => ''];
         }
 
+        $allowDestructive = $params->allowDestructive ?? false;
+        $linter           = new DestructiveLinter();
+        $lintResult       = $linter->lint($diff);
+
+        if ($lintResult->hasErrors() && !$allowDestructive) {
+            throw new DestructiveChangeException($lintResult);
+        }
+
         $sqlGenerator = new SQLGenerator($diff);
         $up   = ($params->include !== 'down') ? $sqlGenerator->getUp()   : '';
         $down = ($params->include !== 'up')   ? $sqlGenerator->getDown() : '';
 
-        return ['empty' => false, 'up' => $up, 'down' => $down];
+        return ['empty' => false, 'up' => $up, 'down' => $down, 'lint' => $lintResult];
     }
 }
