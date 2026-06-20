@@ -381,6 +381,7 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
     {
         $outputFile      = tempnam(sys_get_temp_dir(), 'dbdiff_test_');
         $args[]          = "--output=$outputFile";
+        $args[]          = '--allow-destructive';
         $GLOBALS['argv'] = array_merge([''], $args);
 
         ob_start();

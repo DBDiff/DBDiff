@@ -78,7 +78,11 @@ class DiffCommand extends Command
             ->addOption('tables',        null, InputOption::VALUE_REQUIRED,
                 'Comma-separated list of tables to include (supports globs: *, ?). Overrides tablesToIgnore.')
             ->addOption('ignore-tables', null, InputOption::VALUE_REQUIRED,
-                'Comma-separated list of tables to exclude (supports globs: *, ?).');
+                'Comma-separated list of tables to exclude (supports globs: *, ?).')
+            // ── Safety options ────────────────────────────────────────────────
+            ->addOption('allow-destructive', null, InputOption::VALUE_NONE,
+                'Allow destructive schema changes (DROP TABLE, DROP COLUMN) to proceed without error. '
+                . 'Back up your data before using this flag.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -132,7 +136,8 @@ class DiffCommand extends Command
         $params->template    = $input->getOption('template') ?? '';
         $params->config      = $input->getOption('config');
         $params->description   = $input->getOption('description') ?: '';
-        $params->memoryLimit   = $input->getOption('memory-limit');
+        $params->memoryLimit      = $input->getOption('memory-limit');
+        $params->allowDestructive = (bool) $input->getOption('allow-destructive');
 
         if ($input->getOption('tables')) {
             $params->tables = array_map('trim', explode(',', $input->getOption('tables')));
