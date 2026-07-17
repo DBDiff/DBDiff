@@ -1,0 +1,16 @@
+#---------- UP ----------
+-- WARNING: column "status" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "status";
+ALTER TABLE "products" ADD COLUMN "status" varchar(20) NOT NULL DEFAULT 'draft'::character varying;
+ALTER TABLE "order_items" DROP COLUMN "discount";
+CREATE UNIQUE INDEX uq_category_sku ON public.products USING btree (category_id, sku);
+ALTER TABLE "order_items" ADD CONSTRAINT "fk_order_items_product" FOREIGN KEY ("product_id") REFERENCES "products" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE "products" ADD CONSTRAINT "uq_category_sku" UNIQUE ("category_id", "sku");
+#---------- DOWN ----------
+ALTER TABLE "order_items" DROP CONSTRAINT "fk_order_items_product";
+ALTER TABLE "products" DROP CONSTRAINT "uq_category_sku";
+-- WARNING: column "status" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "status";
+ALTER TABLE "products" ADD COLUMN "status" varchar(20) NOT NULL DEFAULT 'active'::character varying;
+ALTER TABLE "order_items" ADD COLUMN "discount" numeric(5,2) NOT NULL DEFAULT 0.00;
+DROP INDEX "uq_category_sku";

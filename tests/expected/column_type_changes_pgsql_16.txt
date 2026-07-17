@@ -1,0 +1,44 @@
+#---------- UP ----------
+-- WARNING: column "created_at" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "created_at";
+ALTER TABLE "products" ADD COLUMN "created_at" timestamp(6) DEFAULT CURRENT_TIMESTAMP;
+-- WARNING: column "description" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "description";
+ALTER TABLE "products" ADD COLUMN "description" varchar(255);
+-- WARNING: column "is_active" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "is_active";
+ALTER TABLE "products" ADD COLUMN "is_active" boolean NOT NULL DEFAULT true;
+-- WARNING: column "name" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "name";
+ALTER TABLE "products" ADD COLUMN "name" varchar(100) NOT NULL;
+-- WARNING: column "price" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "price";
+ALTER TABLE "products" ADD COLUMN "price" numeric(10,2) NOT NULL DEFAULT 0.00;
+-- WARNING: column "quantity" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "quantity";
+ALTER TABLE "products" ADD COLUMN "quantity" integer NOT NULL DEFAULT 0;
+-- WARNING: column "sku" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "sku";
+ALTER TABLE "products" ADD COLUMN "sku" varchar(20) NOT NULL;
+#---------- DOWN ----------
+-- WARNING: column "created_at" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "created_at";
+ALTER TABLE "products" ADD COLUMN "created_at" timestamp(6) DEFAULT '2024-01-01 00:00:00'::timestamp without time zone;
+-- WARNING: column "description" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "description";
+ALTER TABLE "products" ADD COLUMN "description" text;
+-- WARNING: column "is_active" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "is_active";
+ALTER TABLE "products" ADD COLUMN "is_active" boolean NOT NULL DEFAULT false;
+-- WARNING: column "name" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "name";
+ALTER TABLE "products" ADD COLUMN "name" varchar(255) NOT NULL;
+-- WARNING: column "price" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "price";
+ALTER TABLE "products" ADD COLUMN "price" numeric(12,4) NOT NULL DEFAULT 0.0000;
+-- WARNING: column "quantity" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "quantity";
+ALTER TABLE "products" ADD COLUMN "quantity" bigint NOT NULL DEFAULT 0;
+-- WARNING: column "sku" changed; data may be lost.
+ALTER TABLE "products" DROP COLUMN "sku";
+ALTER TABLE "products" ADD COLUMN "sku" varchar(20);
