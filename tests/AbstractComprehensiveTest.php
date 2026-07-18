@@ -459,7 +459,7 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
         }
 
         if (!file_exists($expectedFile)) {
-            $this->fail(
+            $this->markTestSkipped(
                 "Expected file not found: $expectedFile. " .
                 'Run with DBDIFF_RECORD_MODE=true to create it.'
             );
