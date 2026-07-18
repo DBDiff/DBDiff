@@ -225,6 +225,22 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     private function fetchIndexes(Connection $connection, string $table): array {
+        // Collect names of indexes that back constraints (PK, UNIQUE, EXCLUDE)
+        // so we can skip them — they're handled via fetchConstraints() instead.
+        $constraintIndexes = $connection->select(
+            "SELECT con.conname
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public' AND rel.relname = ?
+               AND con.contype IN ('p', 'u', 'x')",
+            [$table]
+        );
+        $skip = [];
+        foreach ($constraintIndexes as $row) {
+            $skip[$row['conname']] = true;
+        }
+
         $rows = $connection->select(
             "SELECT indexname, indexdef
              FROM pg_indexes
@@ -234,8 +250,7 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $keys = [];
         foreach ($rows as $row) {
-            // Skip primary key indexes – they are captured as constraints
-            if (substr($row['indexname'], -5) === '_pkey') {
+            if (isset($skip[$row['indexname']])) {
                 continue;
             }
             $keys[$row['indexname']] = $row['indexdef'];
@@ -261,7 +276,7 @@ class PostgresAdapter implements DBAdapterInterface {
                 ON rc.unique_constraint_name = ccu.constraint_name
                AND rc.unique_constraint_schema = ccu.constraint_schema
              WHERE tc.table_schema = 'public' AND tc.table_name = ?
-               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE')
+               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
              ORDER BY tc.constraint_name, kcu.ordinal_position",
             [$table]
         );
@@ -290,7 +305,30 @@ class PostgresAdapter implements DBAdapterInterface {
             } elseif ($c['constraint_type'] === 'UNIQUE') {
                 $cols = implode('", "', $c['columns']);
                 $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")";
+            } elseif ($c['constraint_type'] === 'PRIMARY KEY') {
+                $cols = implode('", "', $c['columns']);
+                $constraints[$name] = "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")";
             }
+        }
+
+        // CHECK constraints — query pg_constraint directly since
+        // information_schema doesn't expose the check expression.
+        $checks = $connection->select(
+            "SELECT con.conname AS constraint_name,
+                    pg_get_constraintdef(con.oid) AS definition
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public'
+               AND rel.relname = ?
+               AND con.contype IN ('c', 'x')
+             ORDER BY con.conname",
+            [$table]
+        );
+
+        foreach ($checks as $row) {
+            $name = $row['constraint_name'];
+            $constraints[$name] = "CONSTRAINT \"$name\" " . $row['definition'];
         }
 
         return $constraints;

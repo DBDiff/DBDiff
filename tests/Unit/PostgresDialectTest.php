@@ -81,6 +81,6 @@ class PostgresDialectTest extends TestCase
     public function testDropColumn(): void
     {
         $sql = $this->dialect->dropColumn('users', 'phone');
-        $this->assertSame('ALTER TABLE "users" DROP COLUMN "phone";', $sql);
+        $this->assertSame('ALTER TABLE "users" DROP COLUMN "phone" CASCADE;', $sql);
     }
 }

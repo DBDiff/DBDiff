@@ -1,12 +1,12 @@
 #---------- UP ----------
 DELETE FROM "posts" WHERE "id" = '4';
 DELETE FROM "users" WHERE "id" = '4';
--- WARNING: column "status" changed; data may be lost.
-ALTER TABLE "users" DROP COLUMN "status";
-ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'active'::character varying;
-ALTER TABLE "posts" DROP COLUMN "published_at";
-ALTER TABLE "users" DROP COLUMN "phone";
-ALTER TABLE "users" DROP COLUMN "updated_at";
+ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
+ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
+ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
+ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
+ALTER TABLE "users" DROP COLUMN "updated_at" CASCADE;
 DROP INDEX "posts_published_idx";
 DROP INDEX "users_status_idx";
 INSERT INTO "posts" ("id","user_id","title","content","published") VALUES('3','2','Jane Post','This is Jane post content','1');

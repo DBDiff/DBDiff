@@ -1,16 +1,16 @@
 #---------- UP ----------
--- WARNING: column "status" changed; data may be lost.
-ALTER TABLE "users" DROP COLUMN "status";
-ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'active'::character varying;
-ALTER TABLE "posts" DROP COLUMN "published_at";
-ALTER TABLE "users" DROP COLUMN "phone";
-ALTER TABLE "users" DROP COLUMN "updated_at";
+ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
+ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
+ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
+ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
+ALTER TABLE "users" DROP COLUMN "updated_at" CASCADE;
 DROP INDEX "posts_published_idx";
 DROP INDEX "users_status_idx";
 #---------- DOWN ----------
--- WARNING: column "status" changed; data may be lost.
-ALTER TABLE "users" DROP COLUMN "status";
-ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'pending'::character varying;
+ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
+ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp(6);
 ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;
 ALTER TABLE "users" ADD COLUMN "updated_at" timestamp(6) DEFAULT '2024-01-01 00:00:00'::timestamp without time zone;
