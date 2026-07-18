@@ -48,12 +48,31 @@ class PostgresDialect extends AbstractAnsiDialect {
      * Parses the old and new column definition strings (from fetchColumns)
      * and emits the minimal set of ALTER COLUMN sub-statements.
      */
-    public function changeColumn(string $table, string $col, string $newDef): string {
+    public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string {
         $t = $this->quote($table);
         $c = $this->quote($col);
 
+        $oldIsIdentity  = $oldDef !== '' && preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef);
+        $oldIsGenerated = $oldDef !== '' && preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef);
+        $newIsGenerated = (bool) preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef);
+
+        // Both old and new are generated — only nullability can change
+        if ($oldIsGenerated && $newIsGenerated) {
+            $newParts = self::parseColumnDef($newDef);
+            if ($newParts['not_null']) {
+                return "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;";
+            }
+            return "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
+        }
+
         $newParts = self::parseColumnDef($newDef);
         $stmts = [];
+
+        if ($oldIsIdentity) {
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP IDENTITY;";
+        } elseif ($oldIsGenerated) {
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP EXPRESSION;";
+        }
 
         $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
 

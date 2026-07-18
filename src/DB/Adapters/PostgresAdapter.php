@@ -203,7 +203,8 @@ class PostgresAdapter implements DBAdapterInterface {
         $rows = $connection->select(
             "SELECT column_name, data_type, character_maximum_length, is_nullable,
                     column_default, numeric_precision, numeric_scale, udt_name,
-                    datetime_precision
+                    datetime_precision, is_identity, identity_generation,
+                    is_generated, generation_expression
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = ?
              ORDER BY ordinal_position",
@@ -215,11 +216,22 @@ class PostgresAdapter implements DBAdapterInterface {
             $name    = $row['column_name'];
             $type    = $this->buildColumnType($row);
             $notNull = ($row['is_nullable'] === 'NO') ? ' NOT NULL' : '';
-            $default = '';
-            if (!is_null($row['column_default'])) {
-                $default = ' DEFAULT ' . $row['column_default'];
+
+            if ($row['is_identity'] === 'YES') {
+                $gen = $row['identity_generation'] ?? 'BY DEFAULT';
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull
+                    . ' GENERATED ' . $gen . ' AS IDENTITY';
+            } elseif ($row['is_generated'] === 'ALWAYS') {
+                $expr = $row['generation_expression'] ?? '';
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull
+                    . ' GENERATED ALWAYS AS (' . $expr . ') STORED';
+            } else {
+                $default = '';
+                if (!is_null($row['column_default'])) {
+                    $default = ' DEFAULT ' . $row['column_default'];
+                }
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
             }
-            $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
         }
         return $columns;
     }

@@ -60,7 +60,7 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
      * portable approach is to drop and recreate.  Subclasses may
      * override changeColumnWarning() to customise the comment text.
      */
-    public function changeColumn(string $table, string $col, string $newDef): string {
+    public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string {
         $t = $this->quote($table);
         $c = $this->quote($col);
 
