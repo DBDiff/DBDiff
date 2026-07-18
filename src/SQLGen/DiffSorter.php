@@ -108,6 +108,26 @@ class DiffSorter {
         $indexA = $orderMap[$sqlGenClassA];
         $indexB = $orderMap[$sqlGenClassB];
         if ($indexA !== $indexB) {
+            // Generated column dependency drops must happen before changes
+            if ($direction === 'up') {
+                if ($sqlGenClassA === 'AlterTableDropColumn' && !empty($a->isGeneratedDep)
+                    && $sqlGenClassB === 'AlterTableChangeColumn') {
+                    return -1;
+                }
+                if ($sqlGenClassB === 'AlterTableDropColumn' && !empty($b->isGeneratedDep)
+                    && $sqlGenClassA === 'AlterTableChangeColumn') {
+                    return 1;
+                }
+                // Generated column re-adds must happen after changes
+                if ($sqlGenClassA === 'AlterTableAddColumn' && !empty($a->isGenerated)
+                    && $sqlGenClassB === 'AlterTableChangeColumn') {
+                    return 1;
+                }
+                if ($sqlGenClassB === 'AlterTableAddColumn' && !empty($b->isGenerated)
+                    && $sqlGenClassA === 'AlterTableChangeColumn') {
+                    return -1;
+                }
+            }
             return $indexA <=> $indexB;
         }
         return $this->compareSamePriority($a, $b, $direction, $sqlGenClassA);

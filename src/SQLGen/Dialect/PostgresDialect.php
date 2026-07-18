@@ -53,16 +53,42 @@ class PostgresDialect extends AbstractAnsiDialect {
         $c = $this->quote($col);
 
         $oldIsIdentity  = $oldDef !== '' && preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef);
+        $newIsIdentity  = (bool) preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $newDef);
         $oldIsGenerated = $oldDef !== '' && preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef);
         $newIsGenerated = (bool) preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef);
 
-        // Both old and new are generated — only nullability can change
-        if ($oldIsGenerated && $newIsGenerated) {
+        // Both old and new are identity — drop identity, change type, re-add identity
+        if ($oldIsIdentity && $newIsIdentity) {
             $newParts = self::parseColumnDef($newDef);
-            if ($newParts['not_null']) {
-                return "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;";
+            preg_match('/GENERATED\s+(.*?)\s+AS\s+IDENTITY/i', $newDef, $m);
+            $gen = $m[1] ?? 'BY DEFAULT';
+            $stmts = [];
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP IDENTITY;";
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c ADD GENERATED $gen AS IDENTITY;";
+            return implode("\n", $stmts);
+        }
+
+        // Both old and new are generated stored
+        if ($oldIsGenerated && $newIsGenerated) {
+            $oldParts = self::parseColumnDef($oldDef);
+            $newParts = self::parseColumnDef($newDef);
+
+            // Type change on a generated column: DROP + re-ADD to release dependencies
+            if ($oldParts['type'] !== $newParts['type']) {
+                // Strip column name from newDef for ADD COLUMN
+                $colDef = preg_replace('/^"[^"]*"\s*/', '', $newDef);
+                return "ALTER TABLE $t DROP COLUMN $c;\n"
+                     . "ALTER TABLE $t ADD COLUMN $c $colDef;";
             }
-            return "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
+            // Nullability-only change
+            $stmts = [];
+            if ($oldParts['not_null'] !== $newParts['not_null']) {
+                $stmts[] = $newParts['not_null']
+                    ? "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;"
+                    : "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
+            }
+            return implode("\n", $stmts ?: ["ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;"]);
         }
 
         $newParts = self::parseColumnDef($newDef);
@@ -102,6 +128,10 @@ class PostgresDialect extends AbstractAnsiDialect {
 
         $notNull = false;
         $default = null;
+
+        // Strip GENERATED ... AS IDENTITY or GENERATED ALWAYS AS (...) STORED clauses
+        $rest = preg_replace('/\s+GENERATED\s+.*AS\s+IDENTITY.*/i', '', $rest);
+        $rest = preg_replace('/\s+GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', '', $rest);
 
         // Extract DEFAULT clause (may contain complex expressions)
         if (preg_match('/\bDEFAULT\s+(.+)$/i', $rest, $m)) {
