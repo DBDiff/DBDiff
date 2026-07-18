@@ -79,9 +79,36 @@ class TableSchema {
 
         $differ = new MapDiffer();
         $diffs = $differ->doDiff($targetColumns, $sourceColumns);
+
+        // Collect columns being dropped and detect generated column cascades
+        $droppedColumns = [];
         foreach ($diffs as $column => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropColumn($table, $column, $diff);
+                $droppedColumns[$column] = $sourceColumns[$column] ?? '';
+            }
+        }
+        // Skip generated columns whose dependency is also being dropped (CASCADE handles them)
+        $cascadedColumns = [];
+        if ($driver === 'pgsql' && count($droppedColumns) > 1) {
+            foreach ($droppedColumns as $col => $def) {
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+STORED/i', $def, $m)) {
+                    $expr = $m[1];
+                    foreach ($droppedColumns as $otherCol => $otherDef) {
+                        if ($otherCol !== $col && !preg_match('/GENERATED\s+ALWAYS\s+AS\s+/i', $otherDef)
+                            && preg_match('/\b' . preg_quote($otherCol, '/') . '\b/', $expr)) {
+                            $cascadedColumns[$col] = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($diffs as $column => $diff) {
+            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
+                if (!isset($cascadedColumns[$column])) {
+                    $diffSequence[] = new AlterTableDropColumn($table, $column, $diff);
+                }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
                 $diffSequence[] = new AlterTableChangeColumn($table, $column, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
