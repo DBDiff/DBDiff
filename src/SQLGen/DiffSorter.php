@@ -128,10 +128,25 @@ class DiffSorter {
     private function compareByName($a, $b): int {
         $tableA = $a->table ?? '';
         $tableB = $b->table ?? '';
+        if (strcmp($tableA, $tableB) !== 0) {
+            return strcmp($tableA, $tableB);
+        }
+        // Generated/identity columns must be altered first (DROP EXPRESSION/IDENTITY
+        // removes the dependency before other columns' types can change)
+        $genA = !empty($a->isGenerated);
+        $genB = !empty($b->isGenerated);
+        if ($genA !== $genB) {
+            return $genA ? -1 : 1;
+        }
+        // Use ordinal position for ADD COLUMN ordering (preserves target schema order)
+        $ordA = $a->ordinal ?? null;
+        $ordB = $b->ordinal ?? null;
+        if ($ordA !== null && $ordB !== null) {
+            return $ordA <=> $ordB;
+        }
         $itemA  = $a->column ?? $a->key ?? $a->name ?? '';
         $itemB  = $b->column ?? $b->key ?? $b->name ?? '';
-        return strcmp($tableA, $tableB)
-            ?: strcmp((string) $itemA, (string) $itemB)
+        return strcmp((string) $itemA, (string) $itemB)
             ?: $this->compareDataKeys($a, $b);
     }
 

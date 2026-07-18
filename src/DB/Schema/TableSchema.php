@@ -104,15 +104,26 @@ class TableSchema {
             }
         }
 
+        // Build ordinal map from source column order (for correct ADD COLUMN ordering)
+        $sourceOrdinal = array_flip(array_keys($sourceColumns));
+
         foreach ($diffs as $column => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
                 if (!isset($cascadedColumns[$column])) {
                     $diffSequence[] = new AlterTableDropColumn($table, $column, $diff);
                 }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeColumn($table, $column, $diff);
+                $changeCol = new AlterTableChangeColumn($table, $column, $diff);
+                $oldDef = $diff->getOldValue();
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef)
+                    || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
+                    $changeCol->isGenerated = true;
+                }
+                $diffSequence[] = $changeCol;
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddColumn($table, $column, $diff);
+                $addCol = new AlterTableAddColumn($table, $column, $diff);
+                $addCol->ordinal = $sourceOrdinal[$column] ?? null;
+                $diffSequence[] = $addCol;
             }
         }
 
