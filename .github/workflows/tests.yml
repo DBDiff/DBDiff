@@ -492,3 +492,57 @@ jobs:
     # ── 5. Unit tests (fast, no Supabase service required) ──────────────────
     - name: Run unit tests
       run: ./scripts/run-tests.sh --unit
+
+  # ── Postgres conformance (DDL patterns from Postgres regression suite) ──
+  pg-conformance:
+    name: PG Conformance / PostgreSQL ${{ matrix.postgres-version }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ['16']
+
+    env:
+      DB_HOST_POSTGRES: 127.0.0.1
+      DB_PORT_POSTGRES: 5432
+      GH_TOKEN: ${{ github.token }}
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: dbdiff
+          POSTGRES_DB: diff1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dbdiff"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.3'
+        extensions: pdo, pdo_pgsql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Run PG conformance tests
+      run: ./scripts/pg-conformance/run.sh --host=127.0.0.1 --port=5432 --user=dbdiff --pass=rootpass --verbose
+
+    - name: Upload conformance report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pg-conformance-report-pg${{ matrix.postgres-version }}
+        path: tests/pg-conformance/report.json
