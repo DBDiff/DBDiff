@@ -121,6 +121,7 @@ class End2EndPostgresTest extends PHPUnit\Framework\TestCase
             '--type=all',
             '--include=all',
             '--nocomments',
+            '--allow-destructive',
             "--output=./tests/end2end/{$this->migration_actual}",
             "server1.{$this->db1}:server1.{$this->db2}",
         ];
