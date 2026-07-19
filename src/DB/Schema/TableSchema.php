@@ -118,7 +118,9 @@ class TableSchema {
                 }
             }
             foreach ($diffs as $column => $diff) {
-                if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) continue;
+                if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) {
+                    continue;
+                }
                 $oldDef = $diff->getOldValue();
                 if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+STORED/i', $oldDef, $m)) {
                     $expr = $m[1];

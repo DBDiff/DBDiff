@@ -57,40 +57,48 @@ class PostgresDialect extends AbstractAnsiDialect {
         $oldIsGenerated = $oldDef !== '' && preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef);
         $newIsGenerated = (bool) preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef);
 
-        // Both old and new are identity — drop identity, change type, re-add identity
         if ($oldIsIdentity && $newIsIdentity) {
-            $newParts = self::parseColumnDef($newDef);
-            preg_match('/GENERATED\s+(.*?)\s+AS\s+IDENTITY/i', $newDef, $m);
-            $gen = $m[1] ?? 'BY DEFAULT';
-            $stmts = [];
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP IDENTITY;";
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c ADD GENERATED $gen AS IDENTITY;";
-            return implode("\n", $stmts);
+            return $this->changeIdentityColumn($t, $c, $newDef);
         }
 
-        // Both old and new are generated stored
         if ($oldIsGenerated && $newIsGenerated) {
-            $oldParts = self::parseColumnDef($oldDef);
-            $newParts = self::parseColumnDef($newDef);
-
-            // Type change on a generated column: DROP + re-ADD to release dependencies
-            if ($oldParts['type'] !== $newParts['type']) {
-                // Strip column name from newDef for ADD COLUMN
-                $colDef = preg_replace('/^"[^"]*"\s*/', '', $newDef);
-                return "ALTER TABLE $t DROP COLUMN $c;\n"
-                     . "ALTER TABLE $t ADD COLUMN $c $colDef;";
-            }
-            // Nullability-only change
-            $stmts = [];
-            if ($oldParts['not_null'] !== $newParts['not_null']) {
-                $stmts[] = $newParts['not_null']
-                    ? "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;"
-                    : "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
-            }
-            return implode("\n", $stmts ?: ["ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;"]);
+            return $this->changeGeneratedColumn($t, $c, $oldDef, $newDef);
         }
 
+        return $this->changeRegularColumn($t, $c, $newDef, $oldIsIdentity, $oldIsGenerated);
+    }
+
+    private function changeIdentityColumn(string $t, string $c, string $newDef): string {
+        $newParts = self::parseColumnDef($newDef);
+        preg_match('/GENERATED\s+(.*?)\s+AS\s+IDENTITY/i', $newDef, $m);
+        $gen = $m[1] ?? 'BY DEFAULT';
+        $stmts = [];
+        $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP IDENTITY;";
+        $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
+        $stmts[] = "ALTER TABLE $t ALTER COLUMN $c ADD GENERATED $gen AS IDENTITY;";
+        return implode("\n", $stmts);
+    }
+
+    private function changeGeneratedColumn(string $t, string $c, string $oldDef, string $newDef): string {
+        $oldParts = self::parseColumnDef($oldDef);
+        $newParts = self::parseColumnDef($newDef);
+
+        if ($oldParts['type'] !== $newParts['type']) {
+            $colDef = preg_replace('/^"[^"]*"\s*/', '', $newDef);
+            return "ALTER TABLE $t DROP COLUMN $c;\n"
+                 . "ALTER TABLE $t ADD COLUMN $c $colDef;";
+        }
+
+        $stmts = [];
+        if ($oldParts['not_null'] !== $newParts['not_null']) {
+            $stmts[] = $newParts['not_null']
+                ? "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;"
+                : "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
+        }
+        return implode("\n", $stmts ?: ["ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;"]);
+    }
+
+    private function changeRegularColumn(string $t, string $c, string $newDef, bool $oldIsIdentity, bool $oldIsGenerated): string {
         $newParts = self::parseColumnDef($newDef);
         $stmts = [];
 
@@ -102,17 +110,13 @@ class PostgresDialect extends AbstractAnsiDialect {
 
         $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
 
-        if ($newParts['not_null']) {
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;";
-        } else {
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
-        }
+        $stmts[] = $newParts['not_null']
+            ? "ALTER TABLE $t ALTER COLUMN $c SET NOT NULL;"
+            : "ALTER TABLE $t ALTER COLUMN $c DROP NOT NULL;";
 
-        if ($newParts['default'] !== null) {
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c SET DEFAULT {$newParts['default']};";
-        } else {
-            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP DEFAULT;";
-        }
+        $stmts[] = $newParts['default'] !== null
+            ? "ALTER TABLE $t ALTER COLUMN $c SET DEFAULT {$newParts['default']};"
+            : "ALTER TABLE $t ALTER COLUMN $c DROP DEFAULT;";
 
         return implode("\n", $stmts);
     }

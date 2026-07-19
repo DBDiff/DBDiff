@@ -108,29 +108,33 @@ class DiffSorter {
         $indexA = $orderMap[$sqlGenClassA];
         $indexB = $orderMap[$sqlGenClassB];
         if ($indexA !== $indexB) {
-            // Generated column dependency drops must happen before changes
-            if ($direction === 'up') {
-                if ($sqlGenClassA === 'AlterTableDropColumn' && !empty($a->isGeneratedDep)
-                    && $sqlGenClassB === 'AlterTableChangeColumn') {
-                    return -1;
-                }
-                if ($sqlGenClassB === 'AlterTableDropColumn' && !empty($b->isGeneratedDep)
-                    && $sqlGenClassA === 'AlterTableChangeColumn') {
-                    return 1;
-                }
-                // Generated column re-adds must happen after changes
-                if ($sqlGenClassA === 'AlterTableAddColumn' && !empty($a->isGenerated)
-                    && $sqlGenClassB === 'AlterTableChangeColumn') {
-                    return 1;
-                }
-                if ($sqlGenClassB === 'AlterTableAddColumn' && !empty($b->isGenerated)
-                    && $sqlGenClassA === 'AlterTableChangeColumn') {
-                    return -1;
-                }
-            }
-            return $indexA <=> $indexB;
+            $override = $this->generatedColumnOrdering($a, $b, $sqlGenClassA, $sqlGenClassB, $direction);
+            return $override ?? ($indexA <=> $indexB);
         }
         return $this->compareSamePriority($a, $b, $direction, $sqlGenClassA);
+    }
+
+    private function generatedColumnOrdering($a, $b, string $classA, string $classB, string $direction): ?int {
+        if ($direction !== 'up') {
+            return null;
+        }
+        if ($classA === 'AlterTableDropColumn' && !empty($a->isGeneratedDep)
+            && $classB === 'AlterTableChangeColumn') {
+            return -1;
+        }
+        if ($classB === 'AlterTableDropColumn' && !empty($b->isGeneratedDep)
+            && $classA === 'AlterTableChangeColumn') {
+            return 1;
+        }
+        if ($classA === 'AlterTableAddColumn' && !empty($a->isGenerated)
+            && $classB === 'AlterTableChangeColumn') {
+            return 1;
+        }
+        if ($classB === 'AlterTableAddColumn' && !empty($b->isGenerated)
+            && $classA === 'AlterTableChangeColumn') {
+            return -1;
+        }
+        return null;
     }
 
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {
@@ -148,22 +152,23 @@ class DiffSorter {
     private function compareByName($a, $b): int {
         $tableA = $a->table ?? '';
         $tableB = $b->table ?? '';
-        if (strcmp($tableA, $tableB) !== 0) {
-            return strcmp($tableA, $tableB);
+        $tableCmp = strcmp($tableA, $tableB);
+        if ($tableCmp !== 0) {
+            return $tableCmp;
         }
-        // Generated/identity columns must be altered first (DROP EXPRESSION/IDENTITY
-        // removes the dependency before other columns' types can change)
+
         $genA = !empty($a->isGenerated);
         $genB = !empty($b->isGenerated);
         if ($genA !== $genB) {
             return $genA ? -1 : 1;
         }
-        // Use ordinal position for ADD COLUMN ordering (preserves target schema order)
+
         $ordA = $a->ordinal ?? null;
         $ordB = $b->ordinal ?? null;
-        if ($ordA !== null && $ordB !== null) {
+        if ($ordA !== null && $ordB !== null && $ordA !== $ordB) {
             return $ordA <=> $ordB;
         }
+
         $itemA  = $a->column ?? $a->key ?? $a->name ?? '';
         $itemB  = $b->column ?? $b->key ?? $b->name ?? '';
         return strcmp((string) $itemA, (string) $itemB)
