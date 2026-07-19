@@ -67,9 +67,12 @@ try {
 }
 
 $pgVersion = $admin->query("SELECT current_setting('server_version')")->fetchColumn();
+$pgVersionNum = (int) $admin->query("SELECT current_setting('server_version_num')")->fetchColumn();
+$pgMajor = intdiv($pgVersionNum, 10000);
+
 echo "Postgres Conformance Tests for DBDiff\n";
 echo "======================================\n";
-echo "Host: $host:$port | Postgres $pgVersion\n";
+echo "Host: $host:$port | Postgres $pgVersion (major: $pgMajor)\n";
 echo "Patterns: " . count($patterns) . ($category ? " (category: $category)" : '') . "\n";
 echo "======================================\n\n";
 
@@ -139,6 +142,8 @@ $results = [
     'fail_apply' => 0,     // Generated SQL couldn't be applied
     'fail_mismatch' => 0,  // Applied SQL didn't match target schema
     'skip' => 0,           // SQL couldn't run on this Postgres version
+    'skip_version' => 0,   // Requires newer PG version
+    'skip_excluded' => 0,  // Excluded by skip_reason
     'errors' => [],
 ];
 
@@ -152,19 +157,44 @@ foreach ($patterns as $i => $pattern) {
     $cat = $pattern['category'];
     $desc = substr($pattern['description'], 0, 80);
 
+    // Skip patterns excluded by reason
+    if (!empty($pattern['skip_reason'])) {
+        if ($verbose) echo "  SKIP [$cat] $desc (excluded: {$pattern['skip_reason']})\n";
+        $results['skip_excluded']++;
+        continue;
+    }
+
+    // Skip patterns requiring newer PG version
+    if (!empty($pattern['min_pg_version']) && $pgMajor < $pattern['min_pg_version']) {
+        if ($verbose) echo "  SKIP [$cat] $desc (requires PG {$pattern['min_pg_version']}+)\n";
+        $results['skip_version']++;
+        continue;
+    }
+
     // 1. Create before and after databases
     try {
         createDb($admin, $dbBefore);
         createDb($admin, $dbAfter);
         createDb($admin, $dbTest);
 
+        // Execute setup SQL (types, domains, functions) in all databases
+        if (!empty($pattern['setup_sql'])) {
+            foreach ([$dbBefore, $dbAfter, $dbTest] as $dbName) {
+                $pdo = connectDb($host, $port, $user, $pass, $dbName);
+                foreach ($pattern['setup_sql'] as $setupStmt) {
+                    $pdo->exec($setupStmt);
+                }
+                unset($pdo);
+            }
+        }
+
         $pdoBefore = connectDb($host, $port, $user, $pass, $dbBefore);
         $pdoAfter  = connectDb($host, $port, $user, $pass, $dbAfter);
 
-        // before = just the CREATE TABLE
+        // before = CREATE TABLE + cumulative ALTERs
         $pdoBefore->exec($pattern['before_sql']);
 
-        // after = CREATE TABLE + ALTER
+        // after = before + the ALTER under test
         $pdoAfter->exec($pattern['before_sql']);
         $pdoAfter->exec($pattern['alter_sql']);
 
@@ -236,8 +266,8 @@ foreach ($patterns as $i => $pattern) {
         $fpAfter  = getSchemaFingerprint(connectDb($host, $port, $user, $pass, $dbAfter));
 
         if (schemasMatch($fpBefore, $fpAfter)) {
-            if ($verbose) echo "  SKIP [$cat] $desc (no schema diff detected — may be non-structural)\n";
-            $results['skip']++;
+            if ($verbose) echo "  PASS [$cat] $desc (no-op: schemas identical)\n";
+            $results['pass']++;
         } else {
             echo "  FAIL [$cat] $desc\n";
             echo "        DBDiff produced empty output but schemas differ\n";
@@ -327,12 +357,14 @@ echo "\n======================================\n";
 echo "Results\n";
 echo "======================================\n";
 $total = $results['pass'] + $results['fail_diff'] + $results['fail_apply'] + $results['fail_mismatch'];
-echo "  Tested:          $total\n";
-echo "  Passed:          {$results['pass']}\n";
-echo "  Failed (no diff): {$results['fail_diff']}\n";
-echo "  Failed (apply):   {$results['fail_apply']}\n";
-echo "  Failed (mismatch):{$results['fail_mismatch']}\n";
-echo "  Skipped:          {$results['skip']}\n";
+echo "  Tested:            $total\n";
+echo "  Passed:            {$results['pass']}\n";
+echo "  Failed (no diff):  {$results['fail_diff']}\n";
+echo "  Failed (apply):    {$results['fail_apply']}\n";
+echo "  Failed (mismatch): {$results['fail_mismatch']}\n";
+echo "  Skipped (SQL err): {$results['skip']}\n";
+echo "  Skipped (PG ver):  {$results['skip_version']}\n";
+echo "  Excluded:          {$results['skip_excluded']}\n";
 echo "======================================\n";
 
 $totalFail = $results['fail_diff'] + $results['fail_apply'] + $results['fail_mismatch'];

@@ -4,606 +4,574 @@
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN xmin integer;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN xmin integer;"
+    "before_sql": "CREATE TABLE attmp (initial int4);",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN b name;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN b name;"
   },
   {
     "id": "alter_table_add_column_2",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN a int4 default 3;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN a int4 default 3;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN c text;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN c text;"
   },
   {
     "id": "alter_table_add_column_3",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN b name;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN b name;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN d float8;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN d float8;"
   },
   {
     "id": "alter_table_add_column_4",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN c text;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN c text;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN e float4;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN e float4;"
   },
   {
     "id": "alter_table_add_column_5",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN d float8;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN d float8;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN f int2;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN f int2;"
   },
   {
     "id": "alter_table_add_column_6",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN e float4;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN e float4;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN g polygon;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN g polygon;"
   },
   {
     "id": "alter_table_add_column_7",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN f int2;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN f int2;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN i char;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN i char;"
   },
   {
     "id": "alter_table_add_column_8",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN g polygon;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN g polygon;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN k int4;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN k int4;"
   },
   {
     "id": "alter_table_add_column_9",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN i char;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN i char;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN l tid;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN l tid;"
   },
   {
     "id": "alter_table_add_column_10",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN k int4;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN k int4;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN m xid;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN m xid;"
   },
   {
     "id": "alter_table_add_column_11",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN l tid;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN l tid;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN n oidvector;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN n oidvector;"
   },
   {
     "id": "alter_table_add_column_12",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN m xid;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN m xid;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN p boolean;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN p boolean;"
   },
   {
     "id": "alter_table_add_column_13",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN n oidvector;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN n oidvector;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN q point;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN q point;"
   },
   {
     "id": "alter_table_add_column_14",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN o lock;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN o lock;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN r lseg;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN r lseg;"
   },
   {
     "id": "alter_table_add_column_15",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN p boolean;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN p boolean;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN s path;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN s path;"
   },
   {
     "id": "alter_table_add_column_16",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN q point;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN q point;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN t box;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN t box;"
   },
   {
     "id": "alter_table_add_column_17",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN r lseg;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN r lseg;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;\nALTER TABLE attmp ADD COLUMN t box;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN v timestamp;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN v timestamp;"
   },
   {
     "id": "alter_table_add_column_18",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN s path;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN s path;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;\nALTER TABLE attmp ADD COLUMN t box;\nALTER TABLE attmp ADD COLUMN v timestamp;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN w interval;",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN w interval;"
   },
   {
     "id": "alter_table_add_column_19",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN t box;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN t box;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;\nALTER TABLE attmp ADD COLUMN t box;\nALTER TABLE attmp ADD COLUMN v timestamp;\nALTER TABLE attmp ADD COLUMN w interval;",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN x float8[];",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN x float8[];"
   },
   {
     "id": "alter_table_add_column_20",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN v timestamp;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN v timestamp;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;\nALTER TABLE attmp ADD COLUMN t box;\nALTER TABLE attmp ADD COLUMN v timestamp;\nALTER TABLE attmp ADD COLUMN w interval;\nALTER TABLE attmp ADD COLUMN x float8[];",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN y float4[];",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN y float4[];"
   },
   {
     "id": "alter_table_add_column_21",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN w interval;",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN w interval;"
+    "before_sql": "CREATE TABLE attmp (initial int4);\nALTER TABLE attmp ADD COLUMN b name;\nALTER TABLE attmp ADD COLUMN c text;\nALTER TABLE attmp ADD COLUMN d float8;\nALTER TABLE attmp ADD COLUMN e float4;\nALTER TABLE attmp ADD COLUMN f int2;\nALTER TABLE attmp ADD COLUMN g polygon;\nALTER TABLE attmp ADD COLUMN i char;\nALTER TABLE attmp ADD COLUMN k int4;\nALTER TABLE attmp ADD COLUMN l tid;\nALTER TABLE attmp ADD COLUMN m xid;\nALTER TABLE attmp ADD COLUMN n oidvector;\nALTER TABLE attmp ADD COLUMN p boolean;\nALTER TABLE attmp ADD COLUMN q point;\nALTER TABLE attmp ADD COLUMN r lseg;\nALTER TABLE attmp ADD COLUMN s path;\nALTER TABLE attmp ADD COLUMN t box;\nALTER TABLE attmp ADD COLUMN v timestamp;\nALTER TABLE attmp ADD COLUMN w interval;\nALTER TABLE attmp ADD COLUMN x float8[];\nALTER TABLE attmp ADD COLUMN y float4[];",
+    "alter_sql": "ALTER TABLE attmp ADD COLUMN z int2[];",
+    "description": "add_column: ALTER TABLE attmp ADD COLUMN z int2[];"
   },
   {
     "id": "alter_table_add_column_22",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN x float8[];",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN x float8[];"
-  },
-  {
-    "id": "alter_table_add_column_23",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN y float4[];",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN y float4[];"
-  },
-  {
-    "id": "alter_table_add_column_24",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
-    "alter_sql": "ALTER TABLE attmp ADD COLUMN z int2[];",
-    "description": "add_column: ALTER TABLE attmp ADD COLUMN z int2[];"
-  },
-  {
-    "id": "alter_table_add_column_25",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "attmp",
-    "before_sql": "CREATE TABLE attmp(i integer);",
+    "before_sql": "CREATE TABLE attmp (\n\tinitial \tint4\n);",
     "alter_sql": "ALTER TABLE attmp ADD COLUMN a int4;",
     "description": "add_column: ALTER TABLE attmp ADD COLUMN a int4;"
+  },
+  {
+    "id": "alter_table_drop_constraint_23",
+    "source_file": "alter_table",
+    "category": "drop_constraint",
+    "table": "attmp3",
+    "before_sql": "CREATE TABLE attmp3 (a int, b int);\nALTER TABLE attmp3 add constraint attmpconstr foreign key(c) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key(a) references attmp2(b) match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;",
+    "alter_sql": "ALTER TABLE attmp3 drop constraint attmpconstr;",
+    "description": "drop_constraint: ALTER TABLE attmp3 drop constraint attmpconstr;"
+  },
+  {
+    "id": "alter_table_add_constraint_24",
+    "source_file": "alter_table",
+    "category": "add_constraint",
+    "table": "attmp3",
+    "before_sql": "CREATE TABLE attmp3 (a int, b int);\nALTER TABLE attmp3 add constraint attmpconstr foreign key(c) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key(a) references attmp2(b) match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;\nALTER TABLE attmp3 drop constraint attmpconstr;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full NOT VALID;",
+    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT b_le_20 CHECK (b <= 20) NOT VALID;",
+    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT b_le_20 CHECK (b <= 20) NOT VALID;"
+  },
+  {
+    "id": "alter_table_add_constraint_25",
+    "source_file": "alter_table",
+    "category": "add_constraint",
+    "table": "attmp3",
+    "before_sql": "CREATE TABLE attmp3 (a int, b int);\nALTER TABLE attmp3 add constraint attmpconstr foreign key(c) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key(a) references attmp2(b) match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full;\nALTER TABLE attmp3 drop constraint attmpconstr;\nALTER TABLE attmp3 add constraint attmpconstr foreign key (a) references attmp2 match full NOT VALID;\nALTER TABLE attmp3 ADD CONSTRAINT b_le_20 CHECK (b <= 20) NOT VALID;",
+    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT IDENTITY check (b = boo(b)) NOT VALID;",
+    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT IDENTITY check (b = boo(b)) NOT VALID;",
+    "setup_sql": [
+      "CREATE FUNCTION boo(int) RETURNS int IMMUTABLE STRICT LANGUAGE plpgsql AS $$ BEGIN RETURN $1; END; $$;"
+    ]
   },
   {
     "id": "alter_table_add_constraint_26",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "constraint_rename_test",
-    "before_sql": "CREATE TABLE constraint_rename_test (a int CONSTRAINT con1 CHECK (a > 0), b int, c int);",
-    "alter_sql": "ALTER TABLE constraint_rename_test ADD CONSTRAINT con3 PRIMARY KEY (a);",
-    "description": "add_constraint: ALTER TABLE constraint_rename_test ADD CONSTRAINT con3 PRIMARY KEY (a);"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int );",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test>3);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test>3);"
   },
   {
-    "id": "alter_table_drop_constraint_27",
+    "id": "alter_table_add_constraint_27",
     "source_file": "alter_table",
-    "category": "drop_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 drop constraint attmpconstr;",
-    "description": "drop_constraint: ALTER TABLE attmp3 drop constraint attmpconstr;"
+    "category": "add_constraint",
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int );",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test1>3);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test1>3);",
+    "skip_reason": "references_nonexistent_column"
   },
   {
     "id": "alter_table_add_constraint_28",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten CHECK (b > 10);",
-    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten CHECK (b > 10);"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int, test2 int, test3 int);",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test+test2<test3*4);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test+test2<test3*4);"
   },
   {
     "id": "alter_table_add_constraint_29",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten CHECK (b > 10) NOT VALID;",
-    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten CHECK (b > 10) NOT VALID;"
+    "table": "atacc2",
+    "before_sql": "create table atacc2 (test2 int);",
+    "alter_sql": "alter table atacc2 add constraint foo check (test2>0);",
+    "description": "add_constraint: alter table atacc2 add constraint foo check (test2>0);"
   },
   {
     "id": "alter_table_add_constraint_30",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten_not_enforced CHECK (b > 10) NOT ENFORCED;",
-    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT b_greater_than_ten_not_enforced CHECK (b > 10) NOT ENFORCED;"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int ) ;",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test);"
   },
   {
     "id": "alter_table_add_constraint_31",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT b_le_20 CHECK (b <= 20) NOT VALID;",
-    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT b_le_20 CHECK (b <= 20) NOT VALID;"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int );",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test1);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test1);",
+    "skip_reason": "references_nonexistent_column"
   },
   {
     "id": "alter_table_add_constraint_32",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "attmp3",
-    "before_sql": "CREATE TABLE attmp3 (a int, b int);",
-    "alter_sql": "ALTER TABLE attmp3 ADD CONSTRAINT IDENTITY check (b = boo(b)) NOT VALID;",
-    "description": "add_constraint: ALTER TABLE attmp3 ADD CONSTRAINT IDENTITY check (b = boo(b)) NOT VALID;"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int, test2 int);",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test, test2);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test, test2);"
   },
   {
     "id": "alter_table_add_constraint_33",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test>3);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test>3);"
+    "before_sql": "create table atacc1 ( id serial, test int) ;",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test);"
   },
   {
     "id": "alter_table_add_constraint_34",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test1>3);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test1>3);"
+    "before_sql": "create table atacc1 ( id serial, test int) ;\nalter table atacc1 add constraint atacc_test1 primary key (test);",
+    "alter_sql": "alter table atacc1 add constraint atacc_oid1 primary key(id);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_oid1 primary key(id);",
+    "skip_reason": "multiple_primary_keys"
   },
   {
-    "id": "alter_table_add_constraint_35",
+    "id": "alter_table_drop_constraint_35",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "drop_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 check (test+test2<test3*4);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 check (test+test2<test3*4);"
+    "before_sql": "create table atacc1 ( id serial, test int) ;\nalter table atacc1 add constraint atacc_test1 primary key (test);\nalter table atacc1 add constraint atacc_oid1 primary key(id);",
+    "alter_sql": "alter table atacc1 drop constraint atacc_test1 restrict;",
+    "description": "drop_constraint: alter table atacc1 drop constraint atacc_test1 restrict;"
   },
   {
     "id": "alter_table_add_constraint_36",
     "source_file": "alter_table",
     "category": "add_constraint",
-    "table": "atacc2",
-    "before_sql": "create table atacc2 (id int4 unique);",
-    "alter_sql": "alter table atacc2 add constraint foo check (test2>0);",
-    "description": "add_constraint: alter table atacc2 add constraint foo check (test2>0);"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 ( test int );",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test1);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test1);",
+    "skip_reason": "references_nonexistent_column"
   },
   {
-    "id": "alter_table_add_constraint_37",
+    "id": "alter_table_add_column_37",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "add_column",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test);"
+    "before_sql": "create table atacc1 ( test int );",
+    "alter_sql": "alter table atacc1 add column test2 int primary key;",
+    "description": "add_column: alter table atacc1 add column test2 int primary key;"
   },
   {
-    "id": "alter_table_add_constraint_38",
+    "id": "alter_table_add_column_38",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "add_column",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test1);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test1);"
+    "before_sql": "create table atacc1 ( test int );\nalter table atacc1 add column test2 int primary key;",
+    "alter_sql": "alter table atacc1 add column test2 int default 0 primary key;",
+    "description": "add_column: alter table atacc1 add column test2 int default 0 primary key;",
+    "skip_reason": "duplicate_column"
   },
   {
-    "id": "alter_table_add_constraint_39",
+    "id": "alter_table_add_column_39",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "add_column",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 unique (test, test2);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 unique (test, test2);"
+    "before_sql": "create table atacc1 (a int);",
+    "alter_sql": "alter table atacc1\n  add column b float8 not null default random(),\n  add primary key(a);",
+    "description": "add_column: alter table atacc1\n  add column b float8 not null default random(),\n  add primary key(a);"
   },
   {
     "id": "alter_table_add_constraint_40",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test);"
+    "before_sql": "create table atacc1 (a bigint, b int);",
+    "alter_sql": "alter table atacc1 add constraint atacc1_chk check(b = 1) not valid;",
+    "description": "add_constraint: alter table atacc1 add constraint atacc1_chk check(b = 1) not valid;"
   },
   {
     "id": "alter_table_add_constraint_41",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_oid1 primary key(id);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_oid1 primary key(id);"
+    "before_sql": "create table atacc1 ( test int, test2 int);",
+    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test, test2);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test, test2);"
   },
   {
-    "id": "alter_table_drop_constraint_42",
+    "id": "alter_table_add_constraint_42",
     "source_file": "alter_table",
-    "category": "drop_constraint",
+    "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 drop constraint atacc_test1 restrict;",
-    "description": "drop_constraint: alter table atacc1 drop constraint atacc_test1 restrict;"
+    "before_sql": "create table atacc1 ( test int, test2 int);\nalter table atacc1 add constraint atacc_test1 primary key (test, test2);",
+    "alter_sql": "alter table atacc1 add constraint atacc_test2 primary key (test);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc_test2 primary key (test);",
+    "skip_reason": "multiple_primary_keys"
   },
   {
     "id": "alter_table_add_constraint_43",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test1);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test1);"
+    "before_sql": "create table atacc1 (test int not null);",
+    "alter_sql": "alter table atacc1 add constraint \"atacc1_pkey\" primary key (test);",
+    "description": "add_constraint: alter table atacc1 add constraint \"atacc1_pkey\" primary key (test);"
   },
   {
-    "id": "alter_table_add_column_44",
+    "id": "alter_table_drop_not_null_44",
     "source_file": "alter_table",
-    "category": "add_column",
+    "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add column test2 int primary key;",
-    "description": "add_column: alter table atacc1 add column test2 int primary key;"
+    "before_sql": "create table atacc1 (test int not null);\nalter table atacc1 add constraint \"atacc1_pkey\" primary key (test);",
+    "alter_sql": "alter table atacc1 alter column test drop not null;",
+    "description": "drop_not_null: alter table atacc1 alter column test drop not null;",
+    "skip_reason": "column_in_primary_key"
   },
   {
-    "id": "alter_table_add_column_45",
+    "id": "alter_table_drop_constraint_45",
     "source_file": "alter_table",
-    "category": "add_column",
+    "category": "drop_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add column test2 int default 0 primary key;",
-    "description": "add_column: alter table atacc1 add column test2 int default 0 primary key;"
+    "before_sql": "create table atacc1 (test int not null);\nalter table atacc1 add constraint \"atacc1_pkey\" primary key (test);\nalter table atacc1 alter column test drop not null;",
+    "alter_sql": "alter table atacc1 drop constraint \"atacc1_pkey\";",
+    "description": "drop_constraint: alter table atacc1 drop constraint \"atacc1_pkey\";",
+    "skip_reason": "drop_pk_with_dependencies"
   },
   {
-    "id": "alter_table_add_column_46",
+    "id": "alter_table_set_not_null_46",
     "source_file": "alter_table",
-    "category": "add_column",
+    "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1\n  add column b float8 not null default random(),\n  add primary key(a);",
-    "description": "add_column: alter table atacc1\n  add column b float8 not null default random(),\n  add primary key(a);"
+    "before_sql": "create table atacc1 (test int not null);\nalter table atacc1 add constraint \"atacc1_pkey\" primary key (test);\nalter table atacc1 alter column test drop not null;\nalter table atacc1 drop constraint \"atacc1_pkey\";\nalter table atacc1 alter column test drop not null;",
+    "alter_sql": "alter table atacc1 alter test set not null;",
+    "description": "set_not_null: alter table atacc1 alter test set not null;",
+    "skip_reason": "column_in_primary_key"
   },
   {
-    "id": "alter_table_add_constraint_47",
+    "id": "alter_table_set_not_null_47",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc1_chk check(b = 1) not valid;",
-    "description": "add_constraint: alter table atacc1 add constraint atacc1_chk check(b = 1) not valid;"
+    "before_sql": "create table atacc1 (test int not null);\nalter table atacc1 add constraint \"atacc1_pkey\" primary key (test);\nalter table atacc1 alter column test drop not null;\nalter table atacc1 drop constraint \"atacc1_pkey\";\nalter table atacc1 alter column test drop not null;\nalter table atacc1 alter test set not null;\nalter table atacc1 alter test set not null;",
+    "alter_sql": "alter table atacc1 alter bar set not null;",
+    "description": "set_not_null: alter table atacc1 alter bar set not null;",
+    "skip_reason": "references_nonexistent_column"
   },
   {
-    "id": "alter_table_add_constraint_48",
+    "id": "alter_table_drop_not_null_48",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test1 primary key (test, test2);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test1 primary key (test, test2);"
+    "before_sql": "create table atacc1 (test int not null);\nalter table atacc1 add constraint \"atacc1_pkey\" primary key (test);\nalter table atacc1 alter column test drop not null;\nalter table atacc1 drop constraint \"atacc1_pkey\";\nalter table atacc1 alter column test drop not null;\nalter table atacc1 alter test set not null;\nalter table atacc1 alter test set not null;\nalter table atacc1 alter bar set not null;",
+    "alter_sql": "alter table atacc1 alter bar drop not null;",
+    "description": "drop_not_null: alter table atacc1 alter bar drop not null;"
   },
   {
     "id": "alter_table_add_constraint_49",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc_test2 primary key (test);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc_test2 primary key (test);"
+    "before_sql": "create table atacc1 (test_a int, test_b int);",
+    "alter_sql": "alter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);"
   },
   {
-    "id": "alter_table_add_constraint_50",
+    "id": "alter_table_set_not_null_50",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint \"atacc1_pkey\" primary key (test);",
-    "description": "add_constraint: alter table atacc1 add constraint \"atacc1_pkey\" primary key (test);"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);",
+    "alter_sql": "alter table atacc1 alter test_a set not null;",
+    "description": "set_not_null: alter table atacc1 alter test_a set not null;"
   },
   {
-    "id": "alter_table_drop_not_null_51",
-    "source_file": "alter_table",
-    "category": "drop_not_null",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter column test drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter column test drop not null;"
-  },
-  {
-    "id": "alter_table_drop_constraint_52",
+    "id": "alter_table_drop_constraint_51",
     "source_file": "alter_table",
     "category": "drop_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 drop constraint \"atacc1_pkey\";",
-    "description": "drop_constraint: alter table atacc1 drop constraint \"atacc1_pkey\";"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;",
+    "alter_sql": "alter table atacc1 drop constraint atacc1_constr_or;",
+    "description": "drop_constraint: alter table atacc1 drop constraint atacc1_constr_or;"
   },
   {
-    "id": "alter_table_set_not_null_53",
+    "id": "alter_table_add_constraint_52",
     "source_file": "alter_table",
-    "category": "set_not_null",
+    "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test set not null;",
-    "description": "set_not_null: alter table atacc1 alter test set not null;"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;",
+    "alter_sql": "alter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;",
+    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;"
   },
   {
-    "id": "alter_table_set_not_null_54",
+    "id": "alter_table_drop_constraint_53",
     "source_file": "alter_table",
-    "category": "set_not_null",
+    "category": "drop_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter bar set not null;",
-    "description": "set_not_null: alter table atacc1 alter bar set not null;"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;",
+    "alter_sql": "alter table atacc1 drop constraint atacc1_constr_invalid;",
+    "description": "drop_constraint: alter table atacc1 drop constraint atacc1_constr_invalid;"
+  },
+  {
+    "id": "alter_table_add_constraint_54",
+    "source_file": "alter_table",
+    "category": "add_constraint",
+    "table": "atacc1",
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;",
+    "alter_sql": "alter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);",
+    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);"
   },
   {
     "id": "alter_table_drop_not_null_55",
     "source_file": "alter_table",
     "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter bar drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter bar drop not null;"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;\nalter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);\nalter table atacc1 alter test_a set not null;",
+    "alter_sql": "alter table atacc1 alter test_a drop not null;",
+    "description": "drop_not_null: alter table atacc1 alter test_a drop not null;"
   },
   {
-    "id": "alter_table_add_constraint_56",
+    "id": "alter_table_set_not_null_56",
     "source_file": "alter_table",
-    "category": "add_constraint",
+    "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;\nalter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 alter test_a drop not null;",
+    "alter_sql": "alter table atacc1 alter test_a set not null, alter test_b set not null;",
+    "description": "set_not_null: alter table atacc1 alter test_a set not null, alter test_b set not null;"
   },
   {
     "id": "alter_table_set_not_null_57",
     "source_file": "alter_table",
     "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test_a set not null;",
-    "description": "set_not_null: alter table atacc1 alter test_a set not null;"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;\nalter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 alter test_a drop not null;\nalter table atacc1 alter test_a set not null, alter test_b set not null;",
+    "alter_sql": "alter table atacc1 alter test_b set not null, alter test_a set not null;",
+    "description": "set_not_null: alter table atacc1 alter test_b set not null, alter test_a set not null;"
   },
   {
-    "id": "alter_table_drop_constraint_58",
+    "id": "alter_table_drop_not_null_58",
     "source_file": "alter_table",
-    "category": "drop_constraint",
+    "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 drop constraint atacc1_constr_or;",
-    "description": "drop_constraint: alter table atacc1 drop constraint atacc1_constr_or;"
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;\nalter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 alter test_a drop not null;\nalter table atacc1 alter test_a set not null, alter test_b set not null;\nalter table atacc1 alter test_b set not null, alter test_a set not null;\nalter table atacc1 alter test_b set not null, alter test_a set not null;",
+    "alter_sql": "alter table atacc1 alter test_a drop not null, alter test_b drop not null;",
+    "description": "drop_not_null: alter table atacc1 alter test_a drop not null, alter test_b drop not null;"
   },
   {
     "id": "alter_table_add_constraint_59",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;",
-    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;"
-  },
-  {
-    "id": "alter_table_drop_constraint_60",
-    "source_file": "alter_table",
-    "category": "drop_constraint",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 drop constraint atacc1_constr_invalid;",
-    "description": "drop_constraint: alter table atacc1 drop constraint atacc1_constr_invalid;"
-  },
-  {
-    "id": "alter_table_add_constraint_61",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);",
-    "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);"
-  },
-  {
-    "id": "alter_table_drop_not_null_62",
-    "source_file": "alter_table",
-    "category": "drop_not_null",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test_a drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter test_a drop not null;"
-  },
-  {
-    "id": "alter_table_set_not_null_63",
-    "source_file": "alter_table",
-    "category": "set_not_null",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test_a set not null, alter test_b set not null;",
-    "description": "set_not_null: alter table atacc1 alter test_a set not null, alter test_b set not null;"
-  },
-  {
-    "id": "alter_table_set_not_null_64",
-    "source_file": "alter_table",
-    "category": "set_not_null",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test_b set not null, alter test_a set not null;",
-    "description": "set_not_null: alter table atacc1 alter test_b set not null, alter test_a set not null;"
-  },
-  {
-    "id": "alter_table_drop_not_null_65",
-    "source_file": "alter_table",
-    "category": "drop_not_null",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter test_a drop not null, alter test_b drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter test_a drop not null, alter test_b drop not null;"
-  },
-  {
-    "id": "alter_table_add_constraint_66",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (test_a int, test_b int);\nalter table atacc1 add constraint atacc1_constr_or check(test_a is not null or test_b < 10);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_or;\nalter table atacc1 add constraint atacc1_constr_invalid check(test_a is not null) not valid;\nalter table atacc1 alter test_a set not null;\nalter table atacc1 drop constraint atacc1_constr_invalid;\nalter table atacc1 add constraint atacc1_constr_a_valid check(test_a is not null);\nalter table atacc1 alter test_a set not null;\nalter table atacc1 alter test_a drop not null;\nalter table atacc1 alter test_a set not null, alter test_b set not null;\nalter table atacc1 alter test_b set not null, alter test_a set not null;\nalter table atacc1 alter test_b set not null, alter test_a set not null;\nalter table atacc1 alter test_a drop not null, alter test_b drop not null;",
     "alter_sql": "alter table atacc1 add constraint atacc1_constr_b_valid check(test_b is not null);",
     "description": "add_constraint: alter table atacc1 add constraint atacc1_constr_b_valid check(test_b is not null);"
   },
   {
-    "id": "alter_table_add_constraint_67",
+    "id": "alter_table_set_not_null_60",
     "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "atnnpart1",
-    "before_sql": "CREATE TABLE atnnpart1 (col1 int, id int);",
-    "alter_sql": "ALTER TABLE atnnpart1 ADD CONSTRAINT another_constr NOT NULL id;",
-    "description": "add_constraint: ALTER TABLE atnnpart1 ADD CONSTRAINT another_constr NOT NULL id;"
+    "category": "set_not_null",
+    "table": "parent",
+    "before_sql": "create table parent (a int);",
+    "alter_sql": "alter table parent alter a set not null;",
+    "description": "set_not_null: alter table parent alter a set not null;"
   },
   {
-    "id": "alter_table_drop_default_68",
+    "id": "alter_table_drop_not_null_61",
+    "source_file": "alter_table",
+    "category": "drop_not_null",
+    "table": "parent",
+    "before_sql": "create table parent (a int);\nalter table parent alter a set not null;",
+    "alter_sql": "alter table parent alter a drop not null;",
+    "description": "drop_not_null: alter table parent alter a drop not null;"
+  },
+  {
+    "id": "alter_table_set_not_null_62",
+    "source_file": "alter_table",
+    "category": "set_not_null",
+    "table": "parent",
+    "before_sql": "create table parent (a int);\nalter table parent alter a set not null;\nalter table parent alter a drop not null;",
+    "alter_sql": "alter table only parent alter a set not null;",
+    "description": "set_not_null: alter table only parent alter a set not null;"
+  },
+  {
+    "id": "alter_table_drop_default_63",
     "source_file": "alter_table",
     "category": "drop_default",
     "table": "def_test",
@@ -612,133 +580,143 @@
     "description": "drop_default: alter table def_test alter column c1 drop default;"
   },
   {
-    "id": "alter_table_drop_default_69",
+    "id": "alter_table_drop_default_64",
     "source_file": "alter_table",
     "category": "drop_default",
     "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;",
     "alter_sql": "alter table def_test alter column c2 drop default;",
     "description": "drop_default: alter table def_test alter column c2 drop default;"
+  },
+  {
+    "id": "alter_table_set_default_65",
+    "source_file": "alter_table",
+    "category": "set_default",
+    "table": "def_test",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;\nalter table def_test alter column c2 drop default;",
+    "alter_sql": "alter table def_test alter column c1 set default 10;",
+    "description": "set_default: alter table def_test alter column c1 set default 10;"
+  },
+  {
+    "id": "alter_table_set_default_66",
+    "source_file": "alter_table",
+    "category": "set_default",
+    "table": "def_test",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;\nalter table def_test alter column c2 drop default;\nalter table def_test alter column c1 set default 10;",
+    "alter_sql": "alter table def_test alter column c2 set default 'new_default';",
+    "description": "set_default: alter table def_test alter column c2 set default 'new_default';"
+  },
+  {
+    "id": "alter_table_set_default_67",
+    "source_file": "alter_table",
+    "category": "set_default",
+    "table": "def_test",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;\nalter table def_test alter column c2 drop default;\nalter table def_test alter column c1 set default 10;\nalter table def_test alter column c2 set default 'new_default';",
+    "alter_sql": "alter table def_test alter column c1 set default 'wrong_datatype';",
+    "description": "set_default: alter table def_test alter column c1 set default 'wrong_datatype';",
+    "skip_reason": "intentional_error"
+  },
+  {
+    "id": "alter_table_set_default_68",
+    "source_file": "alter_table",
+    "category": "set_default",
+    "table": "def_test",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;\nalter table def_test alter column c2 drop default;\nalter table def_test alter column c1 set default 10;\nalter table def_test alter column c2 set default 'new_default';\nalter table def_test alter column c1 set default 'wrong_datatype';",
+    "alter_sql": "alter table def_test alter column c2 set default 20;",
+    "description": "set_default: alter table def_test alter column c2 set default 20;",
+    "skip_reason": "intentional_error"
+  },
+  {
+    "id": "alter_table_set_default_69",
+    "source_file": "alter_table",
+    "category": "set_default",
+    "table": "def_test",
+    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);\nalter table def_test alter column c1 drop default;\nalter table def_test alter column c2 drop default;\nalter table def_test alter column c1 set default 10;\nalter table def_test alter column c2 set default 'new_default';\nalter table def_test alter column c1 set default 'wrong_datatype';\nalter table def_test alter column c2 set default 20;",
+    "alter_sql": "alter table def_test alter column c3 set default 30;",
+    "description": "set_default: alter table def_test alter column c3 set default 30;",
+    "skip_reason": "intentional_error"
   },
   {
     "id": "alter_table_set_default_70",
     "source_file": "alter_table",
     "category": "set_default",
-    "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
-    "alter_sql": "alter table def_test alter column c1 set default 10;",
-    "description": "set_default: alter table def_test alter column c1 set default 10;"
+    "table": "atacc1",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);",
+    "alter_sql": "alter table atacc1 alter a set default 3;",
+    "description": "set_default: alter table atacc1 alter a set default 3;"
   },
   {
     "id": "alter_table_set_default_71",
     "source_file": "alter_table",
     "category": "set_default",
-    "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
-    "alter_sql": "alter table def_test alter column c2 set default 'new_default';",
-    "description": "set_default: alter table def_test alter column c2 set default 'new_default';"
-  },
-  {
-    "id": "alter_table_set_default_72",
-    "source_file": "alter_table",
-    "category": "set_default",
-    "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
-    "alter_sql": "alter table def_test alter column c1 set default 'wrong_datatype';",
-    "description": "set_default: alter table def_test alter column c1 set default 'wrong_datatype';"
-  },
-  {
-    "id": "alter_table_set_default_73",
-    "source_file": "alter_table",
-    "category": "set_default",
-    "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
-    "alter_sql": "alter table def_test alter column c2 set default 20;",
-    "description": "set_default: alter table def_test alter column c2 set default 20;"
-  },
-  {
-    "id": "alter_table_set_default_74",
-    "source_file": "alter_table",
-    "category": "set_default",
-    "table": "def_test",
-    "before_sql": "create table def_test (\n\tc1\tint4 default 5,\n\tc2\ttext default 'initial_default'\n);",
-    "alter_sql": "alter table def_test alter column c3 set default 30;",
-    "description": "set_default: alter table def_test alter column c3 set default 30;"
-  },
-  {
-    "id": "alter_table_set_default_75",
-    "source_file": "alter_table",
-    "category": "set_default",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
-    "alter_sql": "alter table atacc1 alter a set default 3;",
-    "description": "set_default: alter table atacc1 alter a set default 3;"
-  },
-  {
-    "id": "alter_table_set_default_76",
-    "source_file": "alter_table",
-    "category": "set_default",
-    "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;",
     "alter_sql": "alter table atacc1 alter \"........pg.dropped.1........\" set default 3;",
-    "description": "set_default: alter table atacc1 alter \"........pg.dropped.1........\" set default 3;"
+    "description": "set_default: alter table atacc1 alter \"........pg.dropped.1........\" set default 3;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_drop_default_77",
+    "id": "alter_table_drop_default_72",
     "source_file": "alter_table",
     "category": "drop_default",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;",
     "alter_sql": "alter table atacc1 alter a drop default;",
-    "description": "drop_default: alter table atacc1 alter a drop default;"
+    "description": "drop_default: alter table atacc1 alter a drop default;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_drop_default_78",
+    "id": "alter_table_drop_default_73",
     "source_file": "alter_table",
     "category": "drop_default",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;\nalter table atacc1 alter a drop default;",
     "alter_sql": "alter table atacc1 alter \"........pg.dropped.1........\" drop default;",
-    "description": "drop_default: alter table atacc1 alter \"........pg.dropped.1........\" drop default;"
+    "description": "drop_default: alter table atacc1 alter \"........pg.dropped.1........\" drop default;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_set_not_null_79",
+    "id": "alter_table_set_not_null_74",
     "source_file": "alter_table",
     "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;\nalter table atacc1 alter a drop default;\nalter table atacc1 alter \"........pg.dropped.1........\" drop default;",
     "alter_sql": "alter table atacc1 alter a set not null;",
-    "description": "set_not_null: alter table atacc1 alter a set not null;"
+    "description": "set_not_null: alter table atacc1 alter a set not null;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_set_not_null_80",
+    "id": "alter_table_set_not_null_75",
     "source_file": "alter_table",
     "category": "set_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;\nalter table atacc1 alter a drop default;\nalter table atacc1 alter \"........pg.dropped.1........\" drop default;\nalter table atacc1 alter a set not null;",
     "alter_sql": "alter table atacc1 alter \"........pg.dropped.1........\" set not null;",
-    "description": "set_not_null: alter table atacc1 alter \"........pg.dropped.1........\" set not null;"
+    "description": "set_not_null: alter table atacc1 alter \"........pg.dropped.1........\" set not null;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_drop_not_null_81",
+    "id": "alter_table_drop_not_null_76",
     "source_file": "alter_table",
     "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;\nalter table atacc1 alter a drop default;\nalter table atacc1 alter \"........pg.dropped.1........\" drop default;\nalter table atacc1 alter a set not null;\nalter table atacc1 alter \"........pg.dropped.1........\" set not null;",
     "alter_sql": "alter table atacc1 alter a drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter a drop not null;"
+    "description": "drop_not_null: alter table atacc1 alter a drop not null;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_drop_not_null_82",
+    "id": "alter_table_drop_not_null_77",
     "source_file": "alter_table",
     "category": "drop_not_null",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (a int4 not null, b int4, c int4 not null, d int4);\nalter table atacc1 alter a set default 3;\nalter table atacc1 alter \"........pg.dropped.1........\" set default 3;\nalter table atacc1 alter a drop default;\nalter table atacc1 alter \"........pg.dropped.1........\" drop default;\nalter table atacc1 alter a set not null;\nalter table atacc1 alter \"........pg.dropped.1........\" set not null;\nalter table atacc1 alter a drop not null;",
     "alter_sql": "alter table atacc1 alter \"........pg.dropped.1........\" drop not null;",
-    "description": "drop_not_null: alter table atacc1 alter \"........pg.dropped.1........\" drop not null;"
+    "description": "drop_not_null: alter table atacc1 alter \"........pg.dropped.1........\" drop not null;",
+    "skip_reason": "dropped_column_reference"
   },
   {
-    "id": "alter_table_drop_column_83",
+    "id": "alter_table_drop_column_78",
     "source_file": "alter_table",
     "category": "drop_column",
     "table": "atacc1",
@@ -747,16 +725,17 @@
     "description": "drop_column: alter table atacc1 drop column value;"
   },
   {
-    "id": "alter_table_add_column_84",
+    "id": "alter_table_add_column_79",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "atacc1",
-    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));",
+    "before_sql": "create table atacc1 (id serial primary key, value int check (value < 10));\nalter table atacc1 drop column value;",
     "alter_sql": "alter table atacc1 add column value int check (value < 10);",
-    "description": "add_column: alter table atacc1 add column value int check (value < 10);"
+    "description": "add_column: alter table atacc1 add column value int check (value < 10);",
+    "skip_reason": "duplicate_column"
   },
   {
-    "id": "alter_table_drop_column_85",
+    "id": "alter_table_drop_column_80",
     "source_file": "alter_table",
     "category": "drop_column",
     "table": "dropcolumn",
@@ -765,16 +744,16 @@
     "description": "drop_column: alter table only dropColumn drop column e;"
   },
   {
-    "id": "alter_table_drop_column_86",
+    "id": "alter_table_drop_column_81",
     "source_file": "alter_table",
     "category": "drop_column",
     "table": "dropcolumn",
-    "before_sql": "create table dropColumn (a int, b int, e int);",
+    "before_sql": "create table dropColumn (a int, b int, e int);\nalter table only dropColumn drop column e;",
     "alter_sql": "alter table dropColumn drop column a;",
     "description": "drop_column: alter table dropColumn drop column a;"
   },
   {
-    "id": "alter_table_add_column_87",
+    "id": "alter_table_add_column_82",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "renamecolumn",
@@ -783,34 +762,43 @@
     "description": "add_column: alter table renameColumn add column w int;"
   },
   {
-    "id": "alter_table_add_column_88",
+    "id": "alter_table_add_column_83",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "renamecolumn",
-    "before_sql": "create table renameColumn (a int);",
+    "before_sql": "create table renameColumn (a int);\nalter table renameColumn add column w int;",
     "alter_sql": "alter table only renameColumn add column x int;",
     "description": "add_column: alter table only renameColumn add column x int;"
   },
   {
-    "id": "alter_table_add_column_89",
+    "id": "alter_table_drop_column_84",
     "source_file": "alter_table",
-    "category": "add_column",
-    "table": "renamecolumn",
-    "before_sql": "create table renameColumn (a int);",
-    "alter_sql": "alter table renameColumn add column x int check (x > 0) not enforced;",
-    "description": "add_column: alter table renameColumn add column x int check (x > 0) not enforced;"
+    "category": "drop_column",
+    "table": "p1",
+    "before_sql": "create table p1 (f1 int, f2 int);",
+    "alter_sql": "alter table p1 drop column f1;",
+    "description": "drop_column: alter table p1 drop column f1;"
   },
   {
-    "id": "alter_table_add_column_90",
+    "id": "alter_table_drop_column_85",
     "source_file": "alter_table",
-    "category": "add_column",
-    "table": "renamecolumn",
-    "before_sql": "create table renameColumn (a int);",
-    "alter_sql": "alter table renameColumn add column y int check (x > 0) not enforced enforced;",
-    "description": "add_column: alter table renameColumn add column y int check (x > 0) not enforced enforced;"
+    "category": "drop_column",
+    "table": "p1",
+    "before_sql": "create table p1 (f1 int, f2 int);",
+    "alter_sql": "alter table only p1 drop column f1;",
+    "description": "drop_column: alter table only p1 drop column f1;"
   },
   {
-    "id": "alter_table_drop_column_91",
+    "id": "alter_table_drop_column_86",
+    "source_file": "alter_table",
+    "category": "drop_column",
+    "table": "p1",
+    "before_sql": "create table p1(id int, name text);",
+    "alter_sql": "alter table only p1 drop column name;",
+    "description": "drop_column: alter table only p1 drop column name;"
+  },
+  {
+    "id": "alter_table_drop_column_87",
     "source_file": "alter_table",
     "category": "drop_column",
     "table": "p2",
@@ -819,106 +807,62 @@
     "description": "drop_column: alter table p2 drop column name;"
   },
   {
-    "id": "alter_table_drop_column_92",
+    "id": "alter_table_drop_column_88",
     "source_file": "alter_table",
     "category": "drop_column",
     "table": "p2",
-    "before_sql": "create table p2(id2 int, name text, height int);",
+    "before_sql": "create table p2(id2 int, name text, height int);\nalter table p2 drop column name;",
     "alter_sql": "alter table p2 drop column height;",
     "description": "drop_column: alter table p2 drop column height;"
   },
   {
-    "id": "alter_table_drop_column_93",
+    "id": "alter_table_add_column_89",
     "source_file": "alter_table",
-    "category": "drop_column",
-    "table": "dropcolumnexists",
-    "before_sql": "create table dropColumnExists ();",
-    "alter_sql": "alter table dropColumnExists drop column non_existing;",
-    "description": "drop_column: alter table dropColumnExists drop column non_existing;"
+    "category": "add_column",
+    "table": "p1",
+    "before_sql": "create table p1 (f1 int);",
+    "alter_sql": "alter table p1 add column a1 int check (a1 > 0);",
+    "description": "add_column: alter table p1 add column a1 int check (a1 > 0);",
+    "skip_reason": "references_nonexistent_column"
   },
   {
-    "id": "alter_table_drop_column_94",
+    "id": "alter_table_add_column_90",
     "source_file": "alter_table",
-    "category": "drop_column",
-    "table": "dropcolumnexists",
-    "before_sql": "create table dropColumnExists ();",
-    "alter_sql": "alter table dropColumnExists drop column if exists non_existing;",
-    "description": "drop_column: alter table dropColumnExists drop column if exists non_existing;"
+    "category": "add_column",
+    "table": "p1",
+    "before_sql": "create table p1 (f1 int);\nalter table p1 add column a1 int check (a1 > 0);",
+    "alter_sql": "alter table p1 add column f2 text;",
+    "description": "add_column: alter table p1 add column f2 text;"
   },
   {
-    "id": "alter_table_change_type_95",
+    "id": "alter_table_change_type_91",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
-    "alter_sql": "alter table anothertab alter column atcol1 type boolean;",
-    "description": "change_type: alter table anothertab alter column atcol1 type boolean;"
-  },
-  {
-    "id": "alter_table_change_type_96",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
-    "alter_sql": "alter table anothertab alter column atcol1 type integer;",
-    "description": "change_type: alter table anothertab alter column atcol1 type integer;"
-  },
-  {
-    "id": "alter_table_drop_default_97",
-    "source_file": "alter_table",
-    "category": "drop_default",
-    "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
-    "alter_sql": "alter table anothertab alter column atcol1 drop default;",
-    "description": "drop_default: alter table anothertab alter column atcol1 drop default;"
-  },
-  {
-    "id": "alter_table_drop_constraint_98",
-    "source_file": "alter_table",
-    "category": "drop_constraint",
-    "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
-    "alter_sql": "alter table anothertab drop constraint anothertab_chk;",
-    "description": "drop_constraint: alter table anothertab drop constraint anothertab_chk;"
-  },
-  {
-    "id": "alter_table_drop_constraint_99",
-    "source_file": "alter_table",
-    "category": "drop_constraint",
-    "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
-    "alter_sql": "alter table anothertab drop constraint IF EXISTS anothertab_chk;",
-    "description": "drop_constraint: alter table anothertab drop constraint IF EXISTS anothertab_chk;"
-  },
-  {
-    "id": "alter_table_change_type_100",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
+    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);\nalter table anothertab\n  add unique(f1,f4);",
     "alter_sql": "alter table anothertab alter column f1 type bigint;",
     "description": "change_type: alter table anothertab alter column f1 type bigint;"
   },
   {
-    "id": "alter_table_change_type_101",
+    "id": "alter_table_change_type_92",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
+    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);\nalter table anothertab\n  add unique(f1,f4);\nalter table anothertab alter column f1 type bigint;",
     "alter_sql": "alter table anothertab\n  alter column f2 type bigint,\n  alter column f3 type bigint,\n  alter column f4 type bigint;",
     "description": "change_type: alter table anothertab\n  alter column f2 type bigint,\n  alter column f3 type bigint,\n  alter column "
   },
   {
-    "id": "alter_table_change_type_102",
+    "id": "alter_table_change_type_93",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "anothertab",
-    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);",
+    "before_sql": "create table anothertab(f1 int primary key, f2 int unique,\n                        f3 int, f4 int, f5 int);\nalter table anothertab\n  add unique(f1,f4);\nalter table anothertab alter column f1 type bigint;\nalter table anothertab\n  alter column f2 type bigint,\n  alter column f3 type bigint,\n  alter column f4 type bigint;",
     "alter_sql": "alter table anothertab alter column f5 type bigint;",
     "description": "change_type: alter table anothertab alter column f5 type bigint;"
   },
   {
-    "id": "alter_table_change_type_103",
+    "id": "alter_table_change_type_94",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "test_inh_check",
@@ -927,25 +871,25 @@
     "description": "change_type: ALTER TABLE test_inh_check ALTER COLUMN a TYPE numeric;"
   },
   {
-    "id": "alter_table_add_constraint_104",
+    "id": "alter_table_add_constraint_95",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "test_inh_check",
-    "before_sql": "CREATE TABLE test_inh_check (a float check (a > 10.2), b float);",
+    "before_sql": "CREATE TABLE test_inh_check (a float check (a > 10.2), b float);\nALTER TABLE test_inh_check ALTER COLUMN a TYPE numeric;\nALTER TABLE test_inh_check ADD CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT;",
     "alter_sql": "ALTER TABLE test_inh_check ADD CONSTRAINT bmerged CHECK (b > 1);",
     "description": "add_constraint: ALTER TABLE test_inh_check ADD CONSTRAINT bmerged CHECK (b > 1);"
   },
   {
-    "id": "alter_table_change_type_105",
+    "id": "alter_table_change_type_96",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "test_inh_check",
-    "before_sql": "CREATE TABLE test_inh_check (a float check (a > 10.2), b float);",
+    "before_sql": "CREATE TABLE test_inh_check (a float check (a > 10.2), b float);\nALTER TABLE test_inh_check ALTER COLUMN a TYPE numeric;\nALTER TABLE test_inh_check ADD CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT;\nALTER TABLE test_inh_check ADD CONSTRAINT bmerged CHECK (b > 1);",
     "alter_sql": "ALTER TABLE test_inh_check ALTER COLUMN b TYPE numeric;",
     "description": "change_type: ALTER TABLE test_inh_check ALTER COLUMN b TYPE numeric;"
   },
   {
-    "id": "alter_table_add_column_106",
+    "id": "alter_table_add_column_97",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "test_type_diff",
@@ -954,205 +898,80 @@
     "description": "add_column: ALTER TABLE test_type_diff ADD COLUMN f2 int;"
   },
   {
-    "id": "alter_table_add_column_107",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n      ADD COLUMN empty1 text,\n      ADD COLUMN notempty1_rewrite serial;",
-    "description": "add_column: ALTER TABLE rewrite_test\n      ADD COLUMN empty1 text,\n      ADD COLUMN notempty1_rewrite serial;"
-  },
-  {
-    "id": "alter_table_add_column_108",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n        ADD COLUMN notempty2_rewrite serial,\n        ADD COLUMN empty2 text;",
-    "description": "add_column: ALTER TABLE rewrite_test\n        ADD COLUMN notempty2_rewrite serial,\n        ADD COLUMN empty2 text"
-  },
-  {
-    "id": "alter_table_add_column_109",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n        ADD COLUMN empty3 text,\n        ADD COLUMN notempty3_norewrite int default 42;",
-    "description": "add_column: ALTER TABLE rewrite_test\n        ADD COLUMN empty3 text,\n        ADD COLUMN notempty3_norewrite int "
-  },
-  {
-    "id": "alter_table_add_column_110",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n        ADD COLUMN notempty4_norewrite int default 42,\n        ADD COLUMN empty4 text;",
-    "description": "add_column: ALTER TABLE rewrite_test\n        ADD COLUMN notempty4_norewrite int default 42,\n        ADD COLUMN e"
-  },
-  {
-    "id": "alter_table_add_column_111",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n        ADD COLUMN empty5 text,\n        ADD COLUMN notempty5_norewrite int default 42,\n        ADD COLUMN notempty5_rewrite serial;",
-    "description": "add_column: ALTER TABLE rewrite_test\n        ADD COLUMN empty5 text,\n        ADD COLUMN notempty5_norewrite int "
-  },
-  {
-    "id": "alter_table_add_column_112",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "rewrite_test",
-    "before_sql": "CREATE TABLE rewrite_test(col text);",
-    "alter_sql": "ALTER TABLE rewrite_test\n        ADD COLUMN notempty6_rewrite serial,\n        ADD COLUMN empty6 text,\n        ADD COLUMN notempty6_norewrite int default 42;",
-    "description": "add_column: ALTER TABLE rewrite_test\n        ADD COLUMN notempty6_rewrite serial,\n        ADD COLUMN empty6 text"
-  },
-  {
-    "id": "alter_table_set_default_113",
-    "source_file": "alter_table",
-    "category": "set_default",
-    "table": "alterlock",
-    "before_sql": "create table alterlock (f1 int primary key, f2 text);",
-    "alter_sql": "alter table alterlock alter column f2 set default 'x';",
-    "description": "set_default: alter table alterlock alter column f2 set default 'x';"
-  },
-  {
-    "id": "alter_table_drop_constraint_114",
+    "id": "alter_table_drop_constraint_98",
     "source_file": "alter_table",
     "category": "drop_constraint",
     "table": "test_drop_constr_parent",
     "before_sql": "CREATE TABLE test_drop_constr_parent (c text CHECK (c IS NOT NULL));",
     "alter_sql": "ALTER TABLE ONLY test_drop_constr_parent DROP CONSTRAINT \"test_drop_constr_parent_c_check\";",
-    "description": "drop_constraint: ALTER TABLE ONLY test_drop_constr_parent DROP CONSTRAINT \"test_drop_constr_parent_c_check\";"
+    "description": "drop_constraint: ALTER TABLE ONLY test_drop_constr_parent DROP CONSTRAINT \"test_drop_constr_parent_c_check\";",
+    "skip_reason": "references_nonexistent_constraint"
   },
   {
-    "id": "alter_table_add_constraint_115",
+    "id": "alter_table_add_constraint_99",
     "source_file": "alter_table",
     "category": "add_constraint",
     "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT foo CHECK(c > 3);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT foo CHECK(c > 3);"
+    "before_sql": "CREATE TABLE tt9(c integer);\nALTER TABLE tt9 ADD CHECK(c > 1);",
+    "alter_sql": "ALTER TABLE tt9 ADD CHECK(c > 2);  -- picks nonconflicting name\nALTER TABLE tt9 ADD CONSTRAINT foo CHECK(c > 3);",
+    "description": "add_constraint: ALTER TABLE tt9 ADD CHECK(c > 2);  -- picks nonconflicting name\nALTER TABLE tt9 ADD CONSTRAINT foo C"
   },
   {
-    "id": "alter_table_add_constraint_116",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT foo CHECK(c > 4);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT foo CHECK(c > 4);"
-  },
-  {
-    "id": "alter_table_add_constraint_117",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key UNIQUE(c);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key UNIQUE(c);"
-  },
-  {
-    "id": "alter_table_add_constraint_118",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT foo UNIQUE(c);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT foo UNIQUE(c);"
-  },
-  {
-    "id": "alter_table_add_constraint_119",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key CHECK(c > 5);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key CHECK(c > 5);"
-  },
-  {
-    "id": "alter_table_add_constraint_120",
-    "source_file": "alter_table",
-    "category": "add_constraint",
-    "table": "tt9",
-    "before_sql": "CREATE TABLE tt9(c integer);",
-    "alter_sql": "ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key2 CHECK(c > 6);",
-    "description": "add_constraint: ALTER TABLE tt9 ADD CONSTRAINT tt9_c_key2 CHECK(c > 6);"
-  },
-  {
-    "id": "alter_table_change_type_121",
+    "id": "alter_table_change_type_100",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "alter_sql": "ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;",
+    "description": "change_type: ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;"
+  },
+  {
+    "id": "alter_table_change_type_101",
+    "source_file": "alter_table",
+    "category": "change_type",
+    "table": "comment_test",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;"
   },
   {
-    "id": "alter_table_change_type_122",
+    "id": "alter_table_change_type_102",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;"
   },
   {
-    "id": "alter_table_change_type_123",
+    "id": "alter_table_change_type_103",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;"
   },
   {
-    "id": "alter_table_change_type_124",
+    "id": "alter_table_change_type_104",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;"
   },
   {
-    "id": "alter_table_change_type_125",
+    "id": "alter_table_change_type_105",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
+    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;"
   },
   {
-    "id": "alter_table_change_type_126",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
-    "alter_sql": "ALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;",
-    "description": "change_type: ALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;"
-  },
-  {
-    "id": "alter_table_change_type_127",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
-    "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE x;",
-    "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE x;"
-  },
-  {
-    "id": "alter_table_change_type_128",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "comment_test",
-    "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
-    "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int COLLATE \"C\";",
-    "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int COLLATE \"C\";"
-  },
-  {
-    "id": "alter_table_add_column_129",
+    "id": "alter_table_add_column_106",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "test_add_column",
@@ -1161,97 +980,46 @@
     "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN c2 integer;"
   },
   {
-    "id": "alter_table_add_column_130",
+    "id": "alter_table_add_column_107",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
-    "alter_sql": "ALTER TABLE ONLY test_add_column\n\tADD COLUMN c2 integer;",
-    "description": "add_column: ALTER TABLE ONLY test_add_column\n\tADD COLUMN c2 integer;"
-  },
-  {
-    "id": "alter_table_add_column_131",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
-    "alter_sql": "ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer;",
-    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer;"
-  },
-  {
-    "id": "alter_table_add_column_132",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
-    "alter_sql": "ALTER TABLE ONLY test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer;",
-    "description": "add_column: ALTER TABLE ONLY test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer;"
-  },
-  {
-    "id": "alter_table_add_column_133",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
-    "alter_sql": "ALTER TABLE test_add_column\n\tADD COLUMN c2 integer, -- fail because c2 already exists\n\tADD COLUMN c3 integer primary key;",
-    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN c2 integer, -- fail because c2 already exists\n\tADD COLUMN c3"
-  },
-  {
-    "id": "alter_table_add_column_134",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
+    "before_sql": "CREATE TABLE test_add_column(c1 integer);\nALTER TABLE test_add_column\n\tADD COLUMN c2 integer;",
     "alter_sql": "ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN c3 integer primary key;",
-    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exi"
+    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exi",
+    "skip_reason": "no_op_if_not_exists"
   },
   {
-    "id": "alter_table_add_column_135",
+    "id": "alter_table_add_column_108",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
+    "before_sql": "CREATE TABLE test_add_column(c1 integer);\nALTER TABLE test_add_column\n\tADD COLUMN c2 integer;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN c3 integer primary key;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN IF NOT EXISTS c3 integer primary key; -- skipping because c3 already exists\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN IF NOT EXISTS c3 integer, -- skipping because c3 already exists\n\tADD COLUMN c4 integer REFERENCES test_add_column;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c4 integer REFERENCES test_add_column;",
     "alter_sql": "ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 8);",
-    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 8);"
+    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 8);",
+    "skip_reason": "references_nonexistent_column"
   },
   {
-    "id": "alter_table_add_column_136",
+    "id": "alter_table_add_column_109",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "test_add_column",
-    "before_sql": "CREATE TABLE test_add_column(c1 integer);",
+    "before_sql": "CREATE TABLE test_add_column(c1 integer);\nALTER TABLE test_add_column\n\tADD COLUMN c2 integer;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN c3 integer primary key;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN IF NOT EXISTS c3 integer primary key; -- skipping because c3 already exists\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists\n\tADD COLUMN IF NOT EXISTS c3 integer, -- skipping because c3 already exists\n\tADD COLUMN c4 integer REFERENCES test_add_column;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c4 integer REFERENCES test_add_column;\nALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 8);",
     "alter_sql": "ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 10);",
-    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 10);"
+    "description": "add_column: ALTER TABLE test_add_column\n\tADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 10);",
+    "skip_reason": "no_op_if_not_exists"
   },
   {
-    "id": "alter_table_add_column_137",
+    "id": "alter_table_add_constraint_110",
     "source_file": "alter_table",
-    "category": "add_column",
-    "table": "atnotnull1",
-    "before_sql": "CREATE TABLE atnotnull1 ();",
-    "alter_sql": "ALTER TABLE atnotnull1\n  ADD COLUMN a INT,\n  ALTER a SET NOT NULL;",
-    "description": "add_column: ALTER TABLE atnotnull1\n  ADD COLUMN a INT,\n  ALTER a SET NOT NULL;"
+    "category": "add_constraint",
+    "table": "fail_part",
+    "before_sql": "CREATE TABLE fail_part (\n\tb char(2) COLLATE \"C\",\n\ta int NOT NULL\n);",
+    "alter_sql": "ALTER TABLE fail_part ADD CONSTRAINT check_a CHECK (a >= 0);",
+    "description": "add_constraint: ALTER TABLE fail_part ADD CONSTRAINT check_a CHECK (a >= 0);"
   },
   {
-    "id": "alter_table_add_column_138",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "atnotnull1",
-    "before_sql": "CREATE TABLE atnotnull1 ();",
-    "alter_sql": "ALTER TABLE atnotnull1\n  ADD COLUMN b INT,\n  ADD NOT NULL b;",
-    "description": "add_column: ALTER TABLE atnotnull1\n  ADD COLUMN b INT,\n  ADD NOT NULL b;"
-  },
-  {
-    "id": "alter_table_add_column_139",
-    "source_file": "alter_table",
-    "category": "add_column",
-    "table": "atnotnull1",
-    "before_sql": "CREATE TABLE atnotnull1 ();",
-    "alter_sql": "ALTER TABLE atnotnull1\n  ADD COLUMN c INT,\n  ADD PRIMARY KEY (c);",
-    "description": "add_column: ALTER TABLE atnotnull1\n  ADD COLUMN c INT,\n  ADD PRIMARY KEY (c);"
-  },
-  {
-    "id": "alter_table_add_column_140",
+    "id": "alter_table_add_column_111",
     "source_file": "alter_table",
     "category": "add_column",
     "table": "bar2",
@@ -1260,40 +1028,13 @@
     "description": "add_column: alter table bar2 add column b integer not null default 1;"
   },
   {
-    "id": "alter_table_change_type_141",
+    "id": "alter_table_change_type_112",
     "source_file": "alter_table",
     "category": "change_type",
     "table": "attbl",
-    "before_sql": "create table attbl(a int);",
+    "before_sql": "create table attbl (p1 int constraint pk_attbl primary key);",
     "alter_sql": "alter table attbl alter column p1 set data type bigint;",
     "description": "change_type: alter table attbl alter column p1 set data type bigint;"
-  },
-  {
-    "id": "alter_table_change_type_142",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "atref",
-    "before_sql": "create table atref(b attbl check ((b).a is not null));",
-    "alter_sql": "alter table atref alter column c1 set data type bigint;",
-    "description": "change_type: alter table atref alter column c1 set data type bigint;"
-  },
-  {
-    "id": "alter_table_change_type_143",
-    "source_file": "alter_table",
-    "category": "change_type",
-    "table": "attbl",
-    "before_sql": "create table attbl(a int);",
-    "alter_sql": "alter table attbl alter column a type numeric;",
-    "description": "change_type: alter table attbl alter column a type numeric;"
-  },
-  {
-    "id": "alter_table_drop_constraint_144",
-    "source_file": "alter_table",
-    "category": "drop_constraint",
-    "table": "atref",
-    "before_sql": "create table atref(b attbl check ((b).a is not null));",
-    "alter_sql": "alter table atref drop constraint atref_b_check;",
-    "description": "drop_constraint: alter table atref drop constraint atref_b_check;"
   },
   {
     "id": "constraints_drop_constraint_1",
@@ -1302,14 +1043,15 @@
     "table": "unique_tbl",
     "before_sql": "CREATE TABLE unique_tbl (i int UNIQUE DEFERRABLE, t text);",
     "alter_sql": "ALTER TABLE unique_tbl DROP CONSTRAINT unique_tbl_i_key;",
-    "description": "drop_constraint: ALTER TABLE unique_tbl DROP CONSTRAINT unique_tbl_i_key;"
+    "description": "drop_constraint: ALTER TABLE unique_tbl DROP CONSTRAINT unique_tbl_i_key;",
+    "skip_reason": "references_nonexistent_constraint"
   },
   {
     "id": "constraints_add_constraint_2",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "unique_tbl",
-    "before_sql": "CREATE TABLE unique_tbl (i int UNIQUE DEFERRABLE, t text);",
+    "before_sql": "CREATE TABLE unique_tbl (i int UNIQUE DEFERRABLE, t text);\nALTER TABLE unique_tbl DROP CONSTRAINT unique_tbl_i_key;",
     "alter_sql": "ALTER TABLE unique_tbl ADD CONSTRAINT unique_tbl_i_key\n\tUNIQUE (i) DEFERRABLE INITIALLY DEFERRED;",
     "description": "add_constraint: ALTER TABLE unique_tbl ADD CONSTRAINT unique_tbl_i_key\n\tUNIQUE (i) DEFERRABLE INITIALLY DEFERRED;"
   },
@@ -1323,223 +1065,26 @@
     "description": "drop_constraint: ALTER TABLE deferred_excl DROP CONSTRAINT deferred_excl_con;"
   },
   {
-    "id": "constraints_add_constraint_4",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "atacc1",
-    "before_sql": "CREATE TABLE ATACC1 (a int);",
-    "alter_sql": "ALTER TABLE ATACC1 ADD CONSTRAINT ditto NOT NULL a;",
-    "description": "add_constraint: ALTER TABLE ATACC1 ADD CONSTRAINT ditto NOT NULL a;"
-  },
-  {
-    "id": "constraints_drop_constraint_5",
-    "source_file": "constraints",
-    "category": "drop_constraint",
-    "table": "atacc2",
-    "before_sql": "CREATE TABLE ATACC2 (a int, CONSTRAINT a_is_not_null NOT NULL a NO INHERIT);",
-    "alter_sql": "ALTER TABLE ATACC2 DROP CONSTRAINT a_is_not_null;",
-    "description": "drop_constraint: ALTER TABLE ATACC2 DROP CONSTRAINT a_is_not_null;"
-  },
-  {
-    "id": "constraints_drop_not_null_6",
-    "source_file": "constraints",
-    "category": "drop_not_null",
-    "table": "notnull_tbl2",
-    "before_sql": "CREATE TABLE notnull_tbl2 (a INTEGER PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE notnull_tbl2 ALTER a DROP NOT NULL;",
-    "description": "drop_not_null: ALTER TABLE notnull_tbl2 ALTER a DROP NOT NULL;"
-  },
-  {
-    "id": "constraints_drop_not_null_7",
-    "source_file": "constraints",
-    "category": "drop_not_null",
-    "table": "notnull_tbl3",
-    "before_sql": "CREATE TABLE notnull_tbl3 (a INTEGER NOT NULL, CHECK (a IS NOT NULL));",
-    "alter_sql": "ALTER TABLE notnull_tbl3 ALTER A DROP NOT NULL;",
-    "description": "drop_not_null: ALTER TABLE notnull_tbl3 ALTER A DROP NOT NULL;"
-  },
-  {
-    "id": "constraints_add_constraint_8",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_tbl3",
-    "before_sql": "CREATE TABLE notnull_tbl3 (a INTEGER NOT NULL, CHECK (a IS NOT NULL));",
-    "alter_sql": "ALTER TABLE notnull_tbl3 ADD b int, ADD CONSTRAINT pk PRIMARY KEY (a, b);",
-    "description": "add_constraint: ALTER TABLE notnull_tbl3 ADD b int, ADD CONSTRAINT pk PRIMARY KEY (a, b);"
-  },
-  {
-    "id": "constraints_drop_constraint_9",
-    "source_file": "constraints",
-    "category": "drop_constraint",
-    "table": "notnull_tbl3",
-    "before_sql": "CREATE TABLE notnull_tbl3 (a INTEGER NOT NULL, CHECK (a IS NOT NULL));",
-    "alter_sql": "ALTER TABLE notnull_tbl3 DROP CONSTRAINT pk;",
-    "description": "drop_constraint: ALTER TABLE notnull_tbl3 DROP CONSTRAINT pk;"
-  },
-  {
-    "id": "constraints_add_constraint_10",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "cnn_pk",
-    "before_sql": "create table cnn_pk (a int not null no inherit);",
-    "alter_sql": "ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY (b);",
-    "description": "add_constraint: ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY (b);"
-  },
-  {
-    "id": "constraints_drop_constraint_11",
-    "source_file": "constraints",
-    "category": "drop_constraint",
-    "table": "cnn_pk",
-    "before_sql": "create table cnn_pk (a int not null no inherit);",
-    "alter_sql": "ALTER TABLE cnn_pk DROP CONSTRAINT cnn_primarykey;",
-    "description": "drop_constraint: ALTER TABLE cnn_pk DROP CONSTRAINT cnn_primarykey;"
-  },
-  {
-    "id": "constraints_drop_constraint_12",
-    "source_file": "constraints",
-    "category": "drop_constraint",
-    "table": "notnull_tbl5",
-    "before_sql": "CREATE TABLE notnull_tbl5 (a int CONSTRAINT ann NOT NULL,\n\tb int CONSTRAINT bnn NOT NULL);",
-    "alter_sql": "ALTER TABLE ONLY notnull_tbl5 DROP CONSTRAINT ann;",
-    "description": "drop_constraint: ALTER TABLE ONLY notnull_tbl5 DROP CONSTRAINT ann;"
-  },
-  {
-    "id": "constraints_drop_not_null_13",
-    "source_file": "constraints",
-    "category": "drop_not_null",
-    "table": "notnull_tbl5",
-    "before_sql": "CREATE TABLE notnull_tbl5 (a int CONSTRAINT ann NOT NULL,\n\tb int CONSTRAINT bnn NOT NULL);",
-    "alter_sql": "ALTER TABLE ONLY notnull_tbl5 ALTER b DROP NOT NULL;",
-    "description": "drop_not_null: ALTER TABLE ONLY notnull_tbl5 ALTER b DROP NOT NULL;"
-  },
-  {
-    "id": "constraints_drop_constraint_14",
-    "source_file": "constraints",
-    "category": "drop_constraint",
-    "table": "notnull_chld0",
-    "before_sql": "CREATE TABLE notnull_chld0 (a int, CONSTRAINT nn_chld0 NOT NULL a);",
-    "alter_sql": "ALTER TABLE notnull_chld0 DROP CONSTRAINT nn_chld0;",
-    "description": "drop_constraint: ALTER TABLE notnull_chld0 DROP CONSTRAINT nn_chld0;"
-  },
-  {
-    "id": "constraints_add_constraint_15",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_chld0",
-    "before_sql": "CREATE TABLE notnull_chld0 (a int, CONSTRAINT nn_chld0 NOT NULL a);",
-    "alter_sql": "ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;",
-    "description": "add_constraint: ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;"
-  },
-  {
-    "id": "constraints_add_constraint_16",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_inhparent",
-    "before_sql": "CREATE TABLE notnull_inhparent (i int);",
-    "alter_sql": "ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
-    "description": "add_constraint: ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;"
-  },
-  {
-    "id": "constraints_set_not_null_17",
-    "source_file": "constraints",
-    "category": "set_not_null",
-    "table": "notnull_inhparent",
-    "before_sql": "CREATE TABLE notnull_inhparent (i int);",
-    "alter_sql": "ALTER TABLE notnull_inhparent ALTER i SET NOT NULL;",
-    "description": "set_not_null: ALTER TABLE notnull_inhparent ALTER i SET NOT NULL;"
-  },
-  {
-    "id": "constraints_add_constraint_18",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_tbl1_3",
-    "before_sql": "CREATE TABLE notnull_tbl1_3(a int, b int);",
-    "alter_sql": "ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "constraints_add_constraint_19",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "pp_nn_1",
-    "before_sql": "CREATE TABLE pp_nn_1(a int, b int);",
-    "alter_sql": "ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "constraints_add_constraint_20",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "pp_nn_1",
-    "before_sql": "CREATE TABLE pp_nn_1(a int, b int);",
-    "alter_sql": "ALTER TABLE pp_nn_1 ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE pp_nn_1 ADD CONSTRAINT nn NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "constraints_add_constraint_21",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_tbl1_upg",
-    "before_sql": "CREATE TABLE notnull_tbl1_upg (a int, b int);",
-    "alter_sql": "ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "constraints_add_constraint_22",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_parent_upg",
-    "before_sql": "CREATE TABLE notnull_parent_upg (a int);",
-    "alter_sql": "ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "constraints_add_constraint_23",
-    "source_file": "constraints",
-    "category": "add_constraint",
-    "table": "notnull_part1_3_upg",
-    "before_sql": "CREATE TABLE notnull_part1_3_upg (a int, b int);",
-    "alter_sql": "ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "description": "add_constraint: ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;"
-  },
-  {
-    "id": "create_index_add_column_1",
-    "source_file": "create_index",
-    "category": "add_column",
-    "table": "concur_reindex_tab",
-    "before_sql": "CREATE TABLE concur_reindex_tab (c1 int);",
-    "alter_sql": "ALTER TABLE concur_reindex_tab ADD COLUMN c2 text;",
-    "description": "add_column: ALTER TABLE concur_reindex_tab ADD COLUMN c2 text;"
-  },
-  {
     "id": "identity_set_not_null_1",
     "source_file": "identity",
     "category": "set_not_null",
     "table": "itest4",
     "before_sql": "CREATE TABLE itest4 (a int, b text);",
-    "alter_sql": "ALTER TABLE itest4 ALTER COLUMN a SET NOT NULL;",
-    "description": "set_not_null: ALTER TABLE itest4 ALTER COLUMN a SET NOT NULL;"
+    "alter_sql": "ALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error, requires NOT NULL\nALTER TABLE itest4 ALTER COLUMN a SET NOT NULL;",
+    "description": "set_not_null: ALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error, requires NOT NULL\nALT"
   },
   {
     "id": "identity_drop_not_null_2",
     "source_file": "identity",
     "category": "drop_not_null",
     "table": "itest4",
-    "before_sql": "CREATE TABLE itest4 (a int, b text);",
-    "alter_sql": "ALTER TABLE itest4 ALTER COLUMN a DROP NOT NULL;",
-    "description": "drop_not_null: ALTER TABLE itest4 ALTER COLUMN a DROP NOT NULL;"
+    "before_sql": "CREATE TABLE itest4 (a int, b text);\nALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error, requires NOT NULL\nALTER TABLE itest4 ALTER COLUMN a SET NOT NULL;",
+    "alter_sql": "ALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- ok\nALTER TABLE itest4 ALTER COLUMN a DROP NOT NULL;  -- error, disallowed\nALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error, already set\nALTER TABLE itest4 ALTER COLUMN b ADD GENERATED ALWAYS AS IDENTITY;  -- error, wrong data type\n-- for later\nALTER TABLE itest4 ALTER COLUMN b SET DEFAULT '';",
+    "description": "drop_not_null: ALTER TABLE itest4 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- ok\nALTER TABLE itest4 ALTER ",
+    "skip_reason": "identity_already_exists"
   },
   {
-    "id": "identity_set_default_3",
-    "source_file": "identity",
-    "category": "set_default",
-    "table": "itest4",
-    "before_sql": "CREATE TABLE itest4 (a int, b text);",
-    "alter_sql": "ALTER TABLE itest4 ALTER COLUMN b SET DEFAULT '';",
-    "description": "set_default: ALTER TABLE itest4 ALTER COLUMN b SET DEFAULT '';"
-  },
-  {
-    "id": "identity_add_column_4",
+    "id": "identity_add_column_3",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest13",
@@ -1548,70 +1093,45 @@
     "description": "add_column: ALTER TABLE itest13 ADD COLUMN b int GENERATED BY DEFAULT AS IDENTITY;"
   },
   {
-    "id": "identity_add_column_5",
+    "id": "identity_add_column_4",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest13",
-    "before_sql": "CREATE TABLE itest13 (a int);",
+    "before_sql": "CREATE TABLE itest13 (a int);\nALTER TABLE itest13 ADD COLUMN b int GENERATED BY DEFAULT AS IDENTITY;",
     "alter_sql": "ALTER TABLE itest13 ADD COLUMN c int GENERATED BY DEFAULT AS IDENTITY;",
     "description": "add_column: ALTER TABLE itest13 ADD COLUMN c int GENERATED BY DEFAULT AS IDENTITY;"
   },
   {
-    "id": "identity_set_default_6",
-    "source_file": "identity",
-    "category": "set_default",
-    "table": "itest1",
-    "before_sql": "CREATE TABLE itest1 (a int generated by default as identity, b text);",
-    "alter_sql": "ALTER TABLE itest1 ALTER COLUMN a SET DEFAULT 1;",
-    "description": "set_default: ALTER TABLE itest1 ALTER COLUMN a SET DEFAULT 1;"
-  },
-  {
-    "id": "identity_change_type_7",
+    "id": "identity_change_type_5",
     "source_file": "identity",
     "category": "change_type",
     "table": "itest3",
-    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);",
+    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);\nALTER TABLE itest3 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error\nSELECT table_name, column_name, column_default, is_nullable, is_identity, identity_generation, identity_start, identity_increment, identity_maximum, identity_minimum, identity_cycle FROM information_schema.columns WHERE table_name LIKE 'itest_' ORDER BY 1, 2;",
     "alter_sql": "ALTER TABLE itest3 ALTER COLUMN a TYPE int;",
-    "description": "change_type: ALTER TABLE itest3 ALTER COLUMN a TYPE int;"
+    "description": "change_type: ALTER TABLE itest3 ALTER COLUMN a TYPE int;",
+    "skip_reason": "identity_type_restriction"
   },
   {
-    "id": "identity_change_type_8",
+    "id": "identity_change_type_6",
     "source_file": "identity",
     "category": "change_type",
     "table": "itest3",
-    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);",
-    "alter_sql": "ALTER TABLE itest3 ALTER COLUMN a TYPE text;",
-    "description": "change_type: ALTER TABLE itest3 ALTER COLUMN a TYPE text;"
+    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);\nALTER TABLE itest3 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error\nSELECT table_name, column_name, column_default, is_nullable, is_identity, identity_generation, identity_start, identity_increment, identity_maximum, identity_minimum, identity_cycle FROM information_schema.columns WHERE table_name LIKE 'itest_' ORDER BY 1, 2;\nALTER TABLE itest3 ALTER COLUMN a TYPE int;",
+    "alter_sql": "ALTER TABLE itest3 ALTER COLUMN a TYPE text;  -- error\n-- check that unlogged propagates to sequence\nCREATE UNLOGGED TABLE itest17 (a int NOT NULL, b text);",
+    "description": "change_type: ALTER TABLE itest3 ALTER COLUMN a TYPE text;  -- error\n-- check that unlogged propagates to sequence",
+    "skip_reason": "identity_type_restriction"
   },
   {
-    "id": "identity_add_column_9",
-    "source_file": "identity",
-    "category": "add_column",
-    "table": "itest17",
-    "before_sql": "CREATE UNLOGGED TABLE itest17 (a int NOT NULL, b text);",
-    "alter_sql": "ALTER TABLE itest17 ADD COLUMN c int GENERATED ALWAYS AS IDENTITY;",
-    "description": "add_column: ALTER TABLE itest17 ADD COLUMN c int GENERATED ALWAYS AS IDENTITY;"
-  },
-  {
-    "id": "identity_add_column_10",
+    "id": "identity_add_column_7",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest3",
-    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);",
+    "before_sql": "CREATE TABLE itest3 (a smallint generated by default as identity (start with 7 increment by 5), b text);\nALTER TABLE itest3 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;  -- error\nSELECT table_name, column_name, column_default, is_nullable, is_identity, identity_generation, identity_start, identity_increment, identity_maximum, identity_minimum, identity_cycle FROM information_schema.columns WHERE table_name LIKE 'itest_' ORDER BY 1, 2;\nALTER TABLE itest3 ALTER COLUMN a TYPE int;\nALTER TABLE itest3 ALTER COLUMN a TYPE text;  -- error\n-- check that unlogged propagates to sequence\nCREATE UNLOGGED TABLE itest17 (a int NOT NULL, b text);",
     "alter_sql": "ALTER TABLE itest3\n  ADD COLUMN c int GENERATED BY DEFAULT AS IDENTITY,\n  ALTER COLUMN c SET GENERATED ALWAYS;",
     "description": "add_column: ALTER TABLE itest3\n  ADD COLUMN c int GENERATED BY DEFAULT AS IDENTITY,\n  ALTER COLUMN c SET GENERAT"
   },
   {
-    "id": "identity_add_column_11",
-    "source_file": "identity",
-    "category": "add_column",
-    "table": "itest7d",
-    "before_sql": "CREATE TABLE itest7d (a int not null);",
-    "alter_sql": "ALTER TABLE itest7d ADD COLUMN b int GENERATED ALWAYS AS IDENTITY;",
-    "description": "add_column: ALTER TABLE itest7d ADD COLUMN b int GENERATED ALWAYS AS IDENTITY;"
-  },
-  {
-    "id": "identity_add_column_12",
+    "id": "identity_add_column_8",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest8",
@@ -1620,79 +1140,64 @@
     "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;"
   },
   {
-    "id": "identity_add_column_13",
+    "id": "identity_add_column_9",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;",
     "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;",
-    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,"
+    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,",
+    "skip_reason": "identity_already_exists"
+  },
+  {
+    "id": "identity_add_column_10",
+    "source_file": "identity",
+    "category": "add_column",
+    "table": "itest8",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;",
+    "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f4 int;",
+    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f4 int;"
+  },
+  {
+    "id": "identity_change_type_11",
+    "source_file": "identity",
+    "category": "change_type",
+    "table": "itest8",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;\nALTER TABLE itest8\n  ADD COLUMN f4 int;",
+    "alter_sql": "ALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f4 SET DATA TYPE bigint;",
+    "description": "change_type: ALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTIT",
+    "skip_reason": "identity_already_exists"
+  },
+  {
+    "id": "identity_add_column_12",
+    "source_file": "identity",
+    "category": "add_column",
+    "table": "itest8",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;\nALTER TABLE itest8\n  ADD COLUMN f4 int;\nALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f4 SET DATA TYPE bigint;",
+    "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;",
+    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;"
+  },
+  {
+    "id": "identity_change_type_13",
+    "source_file": "identity",
+    "category": "change_type",
+    "table": "itest8",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;\nALTER TABLE itest8\n  ADD COLUMN f4 int;\nALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f4 SET DATA TYPE bigint;\nALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;",
+    "alter_sql": "ALTER TABLE itest8\n  ALTER COLUMN f5 DROP IDENTITY,\n  ALTER COLUMN f5 DROP NOT NULL,\n  ALTER COLUMN f5 SET DATA TYPE bigint;",
+    "description": "change_type: ALTER TABLE itest8\n  ALTER COLUMN f5 DROP IDENTITY,\n  ALTER COLUMN f5 DROP NOT NULL,\n  ALTER COLUMN "
   },
   {
     "id": "identity_add_column_14",
     "source_file": "identity",
     "category": "add_column",
     "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
-    "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f4 int;",
-    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f4 int;"
-  },
-  {
-    "id": "identity_change_type_15",
-    "source_file": "identity",
-    "category": "change_type",
-    "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
-    "alter_sql": "ALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f4 SET DATA TYPE bigint;",
-    "description": "change_type: ALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTIT"
-  },
-  {
-    "id": "identity_add_column_16",
-    "source_file": "identity",
-    "category": "add_column",
-    "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
-    "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;",
-    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;"
-  },
-  {
-    "id": "identity_change_type_17",
-    "source_file": "identity",
-    "category": "change_type",
-    "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
-    "alter_sql": "ALTER TABLE itest8\n  ALTER COLUMN f5 DROP IDENTITY,\n  ALTER COLUMN f5 DROP NOT NULL,\n  ALTER COLUMN f5 SET DATA TYPE bigint;",
-    "description": "change_type: ALTER TABLE itest8\n  ALTER COLUMN f5 DROP IDENTITY,\n  ALTER COLUMN f5 DROP NOT NULL,\n  ALTER COLUMN "
-  },
-  {
-    "id": "identity_add_column_18",
-    "source_file": "identity",
-    "category": "add_column",
-    "table": "itest8",
-    "before_sql": "CREATE TABLE itest8 (f1 int);",
+    "before_sql": "CREATE TABLE itest8 (f1 int);\nALTER TABLE itest8\n  ADD COLUMN f2 int NOT NULL,\n  ALTER COLUMN f2 ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ADD COLUMN f3 int NOT NULL,\n  ALTER COLUMN f3 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f3 SET GENERATED BY DEFAULT SET INCREMENT 10;\nALTER TABLE itest8\n  ADD COLUMN f4 int;\nALTER TABLE itest8\n  ALTER COLUMN f4 SET NOT NULL,\n  ALTER COLUMN f4 ADD GENERATED ALWAYS AS IDENTITY,\n  ALTER COLUMN f4 SET DATA TYPE bigint;\nALTER TABLE itest8\n  ADD COLUMN f5 int GENERATED ALWAYS AS IDENTITY;\nALTER TABLE itest8\n  ALTER COLUMN f5 DROP IDENTITY,\n  ALTER COLUMN f5 DROP NOT NULL,\n  ALTER COLUMN f5 SET DATA TYPE bigint;",
     "alter_sql": "ALTER TABLE itest8\n  ADD COLUMN f22 int NOT NULL,\n  ALTER COLUMN f22 ADD GENERATED ALWAYS AS IDENTITY;",
-    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f22 int NOT NULL,\n  ALTER COLUMN f22 ADD GENERATED ALWAYS AS IDENTIT"
+    "description": "add_column: ALTER TABLE itest8\n  ADD COLUMN f22 int NOT NULL,\n  ALTER COLUMN f22 ADD GENERATED ALWAYS AS IDENTIT",
+    "skip_reason": "identity_already_exists"
   },
   {
-    "id": "identity_set_not_null_19",
-    "source_file": "identity",
-    "category": "set_not_null",
-    "table": "pitest1_p2",
-    "before_sql": "CREATE TABLE pitest1_p2 (f3 bigint, f2 text, f1 date NOT NULL);",
-    "alter_sql": "ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET NOT NULL;",
-    "description": "set_not_null: ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET NOT NULL;"
-  },
-  {
-    "id": "identity_set_default_20",
-    "source_file": "identity",
-    "category": "set_default",
-    "table": "pitest1_p2",
-    "before_sql": "CREATE TABLE pitest1_p2 (f3 bigint, f2 text, f1 date NOT NULL);",
-    "alter_sql": "ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET DEFAULT 10000;",
-    "description": "set_default: ALTER TABLE pitest1_p2 ALTER COLUMN f3 SET DEFAULT 10000;"
-  },
-  {
-    "id": "identity_drop_default_21",
+    "id": "identity_drop_default_15",
     "source_file": "identity",
     "category": "drop_default",
     "table": "itest14",
@@ -1707,217 +1212,66 @@
     "table": "gtest_tableoid",
     "before_sql": "CREATE TABLE gtest_tableoid (\n  a int PRIMARY KEY,\n  b bool GENERATED ALWAYS AS (tableoid = 'gtest_tableoid'::regclass) STORED\n);",
     "alter_sql": "ALTER TABLE gtest_tableoid ADD COLUMN\n  c regclass GENERATED ALWAYS AS (tableoid) STORED;",
-    "description": "add_column: ALTER TABLE gtest_tableoid ADD COLUMN\n  c regclass GENERATED ALWAYS AS (tableoid) STORED;"
+    "description": "add_column: ALTER TABLE gtest_tableoid ADD COLUMN\n  c regclass GENERATED ALWAYS AS (tableoid) STORED;",
+    "skip_reason": "generated_column_dependency"
   },
   {
-    "id": "generated_stored_drop_column_2",
+    "id": "generated_stored_add_column_2",
     "source_file": "generated_stored",
-    "category": "drop_column",
-    "table": "gtest10",
-    "before_sql": "CREATE TABLE gtest10 (a int PRIMARY KEY, b int, c int GENERATED ALWAYS AS (b * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest10 DROP COLUMN b;",
-    "description": "drop_column: ALTER TABLE gtest10 DROP COLUMN b;"
+    "category": "add_column",
+    "table": "gtest25",
+    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
+    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 3) STORED;",
+    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 3) STORED;"
   },
   {
-    "id": "generated_stored_drop_column_3",
+    "id": "generated_stored_add_column_3",
     "source_file": "generated_stored",
-    "category": "drop_column",
-    "table": "gtest10",
-    "before_sql": "CREATE TABLE gtest10 (a int PRIMARY KEY, b int, c int GENERATED ALWAYS AS (b * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest10 DROP COLUMN b CASCADE;",
-    "description": "drop_column: ALTER TABLE gtest10 DROP COLUMN b CASCADE;"
+    "category": "add_column",
+    "table": "gtest25",
+    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);\nALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 3) STORED;",
+    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (z * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN c int DEFAULT 42,\n  ADD COLUMN x int GENERATED ALWAYS AS (c * 4) STORED;",
+    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;  -- error\nALTER TABLE gtest",
+    "skip_reason": "generated_column_dependency"
   },
   {
-    "id": "generated_stored_drop_column_4",
+    "id": "generated_stored_add_column_4",
     "source_file": "generated_stored",
-    "category": "drop_column",
-    "table": "gtest10a",
-    "before_sql": "CREATE TABLE gtest10a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest10a DROP COLUMN b;",
-    "description": "drop_column: ALTER TABLE gtest10a DROP COLUMN b;"
+    "category": "add_column",
+    "table": "gtest25",
+    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);\nALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 3) STORED;\nALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (z * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN c int DEFAULT 42,\n  ADD COLUMN x int GENERATED ALWAYS AS (c * 4) STORED;",
+    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN d int DEFAULT 101;",
+    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN d int DEFAULT 101;"
   },
   {
     "id": "generated_stored_add_column_5",
     "source_file": "generated_stored",
     "category": "add_column",
-    "table": "gtest20a",
-    "before_sql": "CREATE TABLE gtest20a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 50);",
-    "description": "add_column: ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 50);"
-  },
-  {
-    "id": "generated_stored_add_column_6",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest20a",
-    "before_sql": "CREATE TABLE gtest20a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 61);",
-    "description": "add_column: ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 61);"
-  },
-  {
-    "id": "generated_stored_add_constraint_7",
-    "source_file": "generated_stored",
-    "category": "add_constraint",
-    "table": "gtest20b",
-    "before_sql": "CREATE TABLE gtest20b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest20b ADD CONSTRAINT chk CHECK (b < 50) NOT VALID;",
-    "description": "add_constraint: ALTER TABLE gtest20b ADD CONSTRAINT chk CHECK (b < 50) NOT VALID;"
-  },
-  {
-    "id": "generated_stored_add_constraint_8",
-    "source_file": "generated_stored",
-    "category": "add_constraint",
-    "table": "gtest20c",
-    "before_sql": "CREATE TABLE gtest20c (a int, b int GENERATED ALWAYS AS (a * 2) STORED);",
-    "alter_sql": "ALTER TABLE gtest20c ADD CONSTRAINT whole_row_check CHECK (gtest20c IS NOT NULL);",
-    "description": "add_constraint: ALTER TABLE gtest20c ADD CONSTRAINT whole_row_check CHECK (gtest20c IS NOT NULL);"
-  },
-  {
-    "id": "generated_stored_set_not_null_9",
-    "source_file": "generated_stored",
-    "category": "set_not_null",
-    "table": "gtest21b",
-    "before_sql": "CREATE TABLE gtest21b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) STORED);",
-    "alter_sql": "ALTER TABLE gtest21b ALTER COLUMN b SET NOT NULL;",
-    "description": "set_not_null: ALTER TABLE gtest21b ALTER COLUMN b SET NOT NULL;"
-  },
-  {
-    "id": "generated_stored_drop_not_null_10",
-    "source_file": "generated_stored",
-    "category": "drop_not_null",
-    "table": "gtest21b",
-    "before_sql": "CREATE TABLE gtest21b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) STORED);",
-    "alter_sql": "ALTER TABLE gtest21b ALTER COLUMN b DROP NOT NULL;",
-    "description": "drop_not_null: ALTER TABLE gtest21b ALTER COLUMN b DROP NOT NULL;"
-  },
-  {
-    "id": "generated_stored_add_column_11",
-    "source_file": "generated_stored",
-    "category": "add_column",
     "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 2) STORED, ALTER COLUMN b SET EXPRESSION AS (a * 3);",
-    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 2) STORED, ALTER COLUMN b SET EXPRESSI"
-  },
-  {
-    "id": "generated_stored_add_column_12",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;",
-    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;"
-  },
-  {
-    "id": "generated_stored_add_column_13",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (z * 4) STORED;",
-    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (z * 4) STORED;"
-  },
-  {
-    "id": "generated_stored_add_column_14",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN c int DEFAULT 42,\n  ADD COLUMN x int GENERATED ALWAYS AS (c * 4) STORED;",
-    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN c int DEFAULT 42,\n  ADD COLUMN x int GENERATED ALWAYS AS (c * 4) STOR"
-  },
-  {
-    "id": "generated_stored_add_column_15",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
-    "alter_sql": "ALTER TABLE gtest25 ADD COLUMN d int DEFAULT 101;",
-    "description": "add_column: ALTER TABLE gtest25 ADD COLUMN d int DEFAULT 101;"
-  },
-  {
-    "id": "generated_stored_add_column_16",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest25",
-    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);",
+    "before_sql": "CREATE TABLE gtest25 (a int PRIMARY KEY);\nALTER TABLE gtest25 ADD COLUMN b int GENERATED ALWAYS AS (a * 3) STORED;\nALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (b * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN x int GENERATED ALWAYS AS (z * 4) STORED;  -- error\nALTER TABLE gtest25 ADD COLUMN c int DEFAULT 42,\n  ADD COLUMN x int GENERATED ALWAYS AS (c * 4) STORED;\nALTER TABLE gtest25 ADD COLUMN d int DEFAULT 101;",
     "alter_sql": "ALTER TABLE gtest25 ALTER COLUMN d SET DATA TYPE float8,\n  ADD COLUMN y float8 GENERATED ALWAYS AS (d * 4) STORED;",
     "description": "add_column: ALTER TABLE gtest25 ALTER COLUMN d SET DATA TYPE float8,\n  ADD COLUMN y float8 GENERATED ALWAYS AS ("
   },
   {
-    "id": "generated_stored_change_type_17",
+    "id": "generated_stored_change_type_6",
     "source_file": "generated_stored",
     "category": "change_type",
     "table": "gtest27",
     "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest27 ALTER COLUMN a TYPE text;",
-    "description": "change_type: ALTER TABLE gtest27 ALTER COLUMN a TYPE text;"
+    "alter_sql": "ALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error\nALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;",
+    "description": "change_type: ALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error\nALTER TABLE gtest27 ALTER COLUMN x TYPE nume"
   },
   {
-    "id": "generated_stored_change_type_18",
+    "id": "generated_stored_change_type_7",
     "source_file": "generated_stored",
     "category": "change_type",
     "table": "gtest27",
-    "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;",
-    "description": "change_type: ALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;"
+    "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);\nALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error\nALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;\nALTER TABLE gtest27 ALTER COLUMN x TYPE boolean USING x <> 0;  -- error\nALTER TABLE gtest27 ALTER COLUMN x DROP DEFAULT;  -- error\n-- It's possible to alter the column types this way:\nALTER TABLE gtest27\n  DROP COLUMN x,\n  ALTER COLUMN a TYPE bigint,\n  ALTER COLUMN b TYPE bigint,\n  ADD COLUMN x bigint GENERATED ALWAYS AS ((a + b) * 2) STORED;",
+    "alter_sql": "ALTER TABLE gtest27\n  ALTER COLUMN a TYPE float8,\n  ALTER COLUMN b TYPE float8;  -- error\nSELECT * FROM gtest27;",
+    "description": "change_type: ALTER TABLE gtest27\n  ALTER COLUMN a TYPE float8,\n  ALTER COLUMN b TYPE float8;  -- error\nSELECT * F"
   },
   {
-    "id": "generated_stored_drop_default_19",
-    "source_file": "generated_stored",
-    "category": "drop_default",
-    "table": "gtest27",
-    "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest27 ALTER COLUMN x DROP DEFAULT;",
-    "description": "drop_default: ALTER TABLE gtest27 ALTER COLUMN x DROP DEFAULT;"
-  },
-  {
-    "id": "generated_stored_add_column_20",
-    "source_file": "generated_stored",
-    "category": "add_column",
-    "table": "gtest27",
-    "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest27\n  DROP COLUMN x,\n  ALTER COLUMN a TYPE bigint,\n  ALTER COLUMN b TYPE bigint,\n  ADD COLUMN x bigint GENERATED ALWAYS AS ((a + b) * 2) STORED;",
-    "description": "add_column: ALTER TABLE gtest27\n  DROP COLUMN x,\n  ALTER COLUMN a TYPE bigint,\n  ALTER COLUMN b TYPE bigint,\n  A"
-  },
-  {
-    "id": "generated_stored_change_type_21",
-    "source_file": "generated_stored",
-    "category": "change_type",
-    "table": "gtest27",
-    "before_sql": "CREATE TABLE gtest27 (\n    a int,\n    b int,\n    x int GENERATED ALWAYS AS ((a + b) * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest27\n  ALTER COLUMN a TYPE float8,\n  ALTER COLUMN b TYPE float8;",
-    "description": "change_type: ALTER TABLE gtest27\n  ALTER COLUMN a TYPE float8,\n  ALTER COLUMN b TYPE float8;"
-  },
-  {
-    "id": "generated_stored_drop_column_22",
-    "source_file": "generated_stored",
-    "category": "drop_column",
-    "table": "gtest29",
-    "before_sql": "CREATE TABLE gtest29 (\n    a int,\n    b int GENERATED ALWAYS AS (a * 2) STORED\n);",
-    "alter_sql": "ALTER TABLE gtest29 DROP COLUMN a;",
-    "description": "drop_column: ALTER TABLE gtest29 DROP COLUMN a;"
-  },
-  {
-    "id": "generated_stored_add_constraint_23",
-    "source_file": "generated_stored",
-    "category": "add_constraint",
-    "table": "gtest31_2",
-    "before_sql": "CREATE TABLE gtest31_2 (x int, y gtest31_1);",
-    "alter_sql": "ALTER TABLE gtest31_2 ADD CONSTRAINT cc CHECK ((y).b IS NOT NULL);",
-    "description": "add_constraint: ALTER TABLE gtest31_2 ADD CONSTRAINT cc CHECK ((y).b IS NOT NULL);"
-  },
-  {
-    "id": "generated_stored_drop_constraint_24",
-    "source_file": "generated_stored",
-    "category": "drop_constraint",
-    "table": "gtest31_2",
-    "before_sql": "CREATE TABLE gtest31_2 (x int, y gtest31_1);",
-    "alter_sql": "ALTER TABLE gtest31_2 DROP CONSTRAINT cc;",
-    "description": "drop_constraint: ALTER TABLE gtest31_2 DROP CONSTRAINT cc;"
-  },
-  {
-    "id": "generated_stored_drop_column_25",
+    "id": "generated_stored_drop_column_8",
     "source_file": "generated_stored",
     "category": "drop_column",
     "table": "gtest28a",
@@ -1926,39 +1280,28 @@
     "description": "drop_column: ALTER TABLE gtest28a DROP COLUMN a;"
   },
   {
-    "id": "domain_drop_default_1",
-    "source_file": "domain",
-    "category": "drop_default",
-    "table": "defaulttest",
-    "before_sql": "create table defaulttest\n            ( col1 ddef1\n            , col2 ddef2\n            , col3 ddef3\n            , col4 ddef4 PRIMARY KEY\n            , col5 ddef1 NOT NULL DEFAULT NULL\n            , col6 ddef2 DEFAULT '88'\n            , col7 ddef4 DEFAULT 8000\n            , col8 ddef5\n            );",
-    "alter_sql": "alter table defaulttest alter column col5 drop default;",
-    "description": "drop_default: alter table defaulttest alter column col5 drop default;"
-  },
-  {
-    "id": "domain_set_default_2",
-    "source_file": "domain",
-    "category": "set_default",
-    "table": "defaulttest",
-    "before_sql": "create table defaulttest\n            ( col1 ddef1\n            , col2 ddef2\n            , col3 ddef3\n            , col4 ddef4 PRIMARY KEY\n            , col5 ddef1 NOT NULL DEFAULT NULL\n            , col6 ddef2 DEFAULT '88'\n            , col7 ddef4 DEFAULT 8000\n            , col8 ddef5\n            );",
-    "alter_sql": "alter table defaulttest alter column col5 set default null;",
-    "description": "set_default: alter table defaulttest alter column col5 set default null;"
-  },
-  {
-    "id": "domain_add_column_3",
+    "id": "domain_add_column_1",
     "source_file": "domain",
     "category": "add_column",
     "table": "domain_test",
     "before_sql": "create table domain_test (a int, b int);",
     "alter_sql": "alter table domain_test add column c str_domain;",
-    "description": "add_column: alter table domain_test add column c str_domain;"
+    "description": "add_column: alter table domain_test add column c str_domain;",
+    "setup_sql": [
+      "CREATE DOMAIN str_domain AS text NOT NULL;"
+    ]
   },
   {
-    "id": "domain_add_column_4",
+    "id": "domain_add_column_2",
     "source_file": "domain",
     "category": "add_column",
     "table": "domain_test",
-    "before_sql": "create table domain_test (a int, b int);",
+    "before_sql": "create table domain_test (a int, b int);\nalter table domain_test add column c str_domain;",
     "alter_sql": "alter table domain_test add column d str_domain2;",
-    "description": "add_column: alter table domain_test add column d str_domain2;"
+    "description": "add_column: alter table domain_test add column d str_domain2;",
+    "setup_sql": [
+      "CREATE DOMAIN str_domain AS text NOT NULL;",
+      "CREATE DOMAIN str_domain2 AS text CHECK (VALUE <> 'foo') DEFAULT 'foo';"
+    ]
   }
 ]
