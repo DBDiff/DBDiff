@@ -164,6 +164,10 @@ class TableSchema {
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
                 $addCol = new AlterTableAddColumn($table, $column, $diff);
                 $addCol->ordinal = $sourceOrdinal[$column] ?? null;
+                $newDef = $diff->getNewValue();
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef)) {
+                    $addCol->isGenerated = true;
+                }
                 $diffSequence[] = $addCol;
             }
         }

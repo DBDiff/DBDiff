@@ -497,7 +497,6 @@ jobs:
   pg-conformance:
     name: PG Conformance / PostgreSQL ${{ matrix.postgres-version }}
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     strategy:
       fail-fast: false

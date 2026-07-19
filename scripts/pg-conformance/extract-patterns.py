@@ -207,6 +207,57 @@ def is_safe_sql(stmt):
     return not any(u in upper for u in unsafe)
 
 
+def is_unsafe_accumulation(stmt):
+    """Check if a statement would poison cumulative state if accumulated."""
+    upper = stmt.upper()
+    # FK REFERENCES to other tables won't exist in isolation
+    if 'FOREIGN KEY' in upper or 'REFERENCES' in upper:
+        return True
+    # PG17+ syntax that fails on PG16
+    if 'SET EXPRESSION' in upper or 'DROP EXPRESSION' in upper:
+        return True
+    return False
+
+
+def _drops_skipped_constraint(stmt, state):
+    """Check if a DROP CONSTRAINT references a constraint we filtered out."""
+    m = re.search(r'DROP\s+CONSTRAINT\s+"?(\w+)"?', stmt, re.IGNORECASE)
+    if m:
+        name = m.group(1).lower()
+        return name in state.get('skipped_constraints', set())
+    return False
+
+
+def _conflicts_with_state(stmt, state):
+    """Check if a statement would error given the current cumulative state."""
+    upper = stmt.upper()
+    full_state = state['create'] + '\n' + '\n'.join(state['alters'])
+
+    # SET/DROP NOT NULL on a column — check it exists and isn't in a PK (for DROP)
+    m = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+NOT\s+NULL', upper)
+    if m:
+        col = m.group(1).lower()
+        if col == 'column':
+            return False
+        # Check column exists in CREATE TABLE or was added by ADD COLUMN
+        col_exists = (
+            re.search(r'\b' + re.escape(col) + r'\b\s+\w+', state['create'], re.IGNORECASE)
+            or re.search(r'ADD\s+COLUMN\s+' + re.escape(col) + r'\b', full_state, re.IGNORECASE)
+        )
+        if not col_exists:
+            return True
+
+        # DROP NOT NULL on a column currently in a PRIMARY KEY
+        if 'DROP' in upper and 'NOT NULL' in upper:
+            for pk_m in re.finditer(r'PRIMARY\s+KEY\s*\(([^)]+)\)', full_state, re.IGNORECASE):
+                if re.search(r'\b' + re.escape(col) + r'\b', pk_m.group(1), re.IGNORECASE):
+                    return True
+            if re.search(r'\b' + re.escape(col) + r'\b\s+\w+.*\bPRIMARY\s+KEY\b',
+                         full_state, re.IGNORECASE):
+                return True
+    return False
+
+
 def detect_min_pg_version(before_sql, alter_sql):
     """Detect minimum PG version needed for this pattern."""
     combined = (before_sql + ' ' + alter_sql).upper()
@@ -218,6 +269,12 @@ def detect_min_pg_version(before_sql, alter_sql):
         return 17
     # Constraint definition in CREATE TABLE: CONSTRAINT <name> NOT NULL <col>
     if re.search(r'CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', combined):
+        return 17
+    # SET/DROP EXPRESSION is PG17+
+    if 'SET EXPRESSION' in combined or 'DROP EXPRESSION' in combined:
+        return 17
+    # ADD NOT NULL <col> (PG17 multi-action syntax)
+    if re.search(r'\bADD\s+NOT\s+NULL\s+\w+', combined):
         return 17
 
     return None
@@ -291,10 +348,27 @@ def detect_skip_reason(stmt, before_sql):
     if notnull_match:
         col = notnull_match.group(1).lower()
         if col != 'column':
-            # Check if this column is in a PRIMARY KEY in before_sql
-            pk_match = re.search(r'PRIMARY\s+KEY\s*\(([^)]+)\)', before_upper)
-            if pk_match and re.search(r'\b' + re.escape(col.upper()) + r'\b', pk_match.group(1)):
+            # Check explicit PRIMARY KEY (col, ...) syntax
+            pk_matches = re.findall(r'PRIMARY\s+KEY\s*\(([^)]+)\)', before_upper)
+            for pk_cols in pk_matches:
+                if re.search(r'\b' + re.escape(col.upper()) + r'\b', pk_cols):
+                    return 'column_in_primary_key'
+            # Check inline "col type PRIMARY KEY" syntax
+            if re.search(r'\b' + re.escape(col) + r'\b\s+\w+.*\bPRIMARY\s+KEY\b',
+                         before_sql, re.IGNORECASE):
                 return 'column_in_primary_key'
+
+    # Multiple PRIMARY KEYs in before_sql (accumulated from ADD COLUMN ... PRIMARY KEY)
+    pk_count = len(re.findall(r'PRIMARY\s+KEY', before_upper))
+    if pk_count > 1:
+        return 'multiple_primary_keys_in_state'
+
+    # Before_sql accumulates a DROP CONSTRAINT on a named NOT NULL (PG17 only)
+    for drop_m in re.finditer(r'DROP\s+CONSTRAINT\s+"?(\w+)"?', before_upper):
+        cname = drop_m.group(1).lower()
+        if re.search(r'CONSTRAINT\s+' + re.escape(cname) + r'\s+NOT\s+NULL',
+                     before_sql, re.IGNORECASE):
+            return 'named_notnull_constraint'
 
     # DROP CONSTRAINT on a PK when other accumulated ALTERs depend on it
     if re.search(r'DROP\s+CONSTRAINT', upper):
@@ -325,6 +399,10 @@ def detect_skip_reason(stmt, before_sql):
         constr_name = drop_constr.group(1).lower()
         if constr_name != 'if' and not re.search(r'\b' + re.escape(constr_name) + r'\b', before_sql, re.IGNORECASE):
             return 'references_nonexistent_constraint'
+        # Named NOT NULL constraints (CONSTRAINT name NOT NULL) are PG17 droppable
+        if re.search(r'CONSTRAINT\s+' + re.escape(constr_name) + r'\s+NOT\s+NULL',
+                     before_sql, re.IGNORECASE):
+            return 'named_notnull_constraint'
 
     # ALTER/DROP NOT NULL on column not in before_sql
     notnull_col = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+NOT\s+NULL', upper)
@@ -358,7 +436,7 @@ def build_test_cases_sequential(sql_content, source_file):
     """Build test cases with cumulative state tracking."""
     statements = split_statements(sql_content)
 
-    # Per-table state: {name: {'create': str, 'alters': [str]}}
+    # Per-table state: {name: {'create': str, 'alters': [str], 'skipped_constraints': set}}
     table_state = {}
     cases = []
     seen = set()
@@ -369,8 +447,8 @@ def build_test_cases_sequential(sql_content, source_file):
         if not clean_stmt:
             continue
 
-        # Check for "-- fails" / "-- fail" in preceding comments
-        has_fail_comment = bool(re.search(r'--\s*fail', stmt, re.IGNORECASE))
+        # Check for error/fail markers in comments (preceding or inline)
+        has_fail_comment = bool(re.search(r'--\s*(?:fail|error)', stmt, re.IGNORECASE))
 
         if is_create_table(clean_stmt):
             table_name = get_create_table_name(clean_stmt)
@@ -378,6 +456,7 @@ def build_test_cases_sequential(sql_content, source_file):
                 table_state[table_name] = {
                     'create': get_create_table_body(stmt),
                     'alters': [],
+                    'skipped_constraints': set(),
                 }
 
         elif is_drop_table(clean_stmt):
@@ -390,12 +469,7 @@ def build_test_cases_sequential(sql_content, source_file):
             if not table_name or table_name not in table_state:
                 continue
 
-            # Skip statements marked as intentional failures
-            if has_fail_comment:
-                # Still accumulate if it's schema-modifying (some "fail" comments
-                # are for the test output but the statement actually succeeds)
-                pass
-            else:
+            if not has_fail_comment:
                 alter_stmt = clean_stmt
                 category = classify_alter(alter_stmt)
 
@@ -442,9 +516,21 @@ def build_test_cases_sequential(sql_content, source_file):
 
                             cases.append(pattern)
 
-            # Accumulate schema-modifying ALTERs for future patterns
+            # Accumulate schema-modifying ALTERs — but never error-marked
+            # statements or FK REFERENCES (the referenced table won't exist)
             if is_schema_modifying_alter(clean_stmt) and not has_fail_comment:
-                table_state[table_name]['alters'].append(clean_stmt)
+                if is_unsafe_accumulation(clean_stmt):
+                    constr_m = re.search(
+                        r'ADD\s+CONSTRAINT\s+"?(\w+)"?', clean_stmt, re.IGNORECASE)
+                    if constr_m:
+                        table_state[table_name]['skipped_constraints'].add(
+                            constr_m.group(1).lower())
+                elif _drops_skipped_constraint(clean_stmt, table_state[table_name]):
+                    pass
+                elif _conflicts_with_state(clean_stmt, table_state[table_name]):
+                    pass
+                else:
+                    table_state[table_name]['alters'].append(clean_stmt)
 
     return cases
 

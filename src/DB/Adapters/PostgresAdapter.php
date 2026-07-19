@@ -273,6 +273,7 @@ class PostgresAdapter implements DBAdapterInterface {
     private function fetchConstraints(Connection $connection, string $table): array {
         $rows = $connection->select(
             "SELECT tc.constraint_name, tc.constraint_type,
+                    tc.is_deferrable, tc.initially_deferred,
                     kcu.column_name, kcu.ordinal_position,
                     ccu.table_name  AS foreign_table,
                     ccu.column_name AS foreign_column,
@@ -308,18 +309,25 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $constraints = [];
         foreach ($groups as $name => $c) {
+            $defer = '';
+            if (($c['is_deferrable'] ?? 'NO') === 'YES') {
+                $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
+                    ? ' DEFERRABLE INITIALLY DEFERRED'
+                    : ' DEFERRABLE INITIALLY IMMEDIATE';
+            }
+
             if ($c['constraint_type'] === 'FOREIGN KEY') {
                 $cols = implode('", "', $c['columns']);
                 $constraints[$name] =
                     "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
                     " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}";
+                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" . $defer;
             } elseif ($c['constraint_type'] === 'UNIQUE') {
                 $cols = implode('", "', $c['columns']);
-                $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")";
+                $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")" . $defer;
             } elseif ($c['constraint_type'] === 'PRIMARY KEY') {
                 $cols = implode('", "', $c['columns']);
-                $constraints[$name] = "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")";
+                $constraints[$name] = "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")" . $defer;
             }
         }
 
