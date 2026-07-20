@@ -203,7 +203,8 @@ def is_safe_sql(stmt):
     upper = stmt.upper().strip()
     unsafe = ['USING', 'REFERENCES', 'LIKE ', 'INHERITS', 'PARTITION',
               'regress_', 'attmp_log', 'pg_temp',
-              'AT_TAB2', 'ATTMP2']  # Tables used via INHERITS/FK in other patterns
+              'AT_TAB2', 'ATTMP2',
+              'EXECUTE ', 'PREPARE ']
     return not any(u in upper for u in unsafe)
 
 
@@ -262,19 +263,21 @@ def detect_min_pg_version(before_sql, alter_sql):
     """Detect minimum PG version needed for this pattern."""
     combined = (before_sql + ' ' + alter_sql).upper()
 
+    # PG18 features
     if 'NOT ENFORCED' in combined:
-        return 17
-    # PG 17 constraint-style NOT NULL: ADD CONSTRAINT <name> NOT NULL <col>
+        return 18
+    # PG18: ADD CONSTRAINT <name> NOT NULL <col>
     if re.search(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', combined):
-        return 17
-    # Constraint definition in CREATE TABLE: CONSTRAINT <name> NOT NULL <col>
+        return 18
+    # PG18: CONSTRAINT <name> NOT NULL <col> in CREATE TABLE
     if re.search(r'CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', combined):
-        return 17
-    # SET/DROP EXPRESSION is PG17+
-    if 'SET EXPRESSION' in combined or 'DROP EXPRESSION' in combined:
-        return 17
-    # ADD NOT NULL <col> (PG17 multi-action syntax)
+        return 18
+    # PG18: ADD NOT NULL <col> (multi-action syntax)
     if re.search(r'\bADD\s+NOT\s+NULL\s+\w+', combined):
+        return 18
+
+    # PG17 features
+    if 'SET EXPRESSION' in combined or 'DROP EXPRESSION' in combined:
         return 17
 
     return None
@@ -285,9 +288,33 @@ def detect_skip_reason(stmt, before_sql):
     upper = stmt.upper()
     before_upper = before_sql.upper()
 
-    # System column name conflicts
-    if re.search(r'ADD\s+COLUMN\s+XMIN\b', upper):
+    # PG18 named NOT NULL constraints — DBDiff doesn't yet read contype='n'
+    if re.search(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', upper):
+        return 'named_notnull_unsupported'
+
+    # System column references
+    system_cols = r'(xmin|ctid|cmin|xmax|cmax|tableoid)'
+    if re.search(r'ADD\s+COLUMN\s+' + system_cols + r'\b', upper):
         return 'system_column_conflict'
+    if re.search(r'ALTER\s+COLUMN\s+' + system_cols + r'\b', upper):
+        return 'system_column_alter'
+
+    # ALTER to a non-standard type that won't exist in test databases
+    if re.search(r'SET\s+DATA\s+TYPE\s+x\b', upper, re.IGNORECASE):
+        return 'nonexistent_type'
+
+    # NOT ENFORCED ENFORCED (toggle constraint enforcement) — not diffable
+    if re.search(r'NOT\s+ENFORCED\s+ENFORCED', upper):
+        return 'enforcement_toggle'
+
+    # COLLATE in ALTER TYPE — requires specific collation setup
+    if re.search(r'SET\s+DATA\s+TYPE\s+\w+\s+COLLATE\b', upper):
+        return 'collate_in_type_change'
+
+    # Multiple named NOT NULL constraints on the same column in before_sql
+    notnull_cols = re.findall(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+(\w+)', before_upper)
+    if len(notnull_cols) != len(set(c.lower() for c in notnull_cols)):
+        return 'duplicate_named_notnull'
 
     # Dropped-column internal references
     if '........PG.DROPPED' in upper or '........PG.DROPPED' in before_upper:

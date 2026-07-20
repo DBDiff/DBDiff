@@ -554,7 +554,8 @@
     "before_sql": "CREATE TABLE atnnpart1 (col1 int, id int);",
     "alter_sql": "ALTER TABLE atnnpart1 ADD CONSTRAINT another_constr NOT NULL id;",
     "description": "add_constraint: ALTER TABLE atnnpart1 ADD CONSTRAINT another_constr NOT NULL id;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "alter_table_set_not_null_61",
@@ -791,7 +792,7 @@
     "before_sql": "create table renameColumn (a int);\nalter table renameColumn add column w int;\nalter table only renameColumn add column x int;",
     "alter_sql": "alter table renameColumn add column x int check (x > 0) not enforced;",
     "description": "add_column: alter table renameColumn add column x int check (x > 0) not enforced;",
-    "min_pg_version": 17,
+    "min_pg_version": 18,
     "skip_reason": "duplicate_column"
   },
   {
@@ -802,7 +803,8 @@
     "before_sql": "create table renameColumn (a int);\nalter table renameColumn add column w int;\nalter table only renameColumn add column x int;\nalter table renameColumn add column x int check (x > 0) not enforced;",
     "alter_sql": "alter table renameColumn add column y int check (x > 0) not enforced enforced;",
     "description": "add_column: alter table renameColumn add column y int check (x > 0) not enforced enforced;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "enforcement_toggle"
   },
   {
     "id": "alter_table_drop_column_87",
@@ -958,7 +960,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_104",
@@ -968,7 +970,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_105",
@@ -978,7 +980,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_106",
@@ -988,7 +990,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_107",
@@ -998,7 +1000,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_108",
@@ -1008,7 +1010,7 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_change_type_109",
@@ -1018,7 +1020,8 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "nonexistent_type"
   },
   {
     "id": "alter_table_change_type_110",
@@ -1028,7 +1031,8 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;\nALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE x;",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE x;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "nonexistent_type"
   },
   {
     "id": "alter_table_change_type_111",
@@ -1038,7 +1042,8 @@
     "before_sql": "CREATE TABLE comment_test (\n  id int,\n  constraint id_notnull_constraint not null id,\n  positive_col int CHECK (positive_col > 0),\n  indexed_col int,\n  CONSTRAINT comment_test_pk PRIMARY KEY (id));\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN indexed_col SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE text;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE int;\nALTER TABLE comment_test ALTER COLUMN positive_col SET DATA TYPE bigint;\nALTER TABLE comment_test ALTER COLUMN xmin SET DATA TYPE x;\nALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE x;",
     "alter_sql": "ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int COLLATE \"C\";",
     "description": "change_type: ALTER TABLE comment_test ALTER COLUMN id SET DATA TYPE int COLLATE \"C\";",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "collate_in_type_change"
   },
   {
     "id": "alter_table_add_column_112",
@@ -1097,7 +1102,7 @@
     "before_sql": "CREATE TABLE atnotnull1 ();",
     "alter_sql": "ALTER TABLE atnotnull1\n  ADD COLUMN b INT,\n  ADD NOT NULL b;",
     "description": "add_column: ALTER TABLE atnotnull1\n  ADD COLUMN b INT,\n  ADD NOT NULL b;",
-    "min_pg_version": 17
+    "min_pg_version": 18
   },
   {
     "id": "alter_table_add_column_118",
@@ -1107,7 +1112,7 @@
     "before_sql": "CREATE TABLE atnotnull1 ();\nALTER TABLE atnotnull1\n  ADD COLUMN b INT,\n  ADD NOT NULL b;",
     "alter_sql": "ALTER TABLE atnotnull1\n  ADD COLUMN c INT,\n  ADD PRIMARY KEY (c);",
     "description": "add_column: ALTER TABLE atnotnull1\n  ADD COLUMN c INT,\n  ADD PRIMARY KEY (c);",
-    "min_pg_version": 17,
+    "min_pg_version": 18,
     "skip_reason": "references_nonexistent_column"
   },
   {
@@ -1173,7 +1178,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_add_constraint_5",
@@ -1183,7 +1189,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_add_column_6",
@@ -1193,7 +1200,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD COLUMN b INT CONSTRAINT notnull_tbl1_a_not_null NOT NULL;",
     "description": "add_column: ALTER TABLE notnull_tbl1 ADD COLUMN b INT CONSTRAINT notnull_tbl1_a_not_null NOT NULL;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "duplicate_named_notnull"
   },
   {
     "id": "constraints_drop_not_null_7",
@@ -1203,7 +1211,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD COLUMN b INT CONSTRAINT notnull_tbl1_a_not_null NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;",
     "description": "drop_not_null: ALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "duplicate_named_notnull"
   },
   {
     "id": "constraints_set_not_null_8",
@@ -1213,7 +1222,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD COLUMN b INT CONSTRAINT notnull_tbl1_a_not_null NOT NULL;\nALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;",
     "description": "set_not_null: ALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "duplicate_named_notnull"
   },
   {
     "id": "constraints_add_constraint_9",
@@ -1223,7 +1233,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a INTEGER NOT NULL NOT NULL);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_tbl1_a_not_null NOT NULL a;\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD COLUMN b INT CONSTRAINT notnull_tbl1_a_not_null NOT NULL;\nALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;\nALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;\nALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;\nALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT foobar NOT NULL a;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT foobar NOT NULL a;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_add_constraint_10",
@@ -1233,7 +1244,8 @@
     "before_sql": "CREATE TABLE ATACC1 (a int);",
     "alter_sql": "ALTER TABLE ATACC1 ADD CONSTRAINT ditto NOT NULL a;",
     "description": "add_constraint: ALTER TABLE ATACC1 ADD CONSTRAINT ditto NOT NULL a;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_drop_constraint_11",
@@ -1243,7 +1255,7 @@
     "before_sql": "CREATE TABLE ATACC2 (a int, CONSTRAINT a_is_not_null NOT NULL a NO INHERIT);",
     "alter_sql": "ALTER TABLE ATACC2 DROP CONSTRAINT a_is_not_null;",
     "description": "drop_constraint: ALTER TABLE ATACC2 DROP CONSTRAINT a_is_not_null;",
-    "min_pg_version": 17,
+    "min_pg_version": 18,
     "skip_reason": "named_notnull_constraint"
   },
   {
@@ -1329,7 +1341,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID NO INHERIT;\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD PRIMARY KEY (a);\nALTER TABLE notnull_tbl1 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD column d float8 default random();",
     "description": "add_column: ALTER TABLE notnull_tbl1 ADD column d float8 default random();",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "duplicate_named_notnull"
   },
   {
     "id": "constraints_drop_constraint_21",
@@ -1349,7 +1362,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_drop_constraint_23",
@@ -1359,7 +1373,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
     "alter_sql": "ALTER TABLE notnull_tbl1 DROP CONSTRAINT nntbl1_a;",
     "description": "drop_constraint: ALTER TABLE notnull_tbl1 DROP CONSTRAINT nntbl1_a;",
-    "min_pg_version": 17,
+    "min_pg_version": 18,
     "skip_reason": "named_notnull_constraint"
   },
   {
@@ -1370,7 +1384,8 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn_parent NOT NULL a not valid;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn_parent NOT NULL a not valid;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_add_constraint_25",
@@ -1380,7 +1395,8 @@
     "before_sql": "CREATE TABLE notnull_chld0 (a int, CONSTRAINT nn_chld0 NOT NULL a);",
     "alter_sql": "ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;",
     "description": "add_constraint: ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "constraints_add_constraint_26",
@@ -1390,67 +1406,63 @@
     "before_sql": "CREATE TABLE notnull_inhparent (i int);",
     "alter_sql": "ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
-    "id": "constraints_set_not_null_27",
-    "source_file": "constraints",
-    "category": "set_not_null",
-    "table": "notnull_inhparent",
-    "before_sql": "CREATE TABLE notnull_inhparent (i int);\nALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
-    "alter_sql": "ALTER TABLE notnull_inhparent ALTER i SET NOT NULL; -- ok\nEXECUTE get_nnconstraint_info('{notnull_inhparent, notnull_inhchild, notnull_inhgrand}');",
-    "description": "set_not_null: ALTER TABLE notnull_inhparent ALTER i SET NOT NULL; -- ok\nEXECUTE get_nnconstraint_info('{notnull_in",
-    "min_pg_version": 17
-  },
-  {
-    "id": "constraints_add_constraint_28",
+    "id": "constraints_add_constraint_27",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "notnull_tbl1_3",
     "before_sql": "CREATE TABLE notnull_tbl1_3(a int, b int);",
     "alter_sql": "ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
-    "id": "constraints_add_constraint_29",
+    "id": "constraints_add_constraint_28",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "pp_nn_1",
     "before_sql": "CREATE TABLE pp_nn_1(a int, b int);",
     "alter_sql": "ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
-    "id": "constraints_add_constraint_30",
+    "id": "constraints_add_constraint_29",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "notnull_tbl1_upg",
     "before_sql": "CREATE TABLE notnull_tbl1_upg (a int, b int);",
     "alter_sql": "ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
-    "id": "constraints_add_constraint_31",
+    "id": "constraints_add_constraint_30",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "notnull_parent_upg",
     "before_sql": "CREATE TABLE notnull_parent_upg (a int);",
     "alter_sql": "ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
-    "id": "constraints_add_constraint_32",
+    "id": "constraints_add_constraint_31",
     "source_file": "constraints",
     "category": "add_constraint",
     "table": "notnull_part1_3_upg",
     "before_sql": "CREATE TABLE notnull_part1_3_upg (a int, b int);",
     "alter_sql": "ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "min_pg_version": 17
+    "min_pg_version": 18,
+    "skip_reason": "named_notnull_unsupported"
   },
   {
     "id": "identity_add_column_1",

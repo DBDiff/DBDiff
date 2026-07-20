@@ -204,18 +204,23 @@ class PostgresAdapter implements DBAdapterInterface {
             "SELECT column_name, data_type, character_maximum_length, is_nullable,
                     column_default, numeric_precision, numeric_scale, udt_name,
                     datetime_precision, is_identity, identity_generation,
-                    is_generated, generation_expression
+                    is_generated, generation_expression, domain_name
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = ?
              ORDER BY ordinal_position",
             [$table]
         );
 
+        $domainNotNull = $this->getDomainNullability($connection);
+
         $columns = [];
         foreach ($rows as $row) {
             $name    = $row['column_name'];
             $type    = $this->buildColumnType($row);
-            $notNull = ($row['is_nullable'] === 'NO') ? ' NOT NULL' : '';
+            // Skip redundant NOT NULL when the domain itself enforces it
+            $domainName = $row['domain_name'] ?? null;
+            $domainIsNotNull = $domainName && ($domainNotNull[$domainName] ?? false);
+            $notNull = ($row['is_nullable'] === 'NO' && !$domainIsNotNull) ? ' NOT NULL' : '';
 
             if ($row['is_identity'] === 'YES') {
                 $gen = $row['identity_generation'] ?? 'BY DEFAULT';
@@ -234,6 +239,20 @@ class PostgresAdapter implements DBAdapterInterface {
             }
         }
         return $columns;
+    }
+
+    private function getDomainNullability(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        );
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['typname']] = (bool) $row['typnotnull'];
+        }
+        return $map;
     }
 
     private function fetchIndexes(Connection $connection, string $table): array {
@@ -355,6 +374,9 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     private function buildColumnType(array $col): string {
+        if (!empty($col['domain_name'])) {
+            return $col['domain_name'];
+        }
         $simpleMap = [
             'time without time zone' => 'time',
             'time with time zone'    => 'timetz',

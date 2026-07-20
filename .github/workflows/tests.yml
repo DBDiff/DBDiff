@@ -501,7 +501,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres-version: ['16']
+        postgres-version: ['16', '17', '18']
 
     env:
       DB_HOST_POSTGRES: 127.0.0.1
