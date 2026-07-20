@@ -296,7 +296,8 @@ class PostgresAdapter implements DBAdapterInterface {
                     kcu.column_name, kcu.ordinal_position,
                     ccu.table_name  AS foreign_table,
                     ccu.column_name AS foreign_column,
-                    rc.update_rule, rc.delete_rule
+                    rc.update_rule, rc.delete_rule, rc.match_option,
+                    con.convalidated
              FROM information_schema.table_constraints tc
              LEFT JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
@@ -307,6 +308,9 @@ class PostgresAdapter implements DBAdapterInterface {
              LEFT JOIN information_schema.constraint_column_usage ccu
                 ON rc.unique_constraint_name = ccu.constraint_name
                AND rc.unique_constraint_schema = ccu.constraint_schema
+             LEFT JOIN pg_constraint con
+                ON tc.constraint_name = con.conname
+               AND con.connamespace = 'public'::regnamespace
              WHERE tc.table_schema = 'public' AND tc.table_name = ?
                AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
              ORDER BY tc.constraint_name, kcu.ordinal_position",
@@ -335,12 +339,26 @@ class PostgresAdapter implements DBAdapterInterface {
                     : ' DEFERRABLE INITIALLY IMMEDIATE';
             }
 
+            $notValid = '';
+            if (isset($c['convalidated']) && !$c['convalidated']) {
+                $notValid = ' NOT VALID';
+            }
+
             if ($c['constraint_type'] === 'FOREIGN KEY') {
                 $cols = implode('", "', $c['columns']);
+                $match = '';
+                $matchOpt = $c['match_option'] ?? 'NONE';
+                if ($matchOpt === 'FULL') {
+                    $match = ' MATCH FULL';
+                } elseif ($matchOpt === 'PARTIAL') {
+                    $match = ' MATCH PARTIAL';
+                }
                 $constraints[$name] =
                     "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
                     " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" . $defer;
+                    $match .
+                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
+                    $defer . $notValid;
             } elseif ($c['constraint_type'] === 'UNIQUE') {
                 $cols = implode('", "', $c['columns']);
                 $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")" . $defer;

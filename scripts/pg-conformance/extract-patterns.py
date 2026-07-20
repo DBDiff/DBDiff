@@ -30,6 +30,8 @@ DEPENDENCY_REGISTRY = {
     'boo': "CREATE FUNCTION boo(int) RETURNS int IMMUTABLE STRICT LANGUAGE plpgsql AS $$ BEGIN RETURN $1; END; $$;",
     'int42': "CREATE DOMAIN int42 AS integer;",
     'city_budget': "CREATE DOMAIN city_budget AS numeric;",
+    'ddef4': "CREATE SEQUENCE ddef4_seq; CREATE DOMAIN ddef4 AS int4 DEFAULT nextval('ddef4_seq');",
+    'ddef5': "CREATE DOMAIN ddef5 AS numeric(8,2) NOT NULL DEFAULT '12.12';",
 }
 
 
@@ -73,8 +75,9 @@ def split_statements(sql):
                 in_dollar = False
                 dollar_tag = ''
 
-        # Statement boundary: line ends with ; and we're not in dollar quote
-        if not in_dollar and stripped.endswith(';'):
+        # Statement boundary: line ends with ; (strip trailing inline comments)
+        code_part = re.sub(r'\s*--.*$', '', stripped)
+        if not in_dollar and code_part.endswith(';'):
             full = '\n'.join(current).strip()
             if full:
                 stmts.append(full)
@@ -142,10 +145,19 @@ def is_schema_modifying_alter(stmt):
         'ADD COLUMN', 'DROP COLUMN', 'ADD CONSTRAINT', 'DROP CONSTRAINT',
         'SET NOT NULL', 'DROP NOT NULL', 'SET DEFAULT', 'DROP DEFAULT',
         'SET DATA TYPE', ' TYPE ', 'ADD PRIMARY KEY', 'ADD UNIQUE',
-        'ADD CHECK', 'ADD FOREIGN KEY', 'DROP IDENTITY', 'ADD GENERATED',
-        'DROP EXPRESSION',
+        'ADD CHECK', 'ADD FOREIGN KEY', 'ADD EXCLUDE', 'ADD NOT NULL',
+        'DROP IDENTITY', 'ADD GENERATED', 'DROP EXPRESSION',
     ]
-    return any(m in upper for m in modifiers)
+    # Also match shorthand DROP col (no COLUMN keyword) and ADD col type
+    if any(m in upper for m in modifiers):
+        return True
+    body = re.sub(r'^ALTER\s+TABLE\s+(?:ONLY\s+)?\w+\s+', '', upper).strip()
+    if re.match(r'DROP\s+[A-Z_]\w*\s*[;,]', body):
+        return True
+    if re.match(r'ADD\s+[A-Z_]\w+\s+\w+', body):
+        if not re.match(r'ADD\s+(COLUMN|CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN|EXCLUDE|NOT|GENERATED|IF)\b', body):
+            return True
+    return False
 
 
 def classify_alter(stmt):
@@ -158,22 +170,25 @@ def classify_alter(stmt):
         'ENABLE TRIGGER', 'DISABLE TRIGGER', 'ENABLE RULE', 'DISABLE RULE',
         'SET SCHEMA', 'RENAME TO', 'RENAME COLUMN', 'RENAME CONSTRAINT',
         'SET (', 'RESET (', 'ENABLE ROW LEVEL', 'DISABLE ROW LEVEL',
-        'FORCE ROW LEVEL', 'NO FORCE ROW', 'INHERIT', 'NO INHERIT',
+        'FORCE ROW LEVEL', 'NO FORCE ROW',
         'OF ', 'NOT OF', 'REPLICA IDENTITY', 'SET LOGGED', 'SET UNLOGGED',
         'ATTACH PARTITION', 'DETACH PARTITION', 'SET ACCESS METHOD',
         'SET STATISTICS', 'SET STORAGE', 'SET COMPRESSION',
         'ALTER COLUMN', 'VALIDATE CONSTRAINT',
+        'SET WITHOUT OIDS', 'SET WITH OIDS',
     ]
     for p in skip_patterns:
         if p in upper:
             if 'ALTER COLUMN' in upper:
                 diffable = ['SET DEFAULT', 'DROP DEFAULT', 'SET NOT NULL',
-                           'DROP NOT NULL', 'SET DATA TYPE', ' TYPE ']
+                           'DROP NOT NULL', 'SET DATA TYPE', ' TYPE ',
+                           'ADD GENERATED', 'DROP IDENTITY']
                 if any(d in upper for d in diffable):
                     break
             else:
                 return None
 
+    # Explicit keyword forms (check most specific first)
     if 'ADD COLUMN' in upper:
         return 'add_column'
     elif 'DROP COLUMN' in upper:
@@ -182,7 +197,19 @@ def classify_alter(stmt):
         return 'add_constraint'
     elif 'DROP CONSTRAINT' in upper:
         return 'drop_constraint'
-    elif 'SET DATA TYPE' in upper or re.search(r'ALTER\s+COLUMN\s+\w+\s+TYPE\s', upper):
+    elif re.search(r'ADD\s+PRIMARY\s+KEY', upper):
+        return 'add_constraint'
+    elif re.search(r'ADD\s+UNIQUE', upper):
+        return 'add_constraint'
+    elif re.search(r'ADD\s+CHECK\b', upper):
+        return 'add_constraint'
+    elif re.search(r'ADD\s+FOREIGN\s+KEY', upper):
+        return 'add_constraint'
+    elif re.search(r'ADD\s+EXCLUDE\b', upper):
+        return 'add_constraint'
+    elif re.search(r'ADD\s+NOT\s+NULL\b', upper):
+        return 'add_constraint'
+    elif 'SET DATA TYPE' in upper or re.search(r'ALTER\s+(?:COLUMN\s+)?\w+\s+TYPE\s', upper):
         return 'change_type'
     elif 'SET NOT NULL' in upper:
         return 'set_not_null'
@@ -192,32 +219,84 @@ def classify_alter(stmt):
         return 'set_default'
     elif 'DROP DEFAULT' in upper:
         return 'drop_default'
+    elif re.search(r'ADD\s+GENERATED\b', upper):
+        return 'add_identity'
+    elif 'DROP IDENTITY' in upper:
+        return 'drop_identity'
+
+    # Shorthand forms without explicit keywords:
+    # "ALTER TABLE t DROP colname;" (no COLUMN keyword)
+    body = re.sub(r'^ALTER\s+TABLE\s+(?:ONLY\s+)?\w+\s+', '', upper).strip()
+    if re.match(r'DROP\s+[A-Z_]\w*\s*[;,]', body):
+        return 'drop_column'
+    # "ALTER TABLE t ADD colname type ..." (no COLUMN keyword)
+    if re.match(r'ADD\s+[A-Z_]\w+\s+\w+', body):
+        if not re.match(r'ADD\s+(COLUMN|CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN|EXCLUDE|NOT|GENERATED|IF)\b', body):
+            return 'add_column'
+    # "ALTER TABLE t ALTER colname TYPE ..." (no COLUMN keyword)
+    if re.match(r'ALTER\s+[A-Z_]\w+\s+TYPE\s', body):
+        return 'change_type'
+
+    # INHERIT / NO INHERIT — not schema-diffable but classifiable
+    if re.match(r'(?:NO\s+)?INHERIT\b', body):
+        return None
 
     return None
 
 
 # ── Safety and version checks ────────────────────────────────────────────
 
-def is_safe_sql(stmt):
-    """Check if a SQL statement is safe to run in isolation."""
+def is_safe_create_sql(stmt):
+    """Check if a CREATE TABLE statement can run in isolation."""
     upper = stmt.upper().strip()
-    unsafe = ['USING', 'REFERENCES', 'LIKE ', 'INHERITS', 'PARTITION',
-              'regress_', 'attmp_log', 'pg_temp',
-              'AT_TAB2', 'ATTMP2',
-              'EXECUTE ', 'PREPARE ']
+    unsafe = ['REFERENCES', 'LIKE ', 'INHERITS', 'PARTITION',
+              'regress_', 'attmp_log', 'pg_temp']
     return not any(u in upper for u in unsafe)
 
 
-def is_unsafe_accumulation(stmt):
+def is_safe_alter_sql(stmt):
+    """Check if an ALTER TABLE statement can run in isolation."""
+    upper = stmt.upper().strip()
+    # EXECUTE/PREPARE are PL/pgSQL, not DDL
+    if 'EXECUTE ' in upper or 'PREPARE ' in upper:
+        return False
+    return True
+
+
+def is_unsafe_accumulation(stmt, table_state=None):
     """Check if a statement would poison cumulative state if accumulated."""
     upper = stmt.upper()
-    # FK REFERENCES to other tables won't exist in isolation
+    # FK REFERENCES to other tables — only skip if referenced table is not in our state
     if 'FOREIGN KEY' in upper or 'REFERENCES' in upper:
-        return True
+        ref_match = re.search(r'REFERENCES\s+(\w+)', upper)
+        if ref_match and table_state:
+            ref_table = ref_match.group(1).lower()
+            if ref_table not in table_state:
+                return True
+        elif not table_state:
+            return True
     # PG17+ syntax that fails on PG16
     if 'SET EXPRESSION' in upper or 'DROP EXPRESSION' in upper:
         return True
     return False
+
+
+def _references_dropped_column(stmt, state):
+    """Check if a statement references a column that was already dropped."""
+    dropped = state.get('dropped_columns', set())
+    if not dropped:
+        return False
+    upper = stmt.upper()
+    for col in dropped:
+        if re.search(r'\b' + re.escape(col) + r'\b', upper, re.IGNORECASE):
+            return True
+    return False
+
+
+def _extract_fk_referenced_table(stmt):
+    """Extract the referenced table name from a REFERENCES clause."""
+    m = re.search(r'REFERENCES\s+(\w+)', stmt, re.IGNORECASE)
+    return m.group(1).lower() if m else None
 
 
 def _drops_skipped_constraint(stmt, state):
@@ -233,6 +312,7 @@ def _conflicts_with_state(stmt, state):
     """Check if a statement would error given the current cumulative state."""
     upper = stmt.upper()
     full_state = state['create'] + '\n' + '\n'.join(state['alters'])
+    full_upper = full_state.upper()
 
     # SET/DROP NOT NULL on a column — check it exists and isn't in a PK (for DROP)
     m = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+NOT\s+NULL', upper)
@@ -240,7 +320,6 @@ def _conflicts_with_state(stmt, state):
         col = m.group(1).lower()
         if col == 'column':
             return False
-        # Check column exists in CREATE TABLE or was added by ADD COLUMN
         col_exists = (
             re.search(r'\b' + re.escape(col) + r'\b\s+\w+', state['create'], re.IGNORECASE)
             or re.search(r'ADD\s+COLUMN\s+' + re.escape(col) + r'\b', full_state, re.IGNORECASE)
@@ -248,7 +327,6 @@ def _conflicts_with_state(stmt, state):
         if not col_exists:
             return True
 
-        # DROP NOT NULL on a column currently in a PRIMARY KEY
         if 'DROP' in upper and 'NOT NULL' in upper:
             for pk_m in re.finditer(r'PRIMARY\s+KEY\s*\(([^)]+)\)', full_state, re.IGNORECASE):
                 if re.search(r'\b' + re.escape(col) + r'\b', pk_m.group(1), re.IGNORECASE):
@@ -256,6 +334,28 @@ def _conflicts_with_state(stmt, state):
             if re.search(r'\b' + re.escape(col) + r'\b\s+\w+.*\bPRIMARY\s+KEY\b',
                          full_state, re.IGNORECASE):
                 return True
+
+    # ADD PRIMARY KEY when one already exists in state
+    if re.search(r'ADD\s+(?:CONSTRAINT\s+\w+\s+)?PRIMARY\s+KEY', upper):
+        if re.search(r'PRIMARY\s+KEY', full_upper):
+            return True
+
+    # ADD COLUMN IF NOT EXISTS — column already exists, skip accumulating
+    if 'IF NOT EXISTS' in upper and 'ADD' in upper:
+        col_m = re.search(r'ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)', upper)
+        if col_m:
+            col = col_m.group(1).lower()
+            if re.search(r'\b' + re.escape(col) + r'\b', full_state, re.IGNORECASE):
+                return True
+
+    # ADD COLUMN for column that already exists (no IF NOT EXISTS)
+    col_add = re.search(r'ADD\s+COLUMN\s+(\w+)', upper)
+    if col_add and 'IF NOT EXISTS' not in upper:
+        col = col_add.group(1).lower()
+        if col not in ('if',):
+            if re.search(r'\b' + re.escape(col) + r'\b\s+\w+', state['create'], re.IGNORECASE):
+                return True
+
     return False
 
 
@@ -311,18 +411,46 @@ def detect_skip_reason(stmt, before_sql):
     if re.search(r'SET\s+DATA\s+TYPE\s+\w+\s+COLLATE\b', upper):
         return 'collate_in_type_change'
 
+    # ALTER TYPE with USING expression for incompatible cast —
+    # DBDiff can't infer arbitrary conversion expressions.
+    # Simple casts like "USING col::type" are fine (PG handles them implicitly),
+    # so only skip complex expressions (CASE, function calls, operators, etc.)
+    using_match = re.search(r'\bTYPE\s+(\w+).*\bUSING\s+(.+)', upper, re.DOTALL)
+    if using_match:
+        using_expr = using_match.group(2).strip().rstrip(';').strip()
+        # Simple cast: "colname::type" or "(colname)::type"
+        if not re.match(r'\(?\w+\)?::\w+$', using_expr):
+            return 'using_cast_expression'
+
+    # PRIMARY KEY USING INDEX — PG-specific syntax to promote an
+    # existing index to a PK constraint; DBDiff doesn't support this
+    if re.search(r'PRIMARY\s+KEY\s+USING\s+INDEX\b', upper):
+        return 'primary_key_using_index'
+
     # Multiple named NOT NULL constraints on the same column in before_sql
     notnull_cols = re.findall(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+(\w+)', before_upper)
     if len(notnull_cols) != len(set(c.lower() for c in notnull_cols)):
         return 'duplicate_named_notnull'
 
-    # Dropped-column internal references
-    if '........PG.DROPPED' in upper or '........PG.DROPPED' in before_upper:
+    # Dropped-column internal references — only skip if the ALTER itself uses them
+    if '........PG.DROPPED' in upper:
         return 'dropped_column_reference'
 
     # DROP COLUMN non_existing (without IF EXISTS) — tests error handling
     if re.search(r'DROP\s+COLUMN\s+NON_EXISTING\b', upper) and 'IF EXISTS' not in upper:
         return 'intentional_error'
+
+    # DROP COLUMN when a generated column in before_sql depends on it
+    # (PG will error without CASCADE)
+    drop_col_m = re.search(r'DROP\s+(?:COLUMN\s+)?(\w+)', upper)
+    if drop_col_m:
+        dcol = drop_col_m.group(1).lower()
+        if dcol not in ('column', 'constraint', 'default', 'not', 'identity', 'expression', 'if'):
+            gen_dep = re.search(
+                r'GENERATED\s+ALWAYS\s+AS\s*\([^)]*\b' + re.escape(dcol) + r'\b',
+                before_sql, re.IGNORECASE)
+            if gen_dep:
+                return 'generated_column_dependency'
 
     # Intentional wrong-type error tests
     if 'WRONG_DATATYPE' in upper or 'WRONG_DATATYPE' in before_upper:
@@ -341,6 +469,15 @@ def detect_skip_reason(stmt, before_sql):
         if re.search(r'ALTER\s+COLUMN\s+\w+\s+TYPE\s', upper):
             return 'identity_type_restriction'
 
+    # ADD GENERATED on a column that already has a default (serial or explicit)
+    gen_col_match = re.search(r'ALTER\s+COLUMN\s+(\w+)\s+ADD\s+GENERATED', upper)
+    if gen_col_match:
+        col = gen_col_match.group(1).lower()
+        if re.search(r'\b' + re.escape(col) + r'\b\s+(?:big)?serial\b', before_sql, re.IGNORECASE):
+            return 'identity_already_exists'
+        if re.search(r'ALTER\s+(?:COLUMN\s+)?' + re.escape(col) + r'\s+SET\s+DEFAULT', before_sql, re.IGNORECASE):
+            return 'identity_already_exists'
+
     # Generated column dependency errors — can't add column referencing generated col
     if 'GENERATED ALWAYS AS' in before_upper:
         if 'ADD COLUMN' in upper and 'GENERATED ALWAYS AS' in upper:
@@ -355,40 +492,43 @@ def detect_skip_reason(stmt, before_sql):
 
     # Patterns that try to add columns already in before_sql (duplicate tests)
     col_match = re.search(r'ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)', upper)
-    if col_match:
+    if col_match and 'IF NOT EXISTS' not in upper:
         col_name = col_match.group(1).lower()
-        # Check if column already exists in before_sql
         if re.search(r'\b' + re.escape(col_name) + r'\b', before_sql, re.IGNORECASE):
-            # ADD COLUMN IF NOT EXISTS is fine (no-op)
-            if 'IF NOT EXISTS' in upper:
-                return 'no_op_if_not_exists'
-            else:
-                return 'duplicate_column'
+            return 'duplicate_column'
 
     # Patterns that add a PRIMARY KEY when one already exists in before_sql
     if re.search(r'PRIMARY\s+KEY', upper) and 'DROP' not in upper:
         if re.search(r'PRIMARY\s+KEY', before_upper):
             return 'multiple_primary_keys'
 
-    # SET/DROP NOT NULL on a column that's part of a PRIMARY KEY in before_sql
-    notnull_match = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+NOT\s+NULL', upper)
+    # DROP NOT NULL on a PK column — Postgres rejects this
+    notnull_match = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+DROP\s+NOT\s+NULL', upper)
     if notnull_match:
         col = notnull_match.group(1).lower()
         if col != 'column':
-            # Check explicit PRIMARY KEY (col, ...) syntax
             pk_matches = re.findall(r'PRIMARY\s+KEY\s*\(([^)]+)\)', before_upper)
             for pk_cols in pk_matches:
                 if re.search(r'\b' + re.escape(col.upper()) + r'\b', pk_cols):
-                    return 'column_in_primary_key'
-            # Check inline "col type PRIMARY KEY" syntax
+                    return 'intentional_error'
             if re.search(r'\b' + re.escape(col) + r'\b\s+\w+.*\bPRIMARY\s+KEY\b',
                          before_sql, re.IGNORECASE):
-                return 'column_in_primary_key'
+                return 'intentional_error'
 
-    # Multiple PRIMARY KEYs in before_sql (accumulated from ADD COLUMN ... PRIMARY KEY)
+    # SET NOT NULL on a PK column — valid but redundant (no-op)
+    notnull_set = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+SET\s+NOT\s+NULL', upper)
+    if notnull_set:
+        col = notnull_set.group(1).lower()
+        if col != 'column':
+            pk_matches = re.findall(r'PRIMARY\s+KEY\s*\(([^)]+)\)', before_upper)
+            for pk_cols in pk_matches:
+                if re.search(r'\b' + re.escape(col.upper()) + r'\b', pk_cols):
+                    pass  # Valid no-op, let it be tested
+
+    # Multiple PRIMARY KEYs in before_sql — indicates state poisoning
     pk_count = len(re.findall(r'PRIMARY\s+KEY', before_upper))
     if pk_count > 1:
-        return 'multiple_primary_keys_in_state'
+        return 'state_has_multiple_pks'
 
     # Before_sql accumulates a DROP CONSTRAINT on a named NOT NULL (PG17 only)
     for drop_m in re.finditer(r'DROP\s+CONSTRAINT\s+"?(\w+)"?', before_upper):
@@ -397,27 +537,39 @@ def detect_skip_reason(stmt, before_sql):
                      before_sql, re.IGNORECASE):
             return 'named_notnull_constraint'
 
-    # DROP CONSTRAINT on a PK when other accumulated ALTERs depend on it
-    if re.search(r'DROP\s+CONSTRAINT', upper):
-        # If before has a PK and the alter drops it, check for dependencies
-        if re.search(r'PRIMARY\s+KEY', before_upper) and 'PKEY' in upper:
-            pk_col_match = re.search(r'PRIMARY\s+KEY\s*\(([^)]+)\)', before_upper)
-            if pk_col_match:
-                return 'drop_pk_with_dependencies'
+    # Combined context: before_sql + the ALTER itself (for multi-action ALTERs
+    # like ADD COLUMN a INT, ALTER a SET NOT NULL)
+    combined_upper = before_upper + ' ' + upper
 
-    # Patterns that reference columns not present in before_sql
-    # UNIQUE/PRIMARY KEY on non-existent columns
+    # Helper: check if a column exists in context (before_sql or the ALTER itself)
+    combined = before_sql + '\n' + stmt
+    def _col_exists(col_name):
+        if not re.search(r'\b' + re.escape(col_name) + r'\b', combined, re.IGNORECASE):
+            return False
+        # Column was dropped in before_sql
+        if re.search(r'DROP\s+(?:COLUMN\s+)?' + re.escape(col_name) + r'\b', before_sql, re.IGNORECASE):
+            return False
+        return True
+
+    def _col_defined(col_name):
+        """Check if column is defined (not just referenced) in before_sql or ALTER."""
+        in_create = re.search(r'\b' + re.escape(col_name) + r'\b\s+\w+', before_sql, re.IGNORECASE)
+        in_add = re.search(r'ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?' + re.escape(col_name) + r'\b',
+                           stmt, re.IGNORECASE)
+        return bool(in_create or in_add)
+
+    # Patterns that reference columns not defined anywhere
     key_col = re.search(r'(?:UNIQUE|PRIMARY\s+KEY)\s*\(\s*(\w+)', upper)
     if key_col:
         ref_col = key_col.group(1).lower()
-        if not re.search(r'\b' + re.escape(ref_col) + r'\b', before_sql, re.IGNORECASE):
+        if ref_col not in ('value',) and not _col_exists(ref_col):
             return 'references_nonexistent_column'
 
     # CHECK constraint on non-existent column
     check_match = re.search(r'CHECK\s*\(\s*(\w+)', upper)
     if check_match:
         ref_col = check_match.group(1).lower()
-        if not re.search(r'\b' + re.escape(ref_col) + r'\b', before_sql, re.IGNORECASE):
+        if ref_col not in ('value',) and not _col_exists(ref_col):
             return 'references_nonexistent_column'
 
     # DROP CONSTRAINT on constraint not in before_sql
@@ -426,33 +578,52 @@ def detect_skip_reason(stmt, before_sql):
         constr_name = drop_constr.group(1).lower()
         if constr_name != 'if' and not re.search(r'\b' + re.escape(constr_name) + r'\b', before_sql, re.IGNORECASE):
             return 'references_nonexistent_constraint'
-        # Named NOT NULL constraints (CONSTRAINT name NOT NULL) are PG17 droppable
         if re.search(r'CONSTRAINT\s+' + re.escape(constr_name) + r'\s+NOT\s+NULL',
                      before_sql, re.IGNORECASE):
             return 'named_notnull_constraint'
 
-    # ALTER/DROP NOT NULL on column not in before_sql
-    notnull_col = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+NOT\s+NULL', upper)
-    if notnull_col:
-        ref_col = notnull_col.group(1).lower()
-        if ref_col != 'column' and not re.search(r'\b' + re.escape(ref_col) + r'\b', before_sql, re.IGNORECASE):
+    # ALTER column operations on non-existent or dropped columns
+    alter_col = re.search(r'ALTER\s+(?:COLUMN\s+)?(\w+)\s+(?:SET|DROP)\s+(?:NOT\s+NULL|DEFAULT)', upper)
+    if alter_col:
+        ref_col = alter_col.group(1).lower()
+        if ref_col != 'column' and not _col_defined(ref_col):
+            return 'references_nonexistent_column'
+
+    # FK REFERENCES on dropped column
+    fk_col = re.search(r'(?:FOREIGN\s+KEY|ADD\s+FOREIGN\s+KEY)\s*\(\s*(\w+)', upper)
+    if fk_col:
+        ref_col = fk_col.group(1).lower()
+        if not _col_exists(ref_col):
             return 'references_nonexistent_column'
 
     return None
 
 
-def detect_dependencies(before_sql, alter_sql):
+def detect_dependencies(before_sql, alter_sql, table_state=None, main_table=None):
     """Detect external type/function dependencies and return setup SQL."""
     combined = before_sql + ' ' + alter_sql
     setup = []
     seen = set()
 
     for name, create_sql in DEPENDENCY_REGISTRY.items():
-        # Check if this dependency name appears as a type or function reference
         if re.search(r'\b' + re.escape(name) + r'\b', combined, re.IGNORECASE):
             if name not in seen:
                 setup.append(create_sql)
                 seen.add(name)
+
+    # FK REFERENCES: include referenced table's CREATE + ALTERs in setup
+    if table_state:
+        for ref_m in re.finditer(r'REFERENCES\s+(\w+)', combined, re.IGNORECASE):
+            ref_table = ref_m.group(1).lower()
+            if ref_table == main_table:
+                continue
+            if ref_table in table_state and ref_table not in seen:
+                seen.add(ref_table)
+                ref_state = table_state[ref_table]
+                setup.append(ref_state['create'])
+                for a in ref_state['alters']:
+                    if 'REFERENCES' not in a.upper():
+                        setup.append(a)
 
     return setup if setup else None
 
@@ -474,8 +645,24 @@ def build_test_cases_sequential(sql_content, source_file):
         if not clean_stmt:
             continue
 
-        # Check for error/fail markers in comments (preceding or inline)
-        has_fail_comment = bool(re.search(r'--\s*(?:fail|error)', stmt, re.IGNORECASE))
+        # Check for error/fail markers — only on comment lines immediately
+        # before the SQL or inline with the SQL itself.
+        # Context comments several lines above may describe a different statement.
+        has_fail_comment = False
+        stmt_lines = stmt.split('\n')
+        sql_start_idx = 0
+        for li, line in enumerate(stmt_lines):
+            if line.strip() and not line.strip().startswith('--'):
+                sql_start_idx = li
+                break
+        # Check the immediate preceding comment line (if any) and inline comments
+        check_lines = []
+        if sql_start_idx > 0:
+            check_lines.append(stmt_lines[sql_start_idx - 1])
+        for li in range(sql_start_idx, len(stmt_lines)):
+            check_lines.append(stmt_lines[li])
+        check_text = '\n'.join(check_lines)
+        has_fail_comment = bool(re.search(r'--.*(?:\bfail|\berror)', check_text, re.IGNORECASE))
 
         if is_create_table(clean_stmt):
             table_name = get_create_table_name(clean_stmt)
@@ -484,12 +671,22 @@ def build_test_cases_sequential(sql_content, source_file):
                     'create': get_create_table_body(stmt),
                     'alters': [],
                     'skipped_constraints': set(),
+                    'dropped_columns': set(),
                 }
 
         elif is_drop_table(clean_stmt):
             table_name = get_drop_table_name(clean_stmt)
             if table_name and table_name in table_state:
                 del table_state[table_name]
+
+        elif clean_stmt.upper().startswith('CREATE') and 'INDEX' in clean_stmt.upper():
+            idx_m = re.search(r'CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s+ON\s+(\w+)',
+                              clean_stmt, re.IGNORECASE)
+            if idx_m:
+                idx_name = idx_m.group(1).lower()
+                tbl_name = idx_m.group(2).lower()
+                if tbl_name in table_state and not has_fail_comment:
+                    table_state[tbl_name]['alters'].append(clean_stmt)
 
         elif is_alter_table(clean_stmt):
             table_name = get_alter_table_name(clean_stmt)
@@ -500,27 +697,27 @@ def build_test_cases_sequential(sql_content, source_file):
                 alter_stmt = clean_stmt
                 category = classify_alter(alter_stmt)
 
-                if category and is_safe_sql(alter_stmt):
+                if category and is_safe_alter_sql(alter_stmt):
                     state = table_state[table_name]
                     create_sql = state['create']
 
-                    # Safety check: skip if create_sql itself is unsafe
-                    if is_safe_sql(create_sql):
-                        # Build before_sql: CREATE + all preceding ALTERs
+                    if is_safe_create_sql(create_sql):
                         before_parts = [create_sql]
                         before_parts.extend(state['alters'])
                         before_sql = '\n'.join(before_parts)
 
-                        # Check for skip reasons
                         skip_reason = detect_skip_reason(alter_stmt, before_sql)
-
-                        # Check PG version requirements
                         min_version = detect_min_pg_version(before_sql, alter_stmt)
+                        setup_sql = detect_dependencies(
+                            before_sql, alter_stmt, table_state,
+                            main_table=table_name)
 
-                        # Check external dependencies
-                        setup_sql = detect_dependencies(before_sql, alter_stmt)
+                        # FK REFERENCES: need referenced table in setup
+                        if 'REFERENCES' in alter_stmt.upper():
+                            ref_table = _extract_fk_referenced_table(alter_stmt)
+                            if ref_table and ref_table not in table_state:
+                                skip_reason = skip_reason or 'references_external_table'
 
-                        # Deduplicate
                         key = f"{category}:{table_name}:{alter_stmt[:80]}"
                         if key not in seen:
                             seen.add(key)
@@ -543,10 +740,21 @@ def build_test_cases_sequential(sql_content, source_file):
 
                             cases.append(pattern)
 
-            # Accumulate schema-modifying ALTERs — but never error-marked
-            # statements or FK REFERENCES (the referenced table won't exist)
-            if is_schema_modifying_alter(clean_stmt) and not has_fail_comment:
-                if is_unsafe_accumulation(clean_stmt):
+            # Accumulate schema-modifying ALTERs for future before_sql.
+            # For accumulation, only skip on inline fail comments (on a SQL
+            # line, not a preceding comment that describes test intent).
+            has_inline_fail = False
+            for ln in clean_stmt.split('\n'):
+                stripped_ln = ln.strip()
+                if stripped_ln and not stripped_ln.startswith('--'):
+                    if re.search(r'--.*(?:\bfail|\berror)', ln, re.IGNORECASE):
+                        has_inline_fail = True
+                        break
+            if is_schema_modifying_alter(clean_stmt) and not has_inline_fail:
+                # Never accumulate dropped-column references
+                if '........pg.dropped' in clean_stmt.lower():
+                    pass
+                elif is_unsafe_accumulation(clean_stmt, table_state):
                     constr_m = re.search(
                         r'ADD\s+CONSTRAINT\s+"?(\w+)"?', clean_stmt, re.IGNORECASE)
                     if constr_m:
@@ -556,8 +764,17 @@ def build_test_cases_sequential(sql_content, source_file):
                     pass
                 elif _conflicts_with_state(clean_stmt, table_state[table_name]):
                     pass
+                elif _references_dropped_column(clean_stmt, table_state[table_name]):
+                    pass
                 else:
                     table_state[table_name]['alters'].append(clean_stmt)
+                    # Track dropped columns
+                    drop_m = re.search(
+                        r'DROP\s+(?:COLUMN\s+)?(\w+)', clean_stmt, re.IGNORECASE)
+                    if drop_m:
+                        col = drop_m.group(1).lower()
+                        if col not in ('column', 'constraint', 'default', 'not', 'identity', 'expression'):
+                            table_state[table_name]['dropped_columns'].add(col)
 
     return cases
 

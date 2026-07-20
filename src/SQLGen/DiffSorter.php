@@ -160,6 +160,10 @@ class DiffSorter {
         $genA = !empty($a->isGenerated);
         $genB = !empty($b->isGenerated);
         if ($genA !== $genB) {
+            $classA = (new \ReflectionClass($a))->getShortName();
+            if ($classA === 'AlterTableAddColumn') {
+                return $genA ? 1 : -1;
+            }
             return $genA ? -1 : 1;
         }
 
