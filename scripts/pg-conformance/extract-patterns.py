@@ -32,6 +32,7 @@ DEPENDENCY_REGISTRY = {
     'city_budget': "CREATE DOMAIN city_budget AS numeric;",
     'ddef4': "CREATE SEQUENCE ddef4_seq; CREATE DOMAIN ddef4 AS int4 DEFAULT nextval('ddef4_seq');",
     'ddef5': "CREATE DOMAIN ddef5 AS numeric(8,2) NOT NULL DEFAULT '12.12';",
+    'gtest31_1': "CREATE TABLE gtest31_1 (a int, b text GENERATED ALWAYS AS ('hello') STORED, c text);",
 }
 
 
@@ -340,6 +341,19 @@ def _conflicts_with_state(stmt, state):
         if re.search(r'PRIMARY\s+KEY', full_upper):
             return True
 
+    # DROP COLUMN on a column that doesn't exist in the table state
+    drop_col_m = re.search(r'DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(\w+)', upper)
+    if drop_col_m and 'IF EXISTS' not in upper:
+        dcol = drop_col_m.group(1).lower()
+        if dcol not in ('column', 'constraint', 'default', 'not', 'identity',
+                         'expression', 'if'):
+            col_in_create = re.search(
+                r'\b' + re.escape(dcol) + r'\b\s+\w+', state['create'], re.IGNORECASE)
+            col_added = re.search(
+                r'ADD\s+(?:COLUMN\s+)?' + re.escape(dcol) + r'\b', full_state, re.IGNORECASE)
+            if not col_in_create and not col_added:
+                return True
+
     # ADD COLUMN IF NOT EXISTS — column already exists, skip accumulating
     if 'IF NOT EXISTS' in upper and 'ADD' in upper:
         col_m = re.search(r'ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)', upper)
@@ -355,6 +369,17 @@ def _conflicts_with_state(stmt, state):
         if col not in ('if',):
             if re.search(r'\b' + re.escape(col) + r'\b\s+\w+', state['create'], re.IGNORECASE):
                 return True
+
+    # FK referencing a local column that doesn't exist
+    fk_col_m = re.search(r'FOREIGN\s+KEY\s*\(\s*(\w+)', upper)
+    if fk_col_m:
+        fk_col = fk_col_m.group(1).lower()
+        col_in_create = re.search(
+            r'\b' + re.escape(fk_col) + r'\b\s+\w+', state['create'], re.IGNORECASE)
+        col_added = re.search(
+            r'ADD\s+(?:COLUMN\s+)?' + re.escape(fk_col) + r'\b', full_state, re.IGNORECASE)
+        if not col_in_create and not col_added:
+            return True
 
     return False
 
@@ -390,6 +415,14 @@ def detect_skip_reason(stmt, before_sql):
 
     # PG18 named NOT NULL constraints — DBDiff doesn't yet read contype='n'
     if re.search(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', upper):
+        return 'named_notnull_unsupported'
+    # PG18 bare ADD NOT NULL (without CONSTRAINT keyword)
+    if re.search(r'\bADD\s+NOT\s+NULL\s+\w+', upper):
+        return 'named_notnull_unsupported'
+    # Before_sql depends on PG18 named NOT NULL constraints
+    if re.search(r'ADD\s+CONSTRAINT\s+\w+\s+NOT\s+NULL\s+\w+', before_upper):
+        return 'named_notnull_unsupported'
+    if re.search(r'\bADD\s+NOT\s+NULL\s+\w+', before_upper):
         return 'named_notnull_unsupported'
 
     # System column references
@@ -596,6 +629,17 @@ def detect_skip_reason(stmt, before_sql):
         if not _col_exists(ref_col):
             return 'references_nonexistent_column'
 
+    # Self-referencing FK on a table without PK/UNIQUE — PG requires
+    # the referenced column(s) to have a unique constraint
+    ref_m = re.search(r'REFERENCES\s+(\w+)', upper)
+    if ref_m:
+        ref_table = ref_m.group(1).lower()
+        tbl_m = re.search(r'ALTER\s+TABLE\s+(?:ONLY\s+)?(\w+)', upper)
+        own_table = tbl_m.group(1).lower() if tbl_m else ''
+        if ref_table == own_table:
+            if not re.search(r'PRIMARY\s+KEY|UNIQUE', before_upper):
+                return 'self_ref_fk_no_pk'
+
     return None
 
 
@@ -645,24 +689,15 @@ def build_test_cases_sequential(sql_content, source_file):
         if not clean_stmt:
             continue
 
-        # Check for error/fail markers — only on comment lines immediately
-        # before the SQL or inline with the SQL itself.
-        # Context comments several lines above may describe a different statement.
+        # Check for error/fail markers in comments attached to this statement.
+        # Include all preceding comment lines (they're part of this statement
+        # block) and inline comments on SQL lines.
         has_fail_comment = False
         stmt_lines = stmt.split('\n')
-        sql_start_idx = 0
-        for li, line in enumerate(stmt_lines):
-            if line.strip() and not line.strip().startswith('--'):
-                sql_start_idx = li
+        for line in stmt_lines:
+            if re.search(r'--.*(?:\bfail|\berror)', line, re.IGNORECASE):
+                has_fail_comment = True
                 break
-        # Check the immediate preceding comment line (if any) and inline comments
-        check_lines = []
-        if sql_start_idx > 0:
-            check_lines.append(stmt_lines[sql_start_idx - 1])
-        for li in range(sql_start_idx, len(stmt_lines)):
-            check_lines.append(stmt_lines[li])
-        check_text = '\n'.join(check_lines)
-        has_fail_comment = bool(re.search(r'--.*(?:\bfail|\berror)', check_text, re.IGNORECASE))
 
         if is_create_table(clean_stmt):
             table_name = get_create_table_name(clean_stmt)
