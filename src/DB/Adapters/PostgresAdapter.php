@@ -211,7 +211,17 @@ class PostgresAdapter implements DBAdapterInterface {
             [$table]
         );
 
-        $domainNotNull = $this->getDomainNullability($connection);
+        // Map of public-schema domains that are themselves NOT NULL, so we can
+        // skip a redundant column-level NOT NULL when the domain enforces it.
+        $domainNotNull = [];
+        foreach ($connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        ) as $d) {
+            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
+        }
         // Columns whose NOT NULL is enforced by a custom-named constraint
         // (PG18 contype='n'): emit those as a separate constraint, not inline,
         // to preserve the constraint name.
@@ -245,20 +255,6 @@ class PostgresAdapter implements DBAdapterInterface {
             }
         }
         return $columns;
-    }
-
-    private function getDomainNullability(Connection $connection): array {
-        $rows = $connection->select(
-            "SELECT t.typname, t.typnotnull
-             FROM pg_type t
-             JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public' AND t.typtype = 'd'"
-        );
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row['typname']] = (bool) $row['typnotnull'];
-        }
-        return $map;
     }
 
     /**
@@ -430,11 +426,6 @@ class PostgresAdapter implements DBAdapterInterface {
         return null;
     }
 
-    /**
-     * Resolve a column's type name, including length/precision/scale parameters.
-     * Domains and simple type aliases return directly; parameterised types
-     * (varchar/char/numeric/timestamp) get their modifiers appended.
-     */
     private function buildColumnType(array $col): string {
         if (!empty($col['domain_name'])) {
             return $col['domain_name'];
@@ -445,26 +436,31 @@ class PostgresAdapter implements DBAdapterInterface {
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
         ];
-        if (isset($simpleMap[$col['data_type']])) {
-            return $simpleMap[$col['data_type']];
-        }
+        return $simpleMap[$col['data_type']] ?? $this->resolveParameterisedType($col);
+    }
 
+    /**
+     * Resolve column types that carry length, precision, or scale parameters.
+     * All other types fall through to $dataType unchanged.
+     */
+    private function resolveParameterisedType(array $col): string {
         $dataType = $col['data_type'];
+        $result   = $dataType;
+
         if ($dataType === 'character varying' || $dataType === 'character') {
-            $len  = $col['character_maximum_length'];
-            $base = $dataType === 'character varying' ? 'varchar' : 'char';
-            return $len ? "$base($len)" : $base;
-        }
-        if ($dataType === 'numeric' || $dataType === 'decimal') {
-            $p = $col['numeric_precision'];
-            return ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
-        }
-        if (str_starts_with($dataType, 'timestamp')) {
-            $p    = $col['datetime_precision'];
-            $base = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
-            return ($p > 0) ? "$base($p)" : $base;
+            $len    = $col['character_maximum_length'];
+            $base   = $dataType === 'character varying' ? 'varchar' : 'char';
+            $result = $len ? "$base($len)" : $base;
+        } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
+            $p      = $col['numeric_precision'];
+            $s      = $col['numeric_scale'];
+            $result = ($p !== null) ? "$dataType($p,$s)" : $dataType;
+        } elseif (str_starts_with($dataType, 'timestamp')) {
+            $p      = $col['datetime_precision'];
+            $base   = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
+            $result = ($p > 0) ? "$base($p)" : $base;
         }
 
-        return $dataType;
+        return $result;
     }
 }
