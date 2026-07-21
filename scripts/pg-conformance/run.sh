@@ -59,15 +59,9 @@ done
 
 echo ""
 echo "Step 2: Extracting DDL patterns (live-validated against $PG_HOST:$PG_PORT)..."
-# psycopg2 lets the extractor validate each statement on the live server, so
-# before_sql is always self-contained and there are no silent runtime skips.
-if ! python3 -c 'import psycopg2' 2>/dev/null; then
-    echo "  Installing psycopg2-binary for live validation..."
-    python3 -m pip install --quiet --disable-pip-version-check psycopg2-binary 2>/dev/null \
-        || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages psycopg2-binary 2>/dev/null \
-        || echo "  WARN: could not install psycopg2; extraction will fall back to static heuristics"
-fi
-python3 "$SCRIPT_DIR/extract-patterns.py"
+# The extractor validates each statement on the live server via PDO (pdo_pgsql),
+# so before_sql is always self-contained and there are no silent runtime skips.
+php "$SCRIPT_DIR/extract-patterns.php"
 
 echo ""
 echo "Step 3: Running conformance tests..."

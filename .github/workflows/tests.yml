@@ -536,9 +536,6 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
-    - name: Install psycopg2 for live pattern validation
-      run: python3 -m pip install --quiet psycopg2-binary || python3 -m pip install --quiet --break-system-packages psycopg2-binary
-
     - name: Run PG conformance tests
       run: ./scripts/pg-conformance/run.sh --host=127.0.0.1 --port=5432 --user=dbdiff --pass=rootpass --verbose
 

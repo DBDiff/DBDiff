@@ -45,7 +45,7 @@ $defaultDb = getenv('DB_NAME') ?: 'diff1';
 $patternsFile = __DIR__ . '/../../tests/pg-conformance/patterns.json';
 if (!file_exists($patternsFile)) {
     fwrite(STDERR, "ERROR: $patternsFile not found.\n");
-    fwrite(STDERR, "Run extract-patterns.py first.\n");
+    fwrite(STDERR, "Run extract-patterns.php first.\n");
     exit(1);
 }
 
