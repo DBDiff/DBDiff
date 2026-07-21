@@ -51,69 +51,104 @@ class DestructiveLinter {
         }
 
         foreach ($schema as $item) {
-            if ($item instanceof DropTable) {
-                $violations[] = new LintViolation(
-                    'error',
-                    'drop-table',
-                    "table `{$item->table}`",
-                    "DROP TABLE `{$item->table}`",
-                    'Use --allow-destructive to proceed, or archive the table instead.'
-                );
-            } elseif ($item instanceof AlterTableDropColumn) {
-                $key = $this->columnKey($item->table, $item->column);
-                if (in_array($key, $renameKeys, true)) {
-                    $violations[] = new LintViolation(
-                        'warning',
-                        'possible-rename',
-                        "column `{$item->table}`.`{$item->column}`",
-                        "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
-                        'Detected a possible column rename. If intentional, use --allow-destructive.'
-                    );
-                } else {
-                    $violations[] = new LintViolation(
-                        'error',
-                        'drop-column',
-                        "column `{$item->table}`.`{$item->column}`",
-                        "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
-                        'Use --allow-destructive to proceed. Back up data in this column first.'
-                    );
-                }
-            } elseif ($item instanceof DropEnum) {
-                $violations[] = new LintViolation(
-                    'warning',
-                    'drop-enum',
-                    "enum type `{$item->name}`",
-                    "DROP TYPE \"{$item->name}\"",
-                    'Ensure no columns reference this enum before dropping.'
-                );
-            } elseif ($item instanceof DropRoutine) {
-                $violations[] = new LintViolation(
-                    'warning',
-                    'drop-routine',
-                    "routine `{$item->name}`",
-                    "DROP FUNCTION/PROCEDURE \"{$item->name}\"",
-                    'Ensure no code references this routine before dropping.'
-                );
-            } elseif ($item instanceof DropTrigger) {
-                $violations[] = new LintViolation(
-                    'warning',
-                    'drop-trigger',
-                    "trigger `{$item->name}` on `{$item->table}`",
-                    "DROP TRIGGER \"{$item->name}\"",
-                    'Verify that removing this trigger does not break business logic.'
-                );
-            } elseif ($item instanceof DropView) {
-                $violations[] = new LintViolation(
-                    'warning',
-                    'drop-view',
-                    "view `{$item->name}`",
-                    "DROP VIEW \"{$item->name}\"",
-                    'Ensure no queries or applications reference this view.'
-                );
+            $violation = $this->classifyItem($item, $renameKeys);
+            if ($violation !== null) {
+                $violations[] = $violation;
             }
         }
 
         return new LintResult($violations);
+    }
+
+    /**
+     * Classify a single schema diff item into a LintViolation, or null if it
+     * is not a destructive change.
+     *
+     * @param object   $item       A diff object from the schema array.
+     * @param string[] $renameKeys Column keys that look like one half of a rename.
+     */
+    private function classifyItem(object $item, array $renameKeys): ?LintViolation {
+        if ($item instanceof DropTable) {
+            return new LintViolation(
+                'error',
+                'drop-table',
+                "table `{$item->table}`",
+                "DROP TABLE `{$item->table}`",
+                'Use --allow-destructive to proceed, or archive the table instead.'
+            );
+        }
+
+        if ($item instanceof AlterTableDropColumn) {
+            return $this->classifyDropColumn($item, $renameKeys);
+        }
+
+        if ($item instanceof DropEnum) {
+            return new LintViolation(
+                'warning',
+                'drop-enum',
+                "enum type `{$item->name}`",
+                "DROP TYPE \"{$item->name}\"",
+                'Ensure no columns reference this enum before dropping.'
+            );
+        }
+
+        if ($item instanceof DropRoutine) {
+            return new LintViolation(
+                'warning',
+                'drop-routine',
+                "routine `{$item->name}`",
+                "DROP FUNCTION/PROCEDURE \"{$item->name}\"",
+                'Ensure no code references this routine before dropping.'
+            );
+        }
+
+        if ($item instanceof DropTrigger) {
+            return new LintViolation(
+                'warning',
+                'drop-trigger',
+                "trigger `{$item->name}` on `{$item->table}`",
+                "DROP TRIGGER \"{$item->name}\"",
+                'Verify that removing this trigger does not break business logic.'
+            );
+        }
+
+        if ($item instanceof DropView) {
+            return new LintViolation(
+                'warning',
+                'drop-view',
+                "view `{$item->name}`",
+                "DROP VIEW \"{$item->name}\"",
+                'Ensure no queries or applications reference this view.'
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * Classify an AlterTableDropColumn as either a possible-rename (warning)
+     * or a true drop-column (error).
+     */
+    private function classifyDropColumn(AlterTableDropColumn $item, array $renameKeys): LintViolation {
+        $key = $this->columnKey($item->table, $item->column);
+
+        if (in_array($key, $renameKeys, true)) {
+            return new LintViolation(
+                'warning',
+                'possible-rename',
+                "column `{$item->table}`.`{$item->column}`",
+                "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
+                'Detected a possible column rename. If intentional, use --allow-destructive.'
+            );
+        }
+
+        return new LintViolation(
+            'error',
+            'drop-column',
+            "column `{$item->table}`.`{$item->column}`",
+            "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
+            'Use --allow-destructive to proceed. Back up data in this column first.'
+        );
     }
 
     private function columnKey(string $table, string $column): string {

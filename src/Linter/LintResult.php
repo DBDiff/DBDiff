@@ -17,14 +17,18 @@ class LintResult {
 
     public function hasErrors(): bool {
         foreach ($this->violations as $v) {
-            if ($v->level === 'error') return true;
+            if ($v->level === 'error') {
+                return true;
+            }
         }
         return false;
     }
 
     public function hasWarnings(): bool {
         foreach ($this->violations as $v) {
-            if ($v->level === 'warning') return true;
+            if ($v->level === 'warning') {
+                return true;
+            }
         }
         return false;
     }
