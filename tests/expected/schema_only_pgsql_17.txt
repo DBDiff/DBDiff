@@ -1,6 +1,5 @@
 #---------- UP ----------
 ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
-ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
@@ -9,7 +8,6 @@ DROP INDEX "posts_published_idx";
 DROP INDEX "users_status_idx";
 #---------- DOWN ----------
 ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
-ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp(6);
 ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;

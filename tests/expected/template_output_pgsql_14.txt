@@ -2,7 +2,6 @@ SQL_UP = u"""
 DELETE FROM "posts" WHERE "id" = '4';
 DELETE FROM "users" WHERE "id" = '4';
 ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
-ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
@@ -20,7 +19,6 @@ SQL_DOWN = u"""
 DELETE FROM "posts" WHERE "id" = '3';
 DELETE FROM "users" WHERE "id" = '3';
 ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
-ALTER TABLE "users" ALTER COLUMN "status" DROP NOT NULL;
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp(6);
 ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;
