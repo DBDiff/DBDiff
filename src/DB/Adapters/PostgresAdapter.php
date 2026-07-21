@@ -212,15 +212,21 @@ class PostgresAdapter implements DBAdapterInterface {
         );
 
         $domainNotNull = $this->getDomainNullability($connection);
+        // Columns whose NOT NULL is enforced by a custom-named constraint
+        // (PG18 contype='n'): emit those as a separate constraint, not inline,
+        // to preserve the constraint name.
+        $customNotNullCols = array_flip($this->fetchNamedNotNullConstraints($connection, $table));
 
         $columns = [];
         foreach ($rows as $row) {
             $name    = $row['column_name'];
             $type    = $this->buildColumnType($row);
-            // Skip redundant NOT NULL when the domain itself enforces it
+            // Skip redundant NOT NULL when the domain itself enforces it, or
+            // when a custom-named NOT NULL constraint carries it.
             $domainName = $row['domain_name'] ?? null;
             $domainIsNotNull = $domainName && ($domainNotNull[$domainName] ?? false);
-            $notNull = ($row['is_nullable'] === 'NO' && !$domainIsNotNull) ? ' NOT NULL' : '';
+            $notNull = ($row['is_nullable'] === 'NO' && !$domainIsNotNull
+                        && !isset($customNotNullCols[$name])) ? ' NOT NULL' : '';
 
             if ($row['is_identity'] === 'YES') {
                 $gen = $row['identity_generation'] ?? 'BY DEFAULT';
@@ -253,6 +259,33 @@ class PostgresAdapter implements DBAdapterInterface {
             $map[$row['typname']] = (bool) $row['typnotnull'];
         }
         return $map;
+    }
+
+    /**
+     * PG18+ named NOT NULL constraints (pg_constraint.contype = 'n'), excluding
+     * the auto-generated "<table>_<column>_not_null" names — those are already
+     * reproduced by the column's own NOT NULL. Returns [conname => column].
+     */
+    private function fetchNamedNotNullConstraints(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "SELECT con.conname, att.attname AS column_name
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             JOIN pg_attribute att ON att.attrelid = con.conrelid
+                                  AND att.attnum = con.conkey[1]
+             WHERE nsp.nspname = 'public' AND rel.relname = ?
+               AND con.contype = 'n'",
+            [$table]
+        );
+        $custom = [];
+        foreach ($rows as $row) {
+            $default = $table . '_' . $row['column_name'] . '_not_null';
+            if ($row['conname'] !== $default) {
+                $custom[$row['conname']] = $row['column_name'];
+            }
+        }
+        return $custom;
     }
 
     private function fetchIndexes(Connection $connection, string $table): array {
@@ -354,6 +387,11 @@ class PostgresAdapter implements DBAdapterInterface {
         foreach ($checks as $row) {
             $name = $row['constraint_name'];
             $constraints[$name] = "CONSTRAINT \"$name\" " . $row['definition'];
+        }
+
+        // PG18+ custom-named NOT NULL constraints (contype='n').
+        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $name => $col) {
+            $constraints[$name] = "CONSTRAINT \"$name\" NOT NULL \"$col\"";
         }
 
         return $constraints;

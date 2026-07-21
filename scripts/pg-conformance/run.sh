@@ -13,6 +13,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_DIR"
 
+# Parse connection args (also forwarded to the PHP runner) so extraction can
+# validate every statement against the same live Postgres.
+PG_HOST=localhost; PG_PORT=5432; PG_USER=dbdiff; PG_PASS=rootpass
+PG_DB="${DB_NAME:-diff1}"
+for arg in "$@"; do
+    case "$arg" in
+        --host=*) PG_HOST="${arg#*=}" ;;
+        --port=*) PG_PORT="${arg#*=}" ;;
+        --user=*) PG_USER="${arg#*=}" ;;
+        --pass=*) PG_PASS="${arg#*=}" ;;
+    esac
+done
+export PGCONF_DSN="host=$PG_HOST port=$PG_PORT user=$PG_USER password=$PG_PASS dbname=$PG_DB"
+
 echo "Step 1: Downloading Postgres regression files from pgrust..."
 mkdir -p /tmp/pg-regress
 
@@ -44,7 +58,15 @@ for f in constraints create_index identity generated_stored domain enum; do
 done
 
 echo ""
-echo "Step 2: Extracting DDL patterns..."
+echo "Step 2: Extracting DDL patterns (live-validated against $PG_HOST:$PG_PORT)..."
+# psycopg2 lets the extractor validate each statement on the live server, so
+# before_sql is always self-contained and there are no silent runtime skips.
+if ! python3 -c 'import psycopg2' 2>/dev/null; then
+    echo "  Installing psycopg2-binary for live validation..."
+    python3 -m pip install --quiet --disable-pip-version-check psycopg2-binary 2>/dev/null \
+        || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages psycopg2-binary 2>/dev/null \
+        || echo "  WARN: could not install psycopg2; extraction will fall back to static heuristics"
+fi
 python3 "$SCRIPT_DIR/extract-patterns.py"
 
 echo ""
