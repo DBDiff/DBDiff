@@ -132,7 +132,10 @@ class DiffSorter {
         } elseif ($classX === 'AlterTableAddColumn' && !empty($x->isGenerated)) {
             $rank = 1;
         }
-        return $rank !== null ? $rank * ($invert ? -1 : 1) : null;
+        if ($rank === null) {
+            return null;
+        }
+        return $invert ? -$rank : $rank;
     }
 
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {
