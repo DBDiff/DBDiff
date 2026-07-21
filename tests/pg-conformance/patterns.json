@@ -223,8 +223,7 @@
     "table": "constraint_rename_test",
     "before_sql": "CREATE TABLE constraint_rename_test (a int CONSTRAINT con1 CHECK (a > 0), b int, c int);",
     "alter_sql": "ALTER TABLE constraint_rename_test ADD CONSTRAINT con2 CHECK (b > 0) NO INHERIT;",
-    "description": "add_constraint: ALTER TABLE constraint_rename_test ADD CONSTRAINT con2 CHECK (b > 0) NO INHERIT;",
-    "skip_reason": "constraint_no_inherit"
+    "description": "add_constraint: ALTER TABLE constraint_rename_test ADD CONSTRAINT con2 CHECK (b > 0) NO INHERIT;"
   },
   {
     "id": "alter_table_add_constraint_26",
@@ -357,8 +356,7 @@
     "table": "parent_noinh_convalid",
     "before_sql": "create table parent_noinh_convalid (a int);",
     "alter_sql": "alter table parent_noinh_convalid add constraint check_a_is_2 check (a = 2) no inherit not valid;",
-    "description": "add_constraint: alter table parent_noinh_convalid add constraint check_a_is_2 check (a = 2) no inherit not valid;",
-    "skip_reason": "constraint_no_inherit"
+    "description": "add_constraint: alter table parent_noinh_convalid add constraint check_a_is_2 check (a = 2) no inherit not valid;"
   },
   {
     "id": "alter_table_add_constraint_37",
@@ -435,8 +433,7 @@
     "table": "atacc1",
     "before_sql": "create table atacc1 (test int);",
     "alter_sql": "alter table atacc1 add constraint foo check (test>0) no inherit;",
-    "description": "add_constraint: alter table atacc1 add constraint foo check (test>0) no inherit;",
-    "skip_reason": "constraint_no_inherit"
+    "description": "add_constraint: alter table atacc1 add constraint foo check (test>0) no inherit;"
   },
   {
     "id": "alter_table_add_constraint_45",
@@ -1490,8 +1487,7 @@
     "table": "test_inh_check",
     "before_sql": "CREATE TABLE test_inh_check (a float check (a > 10.2), b float);\nALTER TABLE test_inh_check ALTER COLUMN a TYPE numeric;",
     "alter_sql": "ALTER TABLE test_inh_check ADD CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT;",
-    "description": "add_constraint: ALTER TABLE test_inh_check ADD CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT;",
-    "skip_reason": "constraint_no_inherit"
+    "description": "add_constraint: ALTER TABLE test_inh_check ADD CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT;"
   },
   {
     "id": "alter_table_add_constraint_156",
@@ -2126,7 +2122,7 @@
     "alter_sql": "ALTER TABLE ATACC1 ADD NOT NULL a NO INHERIT;",
     "description": "add_constraint: ALTER TABLE ATACC1 ADD NOT NULL a NO INHERIT;",
     "min_pg_version": 18,
-    "skip_reason": "constraint_no_inherit"
+    "skip_reason": "notnull_no_inherit"
   },
   {
     "id": "constraints_add_constraint_13",
@@ -2277,8 +2273,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a; -- error",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_29",
@@ -2289,7 +2284,7 @@
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID NO INHERIT;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID NO INHERIT;",
     "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "skip_reason": "intentional_error"
   },
   {
     "id": "constraints_add_constraint_30",
@@ -2299,8 +2294,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a; -- error\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD PRIMARY KEY (a);",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD PRIMARY KEY (a);",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_identity_31",
@@ -2310,8 +2304,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a; -- error\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD PRIMARY KEY (a);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;",
     "description": "add_identity: ALTER TABLE notnull_tbl1 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_32",
@@ -2321,8 +2314,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1_child2 (c int, b int, a int);",
     "alter_sql": "ALTER TABLE notnull_tbl1_child2 ADD NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1_child2 ADD NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_column_33",
@@ -2332,8 +2324,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a; -- error\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a;\nALTER TABLE notnull_tbl1 ADD PRIMARY KEY (a);\nALTER TABLE notnull_tbl1 ALTER COLUMN a ADD GENERATED ALWAYS AS IDENTITY;\nALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD column d float8 default random();",
     "description": "add_column: ALTER TABLE notnull_tbl1 ADD column d float8 default random();",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_34",
@@ -2343,8 +2334,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD NOT NULL a NOT VALID,\n\tADD NOT NULL b NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD NOT NULL a NOT VALID,\n\tADD NOT NULL b NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_drop_constraint_35",
@@ -2354,8 +2344,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int, b int);\nALTER TABLE notnull_tbl1 ADD NOT NULL a NOT VALID,\n\tADD NOT NULL b NOT VALID;\nALTER TABLE notnull_tbl1 ALTER a DROP NOT NULL;",
     "alter_sql": "ALTER TABLE notnull_tbl1 DROP CONSTRAINT notnull_tbl1_b_not_null;",
     "description": "drop_constraint: ALTER TABLE notnull_tbl1 DROP CONSTRAINT notnull_tbl1_b_not_null;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_36",
@@ -2365,8 +2354,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_drop_constraint_37",
@@ -2376,8 +2364,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);\nALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;",
     "alter_sql": "ALTER TABLE notnull_tbl1 DROP CONSTRAINT nntbl1_a;",
     "description": "drop_constraint: ALTER TABLE notnull_tbl1 DROP CONSTRAINT nntbl1_a;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_38",
@@ -2387,8 +2374,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1 (a int);",
     "alter_sql": "ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn_parent NOT NULL a not valid;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn_parent NOT NULL a not valid;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_drop_constraint_39",
@@ -2408,8 +2394,7 @@
     "before_sql": "CREATE TABLE notnull_chld0 (a int, CONSTRAINT nn_chld0 NOT NULL a);\nALTER TABLE notnull_chld0 DROP CONSTRAINT nn_chld0;",
     "alter_sql": "ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;",
     "description": "add_constraint: ALTER TABLE notnull_chld0 ADD CONSTRAINT nn_chld0 NOT NULL a not valid;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_41",
@@ -2419,8 +2404,7 @@
     "before_sql": "CREATE TABLE notnull_inhparent (i int);",
     "alter_sql": "ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_set_not_null_42",
@@ -2430,8 +2414,7 @@
     "before_sql": "CREATE TABLE notnull_inhparent (i int);\nALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;",
     "alter_sql": "ALTER TABLE notnull_inhparent ALTER i SET NOT NULL; -- ok",
     "description": "set_not_null: ALTER TABLE notnull_inhparent ALTER i SET NOT NULL; -- ok",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_43",
@@ -2441,8 +2424,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1_3(a int, b int);",
     "alter_sql": "ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1_3 add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_44",
@@ -2452,8 +2434,7 @@
     "before_sql": "CREATE TABLE pp_nn_1(a int, b int);",
     "alter_sql": "ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE pp_nn_1 ADD CONSTRAINT nn1 NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_45",
@@ -2463,8 +2444,7 @@
     "before_sql": "CREATE TABLE notnull_tbl1_upg (a int, b int);",
     "alter_sql": "ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_46",
@@ -2474,8 +2454,7 @@
     "before_sql": "CREATE TABLE notnull_parent_upg (a int);",
     "alter_sql": "ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_47",
@@ -2485,8 +2464,7 @@
     "before_sql": "CREATE TABLE notnull_part1_3_upg (a int, b int);",
     "alter_sql": "ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;",
     "description": "add_constraint: ALTER TABLE notnull_part1_3_upg add CONSTRAINT nn3 NOT NULL a NOT VALID;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_48",
@@ -2496,8 +2474,7 @@
     "before_sql": "create table constr_parent (a int);",
     "alter_sql": "alter table constr_parent add not null a not valid;",
     "description": "add_constraint: alter table constr_parent add not null a not valid;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "constraints_add_constraint_49",
@@ -2507,8 +2484,7 @@
     "before_sql": "create table constr_parent2 (a int);",
     "alter_sql": "alter table constr_parent2 add not null a not valid;",
     "description": "add_constraint: alter table constr_parent2 add not null a not valid;",
-    "min_pg_version": 18,
-    "skip_reason": "notnull_not_valid"
+    "min_pg_version": 18
   },
   {
     "id": "create_index_add_constraint_1",

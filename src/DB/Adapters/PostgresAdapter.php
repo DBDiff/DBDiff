@@ -225,7 +225,10 @@ class PostgresAdapter implements DBAdapterInterface {
         // Columns whose NOT NULL is enforced by a custom-named constraint
         // (PG18 contype='n'): emit those as a separate constraint, not inline,
         // to preserve the constraint name.
-        $customNotNullCols = array_flip($this->fetchNamedNotNullConstraints($connection, $table));
+        $customNotNullCols = [];
+        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $nn) {
+            $customNotNullCols[$nn['column']] = true;
+        }
 
         $columns = [];
         foreach ($rows as $row) {
@@ -264,7 +267,7 @@ class PostgresAdapter implements DBAdapterInterface {
      */
     private function fetchNamedNotNullConstraints(Connection $connection, string $table): array {
         $rows = $connection->select(
-            "SELECT con.conname, att.attname AS column_name
+            "SELECT con.conname, con.convalidated, att.attname AS column_name
              FROM pg_constraint con
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
@@ -276,9 +279,16 @@ class PostgresAdapter implements DBAdapterInterface {
         );
         $custom = [];
         foreach ($rows as $row) {
-            $default = $table . '_' . $row['column_name'] . '_not_null';
-            if ($row['conname'] !== $default) {
-                $custom[$row['conname']] = $row['column_name'];
+            $default   = $table . '_' . $row['column_name'] . '_not_null';
+            $isDefault = $row['conname'] === $default;
+            // A default-named, validated NOT NULL is reproduced by the column's
+            // own NOT NULL, so skip it. Custom names and any unvalidated (NOT
+            // VALID) constraint must be emitted explicitly to round-trip.
+            if (!$isDefault || !$row['convalidated']) {
+                $custom[$row['conname']] = [
+                    'column'   => $row['column_name'],
+                    'notValid' => !$row['convalidated'],
+                ];
             }
         }
         return $custom;
@@ -385,9 +395,11 @@ class PostgresAdapter implements DBAdapterInterface {
             $constraints[$name] = "CONSTRAINT \"$name\" " . $row['definition'];
         }
 
-        // PG18+ custom-named NOT NULL constraints (contype='n').
-        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $name => $col) {
-            $constraints[$name] = "CONSTRAINT \"$name\" NOT NULL \"$col\"";
+        // PG18+ custom-named NOT NULL constraints (contype='n'), including the
+        // unvalidated (NOT VALID) variant.
+        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $name => $nn) {
+            $notValid = $nn['notValid'] ? ' NOT VALID' : '';
+            $constraints[$name] = "CONSTRAINT \"$name\" NOT NULL \"{$nn['column']}\"" . $notValid;
         }
 
         return $constraints;

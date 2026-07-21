@@ -532,17 +532,12 @@ def detect_skip_reason(stmt, before_sql, validator=None, setup_sql=None):
     if '........PG.DROPPED' in upper:
         return 'dropped_column_reference'
 
-    # Unvalidated NOT NULL constraints (PG18 "ADD [CONSTRAINT] NOT NULL col
-    # NOT VALID") — DBDiff models NOT NULL as a validated column attribute, so
-    # it can't reproduce the unvalidated state. (CHECK ... NOT VALID is fine.)
-    if re.search(r'NOT\s+NULL\s+\w+\s+NOT\s+VALID', upper) \
-       or re.search(r'NOT\s+NULL\s+\w+\s+NOT\s+VALID', before_upper):
-        return 'notnull_not_valid'
-
-    # NO INHERIT constraints — DBDiff doesn't emit the NO INHERIT clause, so
-    # pg_get_constraintdef differs.
-    if re.search(r'\bNO\s+INHERIT\b', upper):
-        return 'constraint_no_inherit'
+    # NOT NULL ... NO INHERIT — a non-inherited NOT NULL constraint (contype='n')
+    # that DBDiff models as a plain column attribute, so it can't reproduce the
+    # NO INHERIT flag. (CHECK ... NO INHERIT round-trips fine via
+    # pg_get_constraintdef, so only the NOT NULL variant is excluded.)
+    if re.search(r'NOT\s+NULL\s+\w+\s+NO\s+INHERIT', upper):
+        return 'notnull_no_inherit'
 
     # PRIMARY KEY USING INDEX promotes an existing index to a PK and renames the
     # index to the constraint name; DBDiff emits a default-named PK + index, so
