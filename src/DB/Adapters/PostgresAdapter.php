@@ -332,41 +332,9 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $constraints = [];
         foreach ($groups as $name => $c) {
-            $defer = '';
-            if (($c['is_deferrable'] ?? 'NO') === 'YES') {
-                $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
-                    ? ' DEFERRABLE INITIALLY DEFERRED'
-                    : ' DEFERRABLE INITIALLY IMMEDIATE';
-            }
-
-            $notValid = '';
-            if (isset($c['convalidated']) && !$c['convalidated']) {
-                $notValid = ' NOT VALID';
-            }
-
-            if ($c['constraint_type'] === 'FOREIGN KEY') {
-                $cols = implode('", "', $c['columns']);
-                $match = '';
-                $matchOpt = $c['match_option'] ?? 'NONE';
-                if ($matchOpt === 'FULL') {
-                    $match = ' MATCH FULL';
-                } elseif ($matchOpt === 'PARTIAL') {
-                    $match = ' MATCH PARTIAL';
-                }
-                $constraints[$name] =
-                    "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                    " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                    $match .
-                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
-                    $defer . $notValid;
-            } elseif ($c['constraint_type'] === 'UNIQUE') {
-                $cols = implode('", "', $c['columns']);
-                $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")" . $defer;
-            } elseif ($c['constraint_type'] === 'PRIMARY KEY') {
-                $cols = implode('", "', $c['columns']);
-                $constraints[$name] = "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")" . $defer;
-            }
+            $constraints[$name] = $this->buildConstraintDef($name, $c);
         }
+        $constraints = array_filter($constraints);
 
         // CHECK constraints — query pg_constraint directly since
         // information_schema doesn't expose the check expression.
@@ -389,6 +357,42 @@ class PostgresAdapter implements DBAdapterInterface {
         }
 
         return $constraints;
+    }
+
+    private function buildConstraintDef(string $name, array $c): ?string {
+        $defer = '';
+        if (($c['is_deferrable'] ?? 'NO') === 'YES') {
+            $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
+                ? ' DEFERRABLE INITIALLY DEFERRED'
+                : ' DEFERRABLE INITIALLY IMMEDIATE';
+        }
+
+        $notValid = '';
+        if (isset($c['convalidated']) && !$c['convalidated']) {
+            $notValid = ' NOT VALID';
+        }
+
+        $cols = implode('", "', $c['columns']);
+
+        if ($c['constraint_type'] === 'FOREIGN KEY') {
+            $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
+            $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
+            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
+                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
+                $match .
+                " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
+                $defer . $notValid;
+        }
+
+        if ($c['constraint_type'] === 'UNIQUE') {
+            return "CONSTRAINT \"$name\" UNIQUE (\"$cols\")" . $defer;
+        }
+
+        if ($c['constraint_type'] === 'PRIMARY KEY') {
+            return "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")" . $defer;
+        }
+
+        return null;
     }
 
     private function buildColumnType(array $col): string {

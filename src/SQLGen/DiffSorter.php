@@ -118,21 +118,21 @@ class DiffSorter {
         if ($direction !== 'up') {
             return null;
         }
-        if ($classA === 'AlterTableDropColumn' && !empty($a->isGeneratedDep)
-            && $classB === 'AlterTableChangeColumn') {
-            return -1;
+        $result = $this->generatedColumnPairOrder($a, $classA, $b, $classB)
+               ?? $this->generatedColumnPairOrder($b, $classB, $a, $classA, true);
+        return $result;
+    }
+
+    private function generatedColumnPairOrder($x, string $classX, $y, string $classY, bool $invert = false): ?int {
+        if ($classY !== 'AlterTableChangeColumn') {
+            return null;
         }
-        if ($classB === 'AlterTableDropColumn' && !empty($b->isGeneratedDep)
-            && $classA === 'AlterTableChangeColumn') {
-            return 1;
+        $sign = $invert ? -1 : 1;
+        if ($classX === 'AlterTableDropColumn' && !empty($x->isGeneratedDep)) {
+            return -1 * $sign;
         }
-        if ($classA === 'AlterTableAddColumn' && !empty($a->isGenerated)
-            && $classB === 'AlterTableChangeColumn') {
-            return 1;
-        }
-        if ($classB === 'AlterTableAddColumn' && !empty($b->isGenerated)
-            && $classA === 'AlterTableChangeColumn') {
-            return -1;
+        if ($classX === 'AlterTableAddColumn' && !empty($x->isGenerated)) {
+            return 1 * $sign;
         }
         return null;
     }
@@ -150,21 +150,21 @@ class DiffSorter {
     }
 
     private function compareByName($a, $b): int {
-        $tableA = $a->table ?? '';
-        $tableB = $b->table ?? '';
-        $tableCmp = strcmp($tableA, $tableB);
+        $tableCmp = strcmp($a->table ?? '', $b->table ?? '');
         if ($tableCmp !== 0) {
             return $tableCmp;
         }
 
+        return $this->compareWithinTable($a, $b);
+    }
+
+    private function compareWithinTable($a, $b): int {
         $genA = !empty($a->isGenerated);
         $genB = !empty($b->isGenerated);
         if ($genA !== $genB) {
             $classA = (new \ReflectionClass($a))->getShortName();
-            if ($classA === 'AlterTableAddColumn') {
-                return $genA ? 1 : -1;
-            }
-            return $genA ? -1 : 1;
+            $generatedFirst = $classA !== 'AlterTableAddColumn';
+            return ($genA === $generatedFirst) ? -1 : 1;
         }
 
         $ordA = $a->ordinal ?? null;
