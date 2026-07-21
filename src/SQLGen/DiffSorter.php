@@ -118,23 +118,21 @@ class DiffSorter {
         if ($direction !== 'up') {
             return null;
         }
-        $result = $this->generatedColumnPairOrder($a, $classA, $b, $classB)
-               ?? $this->generatedColumnPairOrder($b, $classB, $a, $classA, true);
-        return $result;
+        return $this->generatedColumnPairOrder($a, $classA, $classB)
+            ?? $this->generatedColumnPairOrder($b, $classB, $classA, true);
     }
 
-    private function generatedColumnPairOrder($x, string $classX, $y, string $classY, bool $invert = false): ?int {
-        if ($classY !== 'AlterTableChangeColumn') {
+    private function generatedColumnPairOrder($x, string $classX, string $classOther, bool $invert = false): ?int {
+        if ($classOther !== 'AlterTableChangeColumn') {
             return null;
         }
-        $sign = $invert ? -1 : 1;
+        $rank = null;
         if ($classX === 'AlterTableDropColumn' && !empty($x->isGeneratedDep)) {
-            return -1 * $sign;
+            $rank = -1;
+        } elseif ($classX === 'AlterTableAddColumn' && !empty($x->isGenerated)) {
+            $rank = 1;
         }
-        if ($classX === 'AlterTableAddColumn' && !empty($x->isGenerated)) {
-            return 1 * $sign;
-        }
-        return null;
+        return $rank !== null ? $rank * ($invert ? -1 : 1) : null;
     }
 
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {

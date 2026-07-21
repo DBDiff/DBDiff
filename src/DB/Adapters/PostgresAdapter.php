@@ -373,8 +373,9 @@ class PostgresAdapter implements DBAdapterInterface {
         }
 
         $cols = implode('", "', $c['columns']);
+        $type = $c['constraint_type'];
 
-        if ($c['constraint_type'] === 'FOREIGN KEY') {
+        if ($type === 'FOREIGN KEY') {
             $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
             $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
             return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
@@ -384,12 +385,8 @@ class PostgresAdapter implements DBAdapterInterface {
                 $defer . $notValid;
         }
 
-        if ($c['constraint_type'] === 'UNIQUE') {
-            return "CONSTRAINT \"$name\" UNIQUE (\"$cols\")" . $defer;
-        }
-
-        if ($c['constraint_type'] === 'PRIMARY KEY') {
-            return "CONSTRAINT \"$name\" PRIMARY KEY (\"$cols\")" . $defer;
+        if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
+            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
         }
 
         return null;
