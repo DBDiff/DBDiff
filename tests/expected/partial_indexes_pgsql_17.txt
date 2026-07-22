@@ -1,0 +1,16 @@
+#---------- UP ----------
+CREATE INDEX idx_events_public ON public.events USING btree (start_date) WHERE (is_public = true);
+CREATE INDEX idx_events_status_date ON public.events USING btree (status, start_date);
+CREATE INDEX idx_events_venue ON public.events USING btree (venue);
+DROP INDEX "idx_events_large";
+DROP INDEX "idx_events_status_public";
+DROP INDEX "idx_events_upcoming";
+DROP INDEX "idx_events_venue_lower";
+#---------- DOWN ----------
+DROP INDEX "idx_events_public";
+DROP INDEX "idx_events_status_date";
+DROP INDEX "idx_events_venue";
+CREATE INDEX idx_events_large ON public.events USING btree (venue, capacity) WHERE (capacity > 100);
+CREATE INDEX idx_events_status_public ON public.events USING btree (status, is_public);
+CREATE INDEX idx_events_upcoming ON public.events USING btree (start_date) WHERE ((status)::text = 'scheduled'::text);
+CREATE INDEX idx_events_venue_lower ON public.events USING btree (lower((venue)::text));

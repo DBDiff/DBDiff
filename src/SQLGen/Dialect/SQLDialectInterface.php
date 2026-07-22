@@ -60,7 +60,7 @@ interface SQLDialectInterface {
      *
      * Returns the complete statement(s) including trailing semicolons.
      */
-    public function changeColumn(string $table, string $col, string $newDef): string;
+    public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string;
 
     /**
      * DROP CONSTRAINT statement.

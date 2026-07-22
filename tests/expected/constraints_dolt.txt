@@ -1,0 +1,22 @@
+#---------- UP ----------
+ALTER TABLE `order_items` DROP CONSTRAINT `chk_discount_range`;
+ALTER TABLE `products` DROP CONSTRAINT `chk_status_valid`;
+ALTER TABLE `products` CHANGE `status` `status` varchar(20) NOT NULL DEFAULT 'draft';
+ALTER TABLE `order_items` DROP `discount`;
+ALTER TABLE `order_items` ADD KEY `fk_order_items_product` (`product_id`);
+ALTER TABLE `products` ADD UNIQUE KEY `uq_category_sku` (`category_id`,`sku`);
+ALTER TABLE `products` DROP INDEX `fk_products_category`;
+ALTER TABLE `order_items` ADD CONSTRAINT `fk_order_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`);
+ALTER TABLE `products` DROP CONSTRAINT `chk_price_positive`;
+ALTER TABLE `products` ADD CONSTRAINT `chk_price_positive` CHECK ((`price` > 0));
+#---------- DOWN ----------
+ALTER TABLE `order_items` DROP FOREIGN KEY `fk_order_items_product`;
+ALTER TABLE `products` DROP CONSTRAINT `chk_price_positive`;
+ALTER TABLE `products` ADD CONSTRAINT `chk_price_positive` CHECK ((`price` >= 0));
+ALTER TABLE `products` CHANGE `status` `status` varchar(20) NOT NULL DEFAULT 'active';
+ALTER TABLE `order_items` ADD `discount` decimal(5,2) NOT NULL DEFAULT '0.00';
+ALTER TABLE `order_items` DROP INDEX `fk_order_items_product`;
+ALTER TABLE `products` DROP INDEX `uq_category_sku`;
+ALTER TABLE `products` ADD KEY `fk_products_category` (`category_id`);
+ALTER TABLE `order_items` ADD CONSTRAINT `chk_discount_range` CHECK (((`discount` >= 0) AND (`discount` <= 100)));
+ALTER TABLE `products` ADD CONSTRAINT `chk_status_valid` CHECK ((`status` IN ('draft', 'active', 'archived')));

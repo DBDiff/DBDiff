@@ -1,0 +1,24 @@
+#---------- UP ----------
+ALTER TABLE "products" ALTER COLUMN "created_at" TYPE timestamp(6);
+ALTER TABLE "products" ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "products" ALTER COLUMN "description" TYPE varchar(255);
+ALTER TABLE "products" ALTER COLUMN "is_active" TYPE boolean;
+ALTER TABLE "products" ALTER COLUMN "is_active" SET DEFAULT true;
+ALTER TABLE "products" ALTER COLUMN "name" TYPE varchar(100);
+ALTER TABLE "products" ALTER COLUMN "price" TYPE numeric(10,2);
+ALTER TABLE "products" ALTER COLUMN "price" SET DEFAULT 0.00;
+ALTER TABLE "products" ALTER COLUMN "quantity" TYPE integer;
+ALTER TABLE "products" ALTER COLUMN "sku" TYPE varchar(20);
+ALTER TABLE "products" ALTER COLUMN "sku" SET NOT NULL;
+#---------- DOWN ----------
+ALTER TABLE "products" ALTER COLUMN "created_at" TYPE timestamp(6);
+ALTER TABLE "products" ALTER COLUMN "created_at" SET DEFAULT '2024-01-01 00:00:00'::timestamp without time zone;
+ALTER TABLE "products" ALTER COLUMN "description" TYPE text;
+ALTER TABLE "products" ALTER COLUMN "is_active" TYPE boolean;
+ALTER TABLE "products" ALTER COLUMN "is_active" SET DEFAULT false;
+ALTER TABLE "products" ALTER COLUMN "name" TYPE varchar(255);
+ALTER TABLE "products" ALTER COLUMN "price" TYPE numeric(12,4);
+ALTER TABLE "products" ALTER COLUMN "price" SET DEFAULT 0.0000;
+ALTER TABLE "products" ALTER COLUMN "quantity" TYPE bigint;
+ALTER TABLE "products" ALTER COLUMN "sku" TYPE varchar(20);
+ALTER TABLE "products" ALTER COLUMN "sku" DROP NOT NULL;

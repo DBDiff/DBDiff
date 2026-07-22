@@ -9,6 +9,7 @@ class AlterTableChangeColumn {
     public $diff;
     public $source;
     public $target;
+    public bool $isGenerated = false;
 
     function __construct($table, $column, $diff) {
         $this->table = $table;

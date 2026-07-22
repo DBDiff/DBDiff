@@ -342,6 +342,54 @@ abstract class AbstractComprehensiveTest extends PHPUnit\Framework\TestCase
     }
 
     /**
+     * Column type changes: widened types, changed defaults, nullability flips.
+     *
+     * Verifies that ALTER TABLE … ALTER COLUMN is emitted when a column's
+     * type, precision, default value, or NOT NULL constraint changes between
+     * the two schemas.
+     */
+    public function testColumnTypeChanges(): void
+    {
+        $this->loadFixture('column_type_changes');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+        $this->assertExpectedOutput('column_type_changes', $output);
+
+        // The schema diff must detect the type/default changes
+        $this->assertNotEmpty(
+            trim($output),
+            'Column type changes must produce a non-empty diff'
+        );
+        $this->assertStringContainsString(
+            'products',
+            $output,
+            'Diff should reference the products table'
+        );
+    }
+
+    /**
+     * Constraints: foreign keys, check constraints, composite unique constraints.
+     *
+     * Tests adding, changing, and dropping constraints.
+     */
+    public function testConstraintChanges(): void
+    {
+        $this->loadFixture('constraints');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+        $this->assertExpectedOutput('constraints', $output);
+
+        $this->assertNotEmpty(
+            trim($output),
+            'Constraint changes must produce a non-empty diff'
+        );
+    }
+
+    /**
      * Bug #7 regression: rows containing NULL column values must be detected
      * during data diff and appear in the output as UPDATE statements.
      *

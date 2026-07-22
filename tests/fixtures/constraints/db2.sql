@@ -1,0 +1,45 @@
+-- MySQL: constraints fixture - database 2
+
+CREATE TABLE categories (
+  id   INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(100) NOT NULL,
+  UNIQUE KEY uq_name (name),
+  UNIQUE KEY uq_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE products (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  category_id INT NOT NULL,
+  name        VARCHAR(255) NOT NULL,
+  sku         VARCHAR(20) NOT NULL,
+  price       DECIMAL(10,2) NOT NULL,
+  status      VARCHAR(20) NOT NULL DEFAULT 'active',
+  CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id),
+  CONSTRAINT chk_price_positive CHECK (price >= 0),
+  CONSTRAINT chk_status_valid CHECK (status IN ('draft', 'active', 'archived'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE order_items (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  quantity   INT NOT NULL,
+  unit_price DECIMAL(10,2) NOT NULL,
+  discount   DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  CONSTRAINT chk_quantity_positive CHECK (quantity > 0),
+  CONSTRAINT chk_discount_range CHECK (discount >= 0 AND discount <= 100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO categories (id, name, slug) VALUES
+(1, 'Electronics', 'electronics'),
+(2, 'Clothing',    'clothing'),
+(3, 'Books',       'books');
+
+INSERT INTO products (id, category_id, name, sku, price, status) VALUES
+(1, 1, 'Laptop',  'ELC-001', 999.99, 'active'),
+(2, 1, 'Phone',   'ELC-002', 599.99, 'active'),
+(3, 2, 'T-Shirt', 'CLT-001', 19.99,  'active');
+
+INSERT INTO order_items (id, product_id, quantity, unit_price, discount) VALUES
+(1, 1, 2, 999.99, 0.00),
+(2, 2, 1, 599.99, 10.00);

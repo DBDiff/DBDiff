@@ -108,9 +108,34 @@ class DiffSorter {
         $indexA = $orderMap[$sqlGenClassA];
         $indexB = $orderMap[$sqlGenClassB];
         if ($indexA !== $indexB) {
-            return $indexA <=> $indexB;
+            $override = $this->generatedColumnOrdering($a, $b, $sqlGenClassA, $sqlGenClassB, $direction);
+            return $override ?? ($indexA <=> $indexB);
         }
         return $this->compareSamePriority($a, $b, $direction, $sqlGenClassA);
+    }
+
+    private function generatedColumnOrdering($a, $b, string $classA, string $classB, string $direction): ?int {
+        if ($direction !== 'up') {
+            return null;
+        }
+        return $this->generatedColumnPairOrder($a, $classA, $classB)
+            ?? $this->generatedColumnPairOrder($b, $classB, $classA, true);
+    }
+
+    private function generatedColumnPairOrder($x, string $classX, string $classOther, bool $invert = false): ?int {
+        if ($classOther !== 'AlterTableChangeColumn') {
+            return null;
+        }
+        $rank = null;
+        if ($classX === 'AlterTableDropColumn' && !empty($x->isGeneratedDep)) {
+            $rank = -1;
+        } elseif ($classX === 'AlterTableAddColumn' && !empty($x->isGenerated)) {
+            $rank = 1;
+        }
+        if ($rank === null) {
+            return null;
+        }
+        return $invert ? -$rank : $rank;
     }
 
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {
@@ -126,12 +151,32 @@ class DiffSorter {
     }
 
     private function compareByName($a, $b): int {
-        $tableA = $a->table ?? '';
-        $tableB = $b->table ?? '';
+        $tableCmp = strcmp($a->table ?? '', $b->table ?? '');
+        if ($tableCmp !== 0) {
+            return $tableCmp;
+        }
+
+        return $this->compareWithinTable($a, $b);
+    }
+
+    private function compareWithinTable($a, $b): int {
+        $genA = !empty($a->isGenerated);
+        $genB = !empty($b->isGenerated);
+        if ($genA !== $genB) {
+            $classA = (new \ReflectionClass($a))->getShortName();
+            $generatedFirst = $classA !== 'AlterTableAddColumn';
+            return ($genA === $generatedFirst) ? -1 : 1;
+        }
+
+        $ordA = $a->ordinal ?? null;
+        $ordB = $b->ordinal ?? null;
+        if ($ordA !== null && $ordB !== null && $ordA !== $ordB) {
+            return $ordA <=> $ordB;
+        }
+
         $itemA  = $a->column ?? $a->key ?? $a->name ?? '';
         $itemB  = $b->column ?? $b->key ?? $b->name ?? '';
-        return strcmp($tableA, $tableB)
-            ?: strcmp((string) $itemA, (string) $itemB)
+        return strcmp((string) $itemA, (string) $itemB)
             ?: $this->compareDataKeys($a, $b);
     }
 

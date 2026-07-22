@@ -1,0 +1,20 @@
+#---------- UP ----------
+ALTER TABLE "order_items" DROP CONSTRAINT "chk_discount_range";
+ALTER TABLE "products" DROP CONSTRAINT "chk_status_valid";
+ALTER TABLE "products" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "products" ALTER COLUMN "status" SET DEFAULT 'draft'::character varying;
+ALTER TABLE "order_items" DROP COLUMN "discount" CASCADE;
+ALTER TABLE "order_items" ADD CONSTRAINT "fk_order_items_product" FOREIGN KEY ("product_id") REFERENCES "products" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE "products" ADD CONSTRAINT "uq_category_sku" UNIQUE ("category_id", "sku");
+ALTER TABLE "products" DROP CONSTRAINT "chk_price_positive";
+ALTER TABLE "products" ADD CONSTRAINT "chk_price_positive" CHECK ((price > (0)::numeric));
+#---------- DOWN ----------
+ALTER TABLE "order_items" DROP CONSTRAINT "fk_order_items_product";
+ALTER TABLE "products" DROP CONSTRAINT "uq_category_sku";
+ALTER TABLE "products" DROP CONSTRAINT "chk_price_positive";
+ALTER TABLE "products" ADD CONSTRAINT "chk_price_positive" CHECK ((price >= (0)::numeric));
+ALTER TABLE "products" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "products" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
+ALTER TABLE "order_items" ADD COLUMN "discount" numeric(5,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE "order_items" ADD CONSTRAINT "chk_discount_range" CHECK (((discount >= (0)::numeric) AND (discount <= (100)::numeric)));
+ALTER TABLE "products" ADD CONSTRAINT "chk_status_valid" CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'archived'::character varying])::text[])));

@@ -44,7 +44,7 @@ class MySQLDialect implements SQLDialectInterface {
         return "ALTER TABLE $t DROP $c;";
     }
 
-    public function changeColumn(string $table, string $col, string $newDef): string {
+    public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string {
         $t = $this->quote($table);
         $c = $this->quote($col);
         // MySQL CHANGE keeps the same column name; the newDef already contains

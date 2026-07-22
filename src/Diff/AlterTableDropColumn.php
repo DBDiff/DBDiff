@@ -9,6 +9,7 @@ class AlterTableDropColumn {
     public $diff;
     public $source;
     public $target;
+    public bool $isGeneratedDep = false;
 
     function __construct($table, $column, $diff) {
         $this->table = $table;

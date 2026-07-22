@@ -117,6 +117,30 @@ class DBDiffComprehensivePostgresTest extends AbstractComprehensiveTest
         ];
     }
 
+    /**
+     * Partial indexes, expression indexes, and multi-column index changes.
+     * PostgreSQL-specific: MySQL and SQLite don't support partial indexes.
+     */
+    public function testPartialIndexChanges(): void
+    {
+        $this->loadFixture('partial_indexes');
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=all', '--nocomments', $this->dbInputArg()]
+        ));
+        $this->assertExpectedOutput('partial_indexes', $output);
+
+        $this->assertNotEmpty(
+            trim($output),
+            'Partial index changes must produce a non-empty diff'
+        );
+        $this->assertStringContainsString(
+            'events',
+            $output,
+            'Diff should reference the events table'
+        );
+    }
+
     protected function tearDownDatabases(): void
     {
         if (!$this->adminDb) {
