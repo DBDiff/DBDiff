@@ -17,12 +17,14 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
 
     public function getUp(): string {
         $newDef = $this->obj->diff->getNewValue();
-        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $newDef);
+        $oldDef = $this->obj->diff->getOldValue();
+        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $newDef, $oldDef);
     }
 
     public function getDown(): string {
         $oldDef = $this->obj->diff->getOldValue();
-        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $oldDef);
+        $newDef = $this->obj->diff->getNewValue();
+        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $oldDef, $newDef);
     }
 
 }

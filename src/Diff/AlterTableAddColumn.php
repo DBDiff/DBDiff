@@ -9,6 +9,8 @@ class AlterTableAddColumn {
     public $diff;
     public $source;
     public $target;
+    public ?int $ordinal = null;
+    public bool $isGenerated = false;
 
     function __construct($table, $column, $diff) {
         $this->table = $table;

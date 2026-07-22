@@ -203,28 +203,114 @@ class PostgresAdapter implements DBAdapterInterface {
         $rows = $connection->select(
             "SELECT column_name, data_type, character_maximum_length, is_nullable,
                     column_default, numeric_precision, numeric_scale, udt_name,
-                    datetime_precision
+                    datetime_precision, is_identity, identity_generation,
+                    is_generated, generation_expression, domain_name
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = ?
              ORDER BY ordinal_position",
             [$table]
         );
 
+        // Map of public-schema domains that are themselves NOT NULL, so we can
+        // skip a redundant column-level NOT NULL when the domain enforces it.
+        $domainNotNull = [];
+        foreach ($connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        ) as $d) {
+            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
+        }
+        // Columns whose NOT NULL is enforced by a custom-named constraint
+        // (PG18 contype='n'): emit those as a separate constraint, not inline,
+        // to preserve the constraint name.
+        $customNotNullCols = [];
+        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $nn) {
+            $customNotNullCols[$nn['column']] = true;
+        }
+
         $columns = [];
         foreach ($rows as $row) {
             $name    = $row['column_name'];
             $type    = $this->buildColumnType($row);
-            $notNull = ($row['is_nullable'] === 'NO') ? ' NOT NULL' : '';
-            $default = '';
-            if (!is_null($row['column_default'])) {
-                $default = ' DEFAULT ' . $row['column_default'];
+            // Skip redundant NOT NULL when the domain itself enforces it, or
+            // when a custom-named NOT NULL constraint carries it.
+            $domainName = $row['domain_name'] ?? null;
+            $domainIsNotNull = $domainName && ($domainNotNull[$domainName] ?? false);
+            $notNull = ($row['is_nullable'] === 'NO' && !$domainIsNotNull
+                        && !isset($customNotNullCols[$name])) ? ' NOT NULL' : '';
+
+            if ($row['is_identity'] === 'YES') {
+                $gen = $row['identity_generation'] ?? 'BY DEFAULT';
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull
+                    . ' GENERATED ' . $gen . ' AS IDENTITY';
+            } elseif ($row['is_generated'] === 'ALWAYS') {
+                $expr = $row['generation_expression'] ?? '';
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull
+                    . ' GENERATED ALWAYS AS (' . $expr . ') STORED';
+            } else {
+                $default = '';
+                if (!is_null($row['column_default'])) {
+                    $default = ' DEFAULT ' . $row['column_default'];
+                }
+                $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
             }
-            $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
         }
         return $columns;
     }
 
+    /**
+     * PG18+ named NOT NULL constraints (pg_constraint.contype = 'n'), excluding
+     * the auto-generated "<table>_<column>_not_null" names — those are already
+     * reproduced by the column's own NOT NULL. Returns [conname => column].
+     */
+    private function fetchNamedNotNullConstraints(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "SELECT con.conname, con.convalidated, att.attname AS column_name
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             JOIN pg_attribute att ON att.attrelid = con.conrelid
+                                  AND att.attnum = con.conkey[1]
+             WHERE nsp.nspname = 'public' AND rel.relname = ?
+               AND con.contype = 'n'",
+            [$table]
+        );
+        $custom = [];
+        foreach ($rows as $row) {
+            $default   = $table . '_' . $row['column_name'] . '_not_null';
+            $isDefault = $row['conname'] === $default;
+            // A default-named, validated NOT NULL is reproduced by the column's
+            // own NOT NULL, so skip it. Custom names and any unvalidated (NOT
+            // VALID) constraint must be emitted explicitly to round-trip.
+            if (!$isDefault || !$row['convalidated']) {
+                $custom[$row['conname']] = [
+                    'column'   => $row['column_name'],
+                    'notValid' => !$row['convalidated'],
+                ];
+            }
+        }
+        return $custom;
+    }
+
     private function fetchIndexes(Connection $connection, string $table): array {
+        // Collect names of indexes that back constraints (PK, UNIQUE, EXCLUDE)
+        // so we can skip them — they're handled via fetchConstraints() instead.
+        $constraintIndexes = $connection->select(
+            "SELECT con.conname
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public' AND rel.relname = ?
+               AND con.contype IN ('p', 'u', 'x')",
+            [$table]
+        );
+        $skip = [];
+        foreach ($constraintIndexes as $row) {
+            $skip[$row['conname']] = true;
+        }
+
         $rows = $connection->select(
             "SELECT indexname, indexdef
              FROM pg_indexes
@@ -234,8 +320,7 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $keys = [];
         foreach ($rows as $row) {
-            // Skip primary key indexes – they are captured as constraints
-            if (substr($row['indexname'], -5) === '_pkey') {
+            if (isset($skip[$row['indexname']])) {
                 continue;
             }
             $keys[$row['indexname']] = $row['indexdef'];
@@ -246,10 +331,12 @@ class PostgresAdapter implements DBAdapterInterface {
     private function fetchConstraints(Connection $connection, string $table): array {
         $rows = $connection->select(
             "SELECT tc.constraint_name, tc.constraint_type,
+                    tc.is_deferrable, tc.initially_deferred,
                     kcu.column_name, kcu.ordinal_position,
                     ccu.table_name  AS foreign_table,
                     ccu.column_name AS foreign_column,
-                    rc.update_rule, rc.delete_rule
+                    rc.update_rule, rc.delete_rule, rc.match_option,
+                    con.convalidated
              FROM information_schema.table_constraints tc
              LEFT JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
@@ -260,8 +347,11 @@ class PostgresAdapter implements DBAdapterInterface {
              LEFT JOIN information_schema.constraint_column_usage ccu
                 ON rc.unique_constraint_name = ccu.constraint_name
                AND rc.unique_constraint_schema = ccu.constraint_schema
+             LEFT JOIN pg_constraint con
+                ON tc.constraint_name = con.conname
+               AND con.connamespace = 'public'::regnamespace
              WHERE tc.table_schema = 'public' AND tc.table_name = ?
-               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE')
+               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
              ORDER BY tc.constraint_name, kcu.ordinal_position",
             [$table]
         );
@@ -281,22 +371,77 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $constraints = [];
         foreach ($groups as $name => $c) {
-            if ($c['constraint_type'] === 'FOREIGN KEY') {
-                $cols = implode('", "', $c['columns']);
-                $constraints[$name] =
-                    "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                    " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                    " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}";
-            } elseif ($c['constraint_type'] === 'UNIQUE') {
-                $cols = implode('", "', $c['columns']);
-                $constraints[$name] = "CONSTRAINT \"$name\" UNIQUE (\"$cols\")";
-            }
+            $constraints[$name] = $this->buildConstraintDef($name, $c);
+        }
+        $constraints = array_filter($constraints);
+
+        // CHECK constraints — query pg_constraint directly since
+        // information_schema doesn't expose the check expression.
+        $checks = $connection->select(
+            "SELECT con.conname AS constraint_name,
+                    pg_get_constraintdef(con.oid) AS definition
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public'
+               AND rel.relname = ?
+               AND con.contype IN ('c', 'x')
+             ORDER BY con.conname",
+            [$table]
+        );
+
+        foreach ($checks as $row) {
+            $name = $row['constraint_name'];
+            $constraints[$name] = "CONSTRAINT \"$name\" " . $row['definition'];
+        }
+
+        // PG18+ custom-named NOT NULL constraints (contype='n'), including the
+        // unvalidated (NOT VALID) variant.
+        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $name => $nn) {
+            $notValid = $nn['notValid'] ? ' NOT VALID' : '';
+            $constraints[$name] = "CONSTRAINT \"$name\" NOT NULL \"{$nn['column']}\"" . $notValid;
         }
 
         return $constraints;
     }
 
+    private function buildConstraintDef(string $name, array $c): ?string {
+        $defer = '';
+        if (($c['is_deferrable'] ?? 'NO') === 'YES') {
+            $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
+                ? ' DEFERRABLE INITIALLY DEFERRED'
+                : ' DEFERRABLE INITIALLY IMMEDIATE';
+        }
+
+        $notValid = '';
+        if (isset($c['convalidated']) && !$c['convalidated']) {
+            $notValid = ' NOT VALID';
+        }
+
+        $cols = implode('", "', $c['columns']);
+        $type = $c['constraint_type'];
+
+        if ($type === 'FOREIGN KEY') {
+            $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
+            $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
+            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
+                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
+                $match .
+                " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
+                $defer . $notValid;
+        }
+
+        if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
+            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
+        }
+
+        return null;
+    }
+
     private function buildColumnType(array $col): string {
+        if (!empty($col['domain_name'])) {
+            return $col['domain_name'];
+        }
         $simpleMap = [
             'time without time zone' => 'time',
             'time with time zone'    => 'timetz',

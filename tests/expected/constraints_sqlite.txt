@@ -1,0 +1,14 @@
+#---------- UP ----------
+-- WARNING: column "status" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "products" DROP COLUMN "status";
+ALTER TABLE "products" ADD COLUMN "status" varchar(20) NOT NULL DEFAULT 'draft';
+ALTER TABLE "order_items" DROP COLUMN "discount";
+CREATE UNIQUE INDEX "sqlite_autoindex_products_1" ON "products" ("category_id", "sku");
+ALTER TABLE "order_items" ADD CONSTRAINT "fk_order_items_0" FOREIGN KEY ("product_id") REFERENCES "products" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+#---------- DOWN ----------
+ALTER TABLE "order_items" DROP CONSTRAINT "fk_order_items_0";
+-- WARNING: column "status" changed. SQLite requires DROP + ADD (data may be lost).
+ALTER TABLE "products" DROP COLUMN "status";
+ALTER TABLE "products" ADD COLUMN "status" varchar(20) NOT NULL DEFAULT 'active';
+ALTER TABLE "order_items" ADD COLUMN "discount" numeric(5,2) NOT NULL DEFAULT 0.00;
+DROP INDEX "sqlite_autoindex_products_1";

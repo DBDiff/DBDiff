@@ -3,9 +3,8 @@
 #---------- DOWN ----------
 DELETE FROM "posts" WHERE "id" = '3';
 DELETE FROM "users" WHERE "id" = '3';
--- WARNING: column "status" changed; data may be lost.
-ALTER TABLE "users" DROP COLUMN "status";
-ALTER TABLE "users" ADD COLUMN "status" varchar(20) DEFAULT 'pending'::character varying;
+ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
+ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp(6);
 ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;
 ALTER TABLE "users" ADD COLUMN "updated_at" timestamp(6) DEFAULT '2024-01-01 00:00:00'::timestamp without time zone;

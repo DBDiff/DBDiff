@@ -1,0 +1,16 @@
+#---------- UP ----------
+ALTER TABLE `products` CHANGE `created_at` `created_at` timestamp DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE `products` CHANGE `description` `description` varchar(255);
+ALTER TABLE `products` CHANGE `is_active` `is_active` tinyint NOT NULL DEFAULT '1';
+ALTER TABLE `products` CHANGE `name` `name` varchar(100) NOT NULL;
+ALTER TABLE `products` CHANGE `price` `price` decimal(10,2) NOT NULL DEFAULT '0.00';
+ALTER TABLE `products` CHANGE `quantity` `quantity` int NOT NULL DEFAULT '0';
+ALTER TABLE `products` CHANGE `sku` `sku` varchar(20) NOT NULL;
+#---------- DOWN ----------
+ALTER TABLE `products` CHANGE `created_at` `created_at` timestamp DEFAULT '2024-01-01 00:00:00';
+ALTER TABLE `products` CHANGE `description` `description` text;
+ALTER TABLE `products` CHANGE `is_active` `is_active` tinyint NOT NULL DEFAULT '0';
+ALTER TABLE `products` CHANGE `name` `name` varchar(255) NOT NULL;
+ALTER TABLE `products` CHANGE `price` `price` decimal(12,4) NOT NULL DEFAULT '0.0000';
+ALTER TABLE `products` CHANGE `quantity` `quantity` bigint NOT NULL DEFAULT '0';
+ALTER TABLE `products` CHANGE `sku` `sku` varchar(20);
