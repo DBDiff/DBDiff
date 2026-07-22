@@ -219,6 +219,10 @@ foreach ($patterns as $i => $pattern) {
         '--type=schema',
         '--include=up',
         '--nocomments',
+        // Conformance exercises DBDiff's SQL generation for DDL patterns
+        // (including DROP COLUMN/TABLE), not the destructive-change linter, so
+        // allow those the same way the comprehensive test harness does.
+        '--allow-destructive',
         "--output=$outputFile",
         "server1.$dbAfter:server1.$dbBefore",
     ];

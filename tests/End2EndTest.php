@@ -122,6 +122,7 @@
              "--type=all",
              "--include=all",
              "--nocomments",
+             "--allow-destructive",
              "--output=./tests/end2end/$this->migration_actual",
              "server1.$this->db1:server1.$this->db2"
          ];
@@ -206,6 +207,7 @@
                  '--type=all',
                  '--include=all',
                  '--nocomments',
+                 '--allow-destructive',
                  "--output=$outputFile",
                  "server1.{$hyphenDb1}:server1.{$hyphenDb2}",
              ];

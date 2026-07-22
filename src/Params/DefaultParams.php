@@ -115,6 +115,13 @@ class DefaultParams {
     public $tableScope = null;
 
     /*
+     When false (default), getDiffResult() throws DestructiveChangeException if the diff
+     contains DROP TABLE or DROP COLUMN operations, preventing accidental data-loss
+     migrations. Set to true (or pass --allow-destructive on the CLI) to override.
+    */
+    public bool $allowDestructive = false;
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

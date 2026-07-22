@@ -18,7 +18,7 @@ class CLIGetter implements ParamsGetter {
             'server1::', 'server2::', 'format::',
             'template::', 'type::', 'include::',
             'nocomments::', 'config::', 'output::', 'debug::',
-            'driver::', 'supabase::'
+            'driver::', 'supabase::', 'allow-destructive::'
         ]);
     
         $input = $getopt->get(1);
@@ -65,6 +65,8 @@ class CLIGetter implements ParamsGetter {
             $params->driver  = 'pgsql';
             $params->sslmode = 'require';
         }
+        // --allow-destructive bypasses the destructive-change linter
+        $params->allowDestructive = (bool) $getopt->get('--allow-destructive');
 
         return $params;
     }

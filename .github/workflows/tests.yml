@@ -273,7 +273,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'mysql://root:rootpass@127.0.0.1:3306/diff1' \
           --server2-url 'mysql://root:rootpass@127.0.0.1:3306/diff2' \
-          --type=schema --include=all --nocomments --output=/tmp/dsn-mysql.sql
+          --type=schema --include=all --nocomments --allow-destructive --output=/tmp/dsn-mysql.sql
 
         echo "--- MySQL DSN URL output ---"
         head -20 /tmp/dsn-mysql.sql
@@ -289,7 +289,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff1' \
           --server2-url 'postgres://postgres:rootpass@127.0.0.1:5432/diff2' \
-          --type=schema --include=all --nocomments --output=/tmp/dsn-pgsql.sql
+          --type=schema --include=all --nocomments --allow-destructive --output=/tmp/dsn-pgsql.sql
 
         echo "--- PostgreSQL DSN URL output ---"
         head -20 /tmp/dsn-pgsql.sql
@@ -310,7 +310,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'sqlite:///tmp/v1.db' \
           --server2-url 'sqlite:///tmp/v2.db' \
-          --type=all --include=all --nocomments --output=/tmp/dsn-sqlite.sql
+          --type=all --include=all --nocomments --allow-destructive --output=/tmp/dsn-sqlite.sql
 
         echo "--- SQLite DSN URL output ---"
         cat /tmp/dsn-sqlite.sql
@@ -393,7 +393,7 @@ jobs:
         php dbdiff diff \
           --server1-url 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_diff1' \
           --server2-url 'postgres://postgres:supabase-test-pass@127.0.0.1:5432/supa_diff2' \
-          --type=schema --include=up --nocomments --output=/tmp/supabase-diff.sql
+          --type=schema --include=up --nocomments --allow-destructive --output=/tmp/supabase-diff.sql
 
         echo "--- Supabase schema diff output ---"
         cat /tmp/supabase-diff.sql

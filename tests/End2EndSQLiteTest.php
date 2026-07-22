@@ -87,6 +87,7 @@ class End2EndSQLiteTest extends PHPUnit\Framework\TestCase
             '--type=all',
             '--include=all',
             '--nocomments',
+            '--allow-destructive',
             "--output=./tests/end2end/{$this->migration_actual}",
             "server1.{$this->srcFile}:server2.{$this->tgtFile}",
         ];
