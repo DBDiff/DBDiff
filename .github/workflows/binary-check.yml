@@ -25,6 +25,8 @@ on:
 
 env:
   SPC_PHP_VERSION: "8.3"
+  # Pin static-php-cli to a known-good release (see release.yml). Keep in sync.
+  SPC_VERSION: "2.8.3"
   SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 
@@ -135,7 +137,7 @@ jobs:
       - name: Download SPC
         run: |
           curl -fsSL \
-            https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-linux-x86_64.tar.gz \
+            "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-linux-x86_64.tar.gz" \
             | tar xz
           chmod +x spc
 

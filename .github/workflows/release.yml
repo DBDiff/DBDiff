@@ -26,6 +26,11 @@ env:
   # automatically just because the zlib PHP extension is requested).
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
+  # Pin static-php-cli to a known-good release. 'latest' (2.8.4/2.8.5) regressed
+  # the Windows php-src extraction; 2.8.3 built all targets cleanly. Keep this in
+  # sync with release-dry-run.yml and bump only after the dry run passes on a
+  # newer SPC.
+  SPC_VERSION: "2.8.3"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # JOB 1 — Build the PHAR once (fast, shared across all platform build jobs)
@@ -167,7 +172,7 @@ jobs:
             macOS-ARM64)  SPC_TARBALL="spc-macos-aarch64.tar.gz" ;;
           esac
           curl -fsSL \
-            "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/${SPC_TARBALL}" \
+            "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/${SPC_TARBALL}" \
             | tar xz
           chmod +x spc
 
@@ -205,7 +210,7 @@ jobs:
         shell: pwsh
         run: |
           # Windows SPC is a plain .exe (no tarball)
-          $url = "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-windows-x64.exe"
+          $url = "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe"
           Invoke-WebRequest -Uri $url -OutFile spc.exe
 
       - name: Build static PHP binary (Windows)
