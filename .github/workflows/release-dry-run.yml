@@ -108,7 +108,10 @@ jobs:
             os: macos-latest
             artifact: dbdiff-darwin-arm64
           - target: win32-x64
-            os: windows-latest
+            # windows-latest rolled to windows-2025, where static-php-cli's
+            # 7za|tar php-src extraction fails ("system cannot find the path").
+            # Pin to windows-2022 — the last image where the Windows build worked.
+            os: windows-2022
             artifact: dbdiff-win32-x64
 
     runs-on: ${{ matrix.os }}

@@ -144,7 +144,9 @@ jobs:
           # It also always downloads postgresql-16-windows-x64-binaries.zip
           # regardless of runner arch.  Re-add once SPC gains ARM64 support.
           - target:   win32-x64
-            os:       windows-latest
+            # windows-latest rolled to windows-2025, where static-php-cli's
+            # 7za|tar php-src extraction fails; pin to the last working image.
+            os:       windows-2022
             musl:     false
             artifact: dbdiff-win32-x64
 
