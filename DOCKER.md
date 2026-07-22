@@ -298,8 +298,31 @@ The project uses GitHub Actions to ensure full compatibility across all supporte
 **Matrix Grid:**
 - **PHP**: 8.3, 8.4, 8.5
 - **MySQL**: 8.0, 8.4, 9.3, 9.6
-- **PostgreSQL**: 16
+- **PostgreSQL**: 14, 15, 16, 17, 18
 - **SQLite**: bundled (runs in every MySQL CLI container via `pdo_sqlite`)
+
+## PostgreSQL Conformance Tests
+
+`scripts/pg-conformance/` exercises DBDiff's generated SQL against DDL patterns
+extracted from the official PostgreSQL regression suite (run in CI on PG 16, 17,
+and 18). For each pattern it builds a `before` and a `before + ALTER` database,
+runs DBDiff, applies the resulting migration to a copy of `before`, and asserts
+the schema fingerprint then matches — so a pattern either passes or is excluded
+with an explicit, documented reason (no silent skips).
+
+Run it against a live server:
+
+```bash
+./scripts/pg-conformance/run.sh --host=127.0.0.1 --port=5432 --user=dbdiff --pass=rootpass
+```
+
+`run.sh` downloads the regression `.sql` files, then runs the extractor
+(`extract-patterns.php`) and the runner (`run-conformance.php`). Extraction is
+**live-validated**: it replays every statement against the target server via PDO
+(the extractor is plain PHP — no extra language or dependency), so each pattern's
+`before_sql` is self-contained. `run.sh` sets `PGCONF_DSN` for this; if you invoke
+the extractor directly, export `PGCONF_DSN` yourself or it falls back to less
+accurate static heuristics.
 
 ## Deterministic Testing
 
