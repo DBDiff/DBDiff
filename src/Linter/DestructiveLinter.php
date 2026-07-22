@@ -22,34 +22,9 @@ class DestructiveLinter {
      */
     public function lint(array $diff): LintResult {
         $schema     = $diff['schema'] ?? [];
+        $renameKeys = $this->detectRenameKeys($schema);
+
         $violations = [];
-
-        // First pass: index drop-column / add-column per table for rename detection
-        $dropsByTable = [];
-        $addsByTable  = [];
-        foreach ($schema as $item) {
-            if ($item instanceof AlterTableDropColumn) {
-                $dropsByTable[$item->table][] = $item;
-            }
-            if ($item instanceof AlterTableAddColumn) {
-                $addsByTable[$item->table][] = $item;
-            }
-        }
-
-        // Keys of drop-column items that look like one half of a rename
-        $renameKeys = [];
-        foreach ($dropsByTable as $table => $drops) {
-            $adds = $addsByTable[$table] ?? [];
-            foreach ($drops as $drop) {
-                foreach ($adds as $add) {
-                    if ($this->likelyRename($drop, $add)) {
-                        $renameKeys[] = $this->columnKey($table, $drop->column);
-                        break;
-                    }
-                }
-            }
-        }
-
         foreach ($schema as $item) {
             $violation = $this->classifyItem($item, $renameKeys);
             if ($violation !== null) {
@@ -58,6 +33,46 @@ class DestructiveLinter {
         }
 
         return new LintResult($violations);
+    }
+
+    /**
+     * Column keys of drop-column items that look like one half of a rename
+     * (a drop paired with an add of the same type on the same table).
+     *
+     * @param  list<object> $schema
+     * @return string[]
+     */
+    private function detectRenameKeys(array $schema): array {
+        $dropsByTable = [];
+        $addsByTable  = [];
+        foreach ($schema as $item) {
+            if ($item instanceof AlterTableDropColumn) {
+                $dropsByTable[$item->table][] = $item;
+            } elseif ($item instanceof AlterTableAddColumn) {
+                $addsByTable[$item->table][] = $item;
+            }
+        }
+
+        $renameKeys = [];
+        foreach ($dropsByTable as $table => $drops) {
+            $adds = $addsByTable[$table] ?? [];
+            foreach ($drops as $drop) {
+                if ($this->hasMatchingAdd($drop, $adds)) {
+                    $renameKeys[] = $this->columnKey($table, $drop->column);
+                }
+            }
+        }
+        return $renameKeys;
+    }
+
+    /** @param AlterTableAddColumn[] $adds */
+    private function hasMatchingAdd(AlterTableDropColumn $drop, array $adds): bool {
+        foreach ($adds as $add) {
+            if ($this->likelyRename($drop, $add)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -82,44 +97,44 @@ class DestructiveLinter {
             return $this->classifyDropColumn($item, $renameKeys);
         }
 
-        if ($item instanceof DropEnum) {
-            return new LintViolation(
-                'warning',
-                'drop-enum',
-                "enum type `{$item->name}`",
-                "DROP TYPE \"{$item->name}\"",
-                'Ensure no columns reference this enum before dropping.'
-            );
-        }
+        return $this->classifyDroppedObject($item);
+    }
 
-        if ($item instanceof DropRoutine) {
-            return new LintViolation(
-                'warning',
-                'drop-routine',
-                "routine `{$item->name}`",
-                "DROP FUNCTION/PROCEDURE \"{$item->name}\"",
-                'Ensure no code references this routine before dropping.'
-            );
-        }
+    /**
+     * Warning-level violations for dropping standalone objects (enum, routine,
+     * trigger, view). Returns null when the item isn't one of those.
+     */
+    private function classifyDroppedObject(object $item): ?LintViolation {
+        $rules = [
+            DropEnum::class => [
+                'drop-enum', "enum type `{name}`", 'DROP TYPE "{name}"',
+                'Ensure no columns reference this enum before dropping.',
+            ],
+            DropRoutine::class => [
+                'drop-routine', "routine `{name}`", 'DROP FUNCTION/PROCEDURE "{name}"',
+                'Ensure no code references this routine before dropping.',
+            ],
+            DropTrigger::class => [
+                'drop-trigger', "trigger `{name}` on `{table}`", 'DROP TRIGGER "{name}"',
+                'Verify that removing this trigger does not break business logic.',
+            ],
+            DropView::class => [
+                'drop-view', "view `{name}`", 'DROP VIEW "{name}"',
+                'Ensure no queries or applications reference this view.',
+            ],
+        ];
 
-        if ($item instanceof DropTrigger) {
-            return new LintViolation(
-                'warning',
-                'drop-trigger',
-                "trigger `{$item->name}` on `{$item->table}`",
-                "DROP TRIGGER \"{$item->name}\"",
-                'Verify that removing this trigger does not break business logic.'
-            );
-        }
-
-        if ($item instanceof DropView) {
-            return new LintViolation(
-                'warning',
-                'drop-view',
-                "view `{$item->name}`",
-                "DROP VIEW \"{$item->name}\"",
-                'Ensure no queries or applications reference this view.'
-            );
+        foreach ($rules as $class => [$kind, $subject, $sql, $advice]) {
+            if ($item instanceof $class) {
+                $tokens = ['{name}' => $item->name ?? '', '{table}' => $item->table ?? ''];
+                return new LintViolation(
+                    'warning',
+                    $kind,
+                    strtr($subject, $tokens),
+                    strtr($sql, $tokens),
+                    $advice
+                );
+            }
         }
 
         return null;
