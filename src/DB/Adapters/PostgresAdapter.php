@@ -209,7 +209,7 @@ class PostgresAdapter implements DBAdapterInterface {
                             COALESCE(numeric_precision::text,'')                 || '|' ||
                             COALESCE(numeric_scale::text,'')                     || '|' ||
                             COALESCE(datetime_precision::text,'')                || '|' ||
-                            COALESCE(column_default, chr(0))                     || '|' ||
+                            COALESCE(column_default, '')                         || '|' ||
                             is_nullable                                          || '|' ||
                             COALESCE(is_identity,'NO')                           || '|' ||
                             COALESCE(identity_generation,'')                     || '|' ||
