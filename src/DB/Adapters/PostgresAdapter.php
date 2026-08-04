@@ -195,6 +195,98 @@ class PostgresAdapter implements DBAdapterInterface {
         return $enums;
     }
 
+    public function getSchemaHashMap(Connection $connection, array $tables = []): array
+    {
+        // Single CTE query: hash columns + indexes + constraints per table.
+        // Each sub-CTE mirrors what fetchColumns/fetchIndexes/fetchConstraints returns.
+        $rows = $connection->select(
+            "WITH col_data AS (
+                 SELECT table_name,
+                        string_agg(
+                            column_name         || '|' || data_type              || '|' ||
+                            COALESCE(udt_name,'')                                || '|' ||
+                            COALESCE(character_maximum_length::text,'')          || '|' ||
+                            COALESCE(numeric_precision::text,'')                 || '|' ||
+                            COALESCE(numeric_scale::text,'')                     || '|' ||
+                            COALESCE(datetime_precision::text,'')                || '|' ||
+                            COALESCE(column_default, chr(0))                     || '|' ||
+                            is_nullable                                          || '|' ||
+                            COALESCE(is_identity,'NO')                           || '|' ||
+                            COALESCE(identity_generation,'')                     || '|' ||
+                            COALESCE(is_generated,'NEVER')                       || '|' ||
+                            COALESCE(generation_expression,'')                   || '|' ||
+                            COALESCE(domain_name,''),
+                            ';' ORDER BY ordinal_position
+                        ) AS col_str
+                 FROM information_schema.columns
+                 WHERE table_schema = 'public'
+                 GROUP BY table_name
+             ),
+             idx_data AS (
+                 SELECT tablename AS table_name,
+                        string_agg(indexname || '|' || indexdef, ';' ORDER BY indexname) AS idx_str
+                 FROM pg_indexes
+                 WHERE schemaname = 'public'
+                 GROUP BY tablename
+             ),
+             con_base AS (
+                 SELECT tc.table_name,
+                        tc.constraint_name || '|' || tc.constraint_type        || '|' ||
+                        COALESCE(tc.is_deferrable,'NO')                        || '|' ||
+                        COALESCE(tc.initially_deferred,'NO')                   || '|' ||
+                        COALESCE(rc.update_rule,'')                            || '|' ||
+                        COALESCE(rc.delete_rule,'')                            || '|' ||
+                        COALESCE(rc.match_option,'')                           AS con_sig
+                 FROM information_schema.table_constraints tc
+                 LEFT JOIN information_schema.referential_constraints rc
+                   ON tc.constraint_name  = rc.constraint_name
+                  AND tc.constraint_schema = rc.constraint_schema
+                 WHERE tc.table_schema = 'public'
+             ),
+             pg_ext_data AS (
+                 SELECT c.relname AS table_name,
+                        con.conname || '|' || pg_get_constraintdef(con.oid) || '|' ||
+                        CASE WHEN con.convalidated THEN 'v' ELSE 'nv' END AS ext_sig
+                 FROM pg_constraint con
+                 JOIN pg_class c     ON con.conrelid = c.oid
+                 JOIN pg_namespace n ON c.relnamespace = n.oid
+                 WHERE n.nspname = 'public'
+                   AND con.contype IN ('c', 'x', 'n')
+             ),
+             con_data AS (
+                 SELECT table_name,
+                        string_agg(con_sig, ';' ORDER BY con_sig) AS con_str
+                 FROM con_base GROUP BY table_name
+             ),
+             ext_data AS (
+                 SELECT table_name,
+                        string_agg(ext_sig, ';' ORDER BY ext_sig) AS ext_str
+                 FROM pg_ext_data GROUP BY table_name
+             )
+             SELECT c.table_name,
+                    md5(
+                        COALESCE(c.col_str, '') || '###' ||
+                        COALESCE(i.idx_str, '') || '###' ||
+                        COALESCE(co.con_str,'') || '###' ||
+                        COALESCE(e.ext_str, '')
+                    ) AS schema_hash
+             FROM col_data c
+             LEFT JOIN idx_data i  ON i.table_name  = c.table_name
+             LEFT JOIN con_data co ON co.table_name = c.table_name
+             LEFT JOIN ext_data e  ON e.table_name  = c.table_name"
+        );
+
+        $hashMap = [];
+        foreach ($rows as $row) {
+            $name = $row['table_name'];
+            if (!empty($tables) && !in_array($name, $tables, true)) {
+                continue;
+            }
+            $hashMap[$name] = $row['schema_hash'];
+        }
+        return $hashMap;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

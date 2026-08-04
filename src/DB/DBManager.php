@@ -144,4 +144,8 @@ class DBManager {
     public function getEnums(string $connection): array {
         return $this->adapter->getEnums($this->getDB($connection));
     }
+
+    public function getSchemaHashMap(string $connection, array $tables = []): array {
+        return $this->adapter->getSchemaHashMap($this->getDB($connection), $tables);
+    }
 }

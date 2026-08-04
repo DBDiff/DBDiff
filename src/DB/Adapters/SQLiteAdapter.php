@@ -128,6 +128,13 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
+    public function getSchemaHashMap(Connection $connection, array $tables = []): array
+    {
+        // SQLite databases are local files; the latency overhead that motivates
+        // pre-scan hashing does not apply. Return [] to fall back to per-table diffs.
+        return [];
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
