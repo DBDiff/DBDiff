@@ -178,8 +178,13 @@ class MySQLAdapter implements DBAdapterInterface {
     {
         $db = $connection->getDatabaseName();
 
-        // 1. Engine + collation per table
-        $statusRows = $connection->select("SHOW TABLE STATUS FROM `$db`");
+        // 1. Engine + collation per table (parameterized to avoid SQL injection warning)
+        $statusRows = $connection->select(
+            "SELECT TABLE_NAME AS Name, ENGINE AS Engine, TABLE_COLLATION AS Collation
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
+            [$db]
+        );
         $engineMap  = [];
         foreach ($statusRows as $row) {
             $engineMap[$row['Name']] = ($row['Engine'] ?? '') . '|' . ($row['Collation'] ?? '');
