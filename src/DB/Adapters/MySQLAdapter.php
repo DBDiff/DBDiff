@@ -176,75 +176,12 @@ class MySQLAdapter implements DBAdapterInterface {
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
-        $db = $connection->getDatabaseName();
+        $db        = $connection->getDatabaseName();
+        $engineMap = $this->fetchEngineMap($connection, $db);
+        $colMap    = $this->fetchColMap($connection, $db);
+        $idxMap    = $this->fetchIdxMap($connection, $db);
+        $conMap    = $this->fetchConMap($connection, $db);
 
-        // 1. Engine + collation per table (parameterized to avoid SQL injection warning)
-        $statusRows = $connection->select(
-            "SELECT TABLE_NAME AS Name, ENGINE AS Engine, TABLE_COLLATION AS Collation
-             FROM INFORMATION_SCHEMA.TABLES
-             WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
-            [$db]
-        );
-        $engineMap  = [];
-        foreach ($statusRows as $row) {
-            $engineMap[$row['Name']] = ($row['Engine'] ?? '') . '|' . ($row['Collation'] ?? '');
-        }
-
-        // 2. Column data (all tables in one query, ordered for determinism)
-        $colRows = $connection->select(
-            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE,
-                    COALESCE(COLUMN_DEFAULT, '') AS col_default,
-                    IS_NULLABLE, COALESCE(EXTRA, '') AS extra
-             FROM INFORMATION_SCHEMA.COLUMNS
-             WHERE TABLE_SCHEMA = ?
-             ORDER BY TABLE_NAME, ORDINAL_POSITION",
-            [$db]
-        );
-        $colMap = [];
-        foreach ($colRows as $row) {
-            $colMap[$row['TABLE_NAME']][] =
-                $row['COLUMN_NAME'] . '|' . $row['COLUMN_TYPE'] . '|' .
-                $row['col_default']  . '|' . $row['IS_NULLABLE'] . '|' . $row['extra'];
-        }
-
-        // 3. Index data (all tables in one query)
-        $idxRows = $connection->select(
-            "SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX
-             FROM INFORMATION_SCHEMA.STATISTICS
-             WHERE TABLE_SCHEMA = ?
-             ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX",
-            [$db]
-        );
-        $idxMap = [];
-        foreach ($idxRows as $row) {
-            $idxMap[$row['TABLE_NAME']][] =
-                $row['INDEX_NAME'] . '|' . $row['COLUMN_NAME'] . '|' .
-                $row['NON_UNIQUE'] . '|' . $row['SEQ_IN_INDEX'];
-        }
-
-        // 4. FK constraint data
-        $conRows = $connection->select(
-            "SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME,
-                    kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME,
-                    rc.UPDATE_RULE, rc.DELETE_RULE
-             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-             JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
-               ON kcu.CONSTRAINT_NAME  = rc.CONSTRAINT_NAME
-              AND kcu.TABLE_SCHEMA     = rc.CONSTRAINT_SCHEMA
-             WHERE kcu.TABLE_SCHEMA = ?
-             ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION",
-            [$db]
-        );
-        $conMap = [];
-        foreach ($conRows as $row) {
-            $conMap[$row['TABLE_NAME']][] =
-                $row['CONSTRAINT_NAME'] . '|' . $row['COLUMN_NAME'] . '|' .
-                ($row['REFERENCED_TABLE_NAME'] ?? '')  . '|' .
-                ($row['REFERENCED_COLUMN_NAME'] ?? '') . '|' .
-                ($row['UPDATE_RULE'] ?? '')  . '|' . ($row['DELETE_RULE'] ?? '');
-        }
-
-        // Combine into per-table hashes
         $hashMap = [];
         foreach (array_keys($engineMap) as $tableName) {
             if (!empty($tables) && !in_array($tableName, $tables, true)) {
@@ -260,6 +197,84 @@ class MySQLAdapter implements DBAdapterInterface {
         }
 
         return $hashMap;
+    }
+
+    private function fetchEngineMap(Connection $connection, string $db): array
+    {
+        $rows = $connection->select(
+            "SELECT TABLE_NAME AS Name, ENGINE AS Engine, TABLE_COLLATION AS Collation
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
+            [$db]
+        );
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['Name']] = ($row['Engine'] ?? '') . '|' . ($row['Collation'] ?? '');
+        }
+        return $map;
+    }
+
+    private function fetchColMap(Connection $connection, string $db): array
+    {
+        $rows = $connection->select(
+            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE,
+                    COALESCE(COLUMN_DEFAULT, '') AS col_default,
+                    IS_NULLABLE, COALESCE(EXTRA, '') AS extra
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = ?
+             ORDER BY TABLE_NAME, ORDINAL_POSITION",
+            [$db]
+        );
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['TABLE_NAME']][] =
+                $row['COLUMN_NAME'] . '|' . $row['COLUMN_TYPE'] . '|' .
+                $row['col_default']  . '|' . $row['IS_NULLABLE'] . '|' . $row['extra'];
+        }
+        return $map;
+    }
+
+    private function fetchIdxMap(Connection $connection, string $db): array
+    {
+        $rows = $connection->select(
+            "SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX
+             FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = ?
+             ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX",
+            [$db]
+        );
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['TABLE_NAME']][] =
+                $row['INDEX_NAME'] . '|' . $row['COLUMN_NAME'] . '|' .
+                $row['NON_UNIQUE'] . '|' . $row['SEQ_IN_INDEX'];
+        }
+        return $map;
+    }
+
+    private function fetchConMap(Connection $connection, string $db): array
+    {
+        $rows = $connection->select(
+            "SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME,
+                    kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME,
+                    rc.UPDATE_RULE, rc.DELETE_RULE
+             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+             JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+               ON kcu.CONSTRAINT_NAME  = rc.CONSTRAINT_NAME
+              AND kcu.TABLE_SCHEMA     = rc.CONSTRAINT_SCHEMA
+             WHERE kcu.TABLE_SCHEMA = ?
+             ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION",
+            [$db]
+        );
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['TABLE_NAME']][] =
+                $row['CONSTRAINT_NAME'] . '|' . $row['COLUMN_NAME'] . '|' .
+                ($row['REFERENCED_TABLE_NAME'] ?? '')  . '|' .
+                ($row['REFERENCED_COLUMN_NAME'] ?? '') . '|' .
+                ($row['UPDATE_RULE'] ?? '')  . '|' . ($row['DELETE_RULE'] ?? '');
+        }
+        return $map;
     }
 
     /**
