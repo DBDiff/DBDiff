@@ -176,11 +176,22 @@ class MySQLAdapter implements DBAdapterInterface {
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
-        $db        = $connection->getDatabaseName();
-        $engineMap = $this->fetchEngineMap($connection, $db);
-        $colMap    = $this->fetchColMap($connection, $db);
-        $idxMap    = $this->fetchIdxMap($connection, $db);
-        $conMap    = $this->fetchConMap($connection, $db);
+        $db = $connection->getDatabaseName();
+
+        $engineRows = $connection->select(
+            "SELECT TABLE_NAME AS Name, ENGINE AS Engine, TABLE_COLLATION AS Collation
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
+            [$db]
+        );
+        $engineMap = [];
+        foreach ($engineRows as $row) {
+            $engineMap[$row['Name']] = ($row['Engine'] ?? '') . '|' . ($row['Collation'] ?? '');
+        }
+
+        $colMap = $this->fetchColMap($connection, $db);
+        $idxMap = $this->fetchIdxMap($connection, $db);
+        $conMap = $this->fetchConMap($connection, $db);
 
         $hashMap = [];
         foreach (array_keys($engineMap) as $tableName) {
@@ -197,21 +208,6 @@ class MySQLAdapter implements DBAdapterInterface {
         }
 
         return $hashMap;
-    }
-
-    private function fetchEngineMap(Connection $connection, string $db): array
-    {
-        $rows = $connection->select(
-            "SELECT TABLE_NAME AS Name, ENGINE AS Engine, TABLE_COLLATION AS Collation
-             FROM INFORMATION_SCHEMA.TABLES
-             WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'",
-            [$db]
-        );
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row['Name']] = ($row['Engine'] ?? '') . '|' . ($row['Collation'] ?? '');
-        }
-        return $map;
     }
 
     private function fetchColMap(Connection $connection, string $db): array

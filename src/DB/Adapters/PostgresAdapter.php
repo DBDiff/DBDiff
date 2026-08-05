@@ -534,37 +534,30 @@ class PostgresAdapter implements DBAdapterInterface {
         if (!empty($col['domain_name'])) {
             return $col['domain_name'];
         }
+        $dataType  = $col['data_type'];
         $simpleMap = [
             'time without time zone' => 'time',
             'time with time zone'    => 'timetz',
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
         ];
-        return $simpleMap[$col['data_type']] ?? $this->resolveParameterisedType($col);
-    }
-
-    /**
-     * Resolve column types that carry length, precision, or scale parameters.
-     * All other types fall through to $dataType unchanged.
-     */
-    private function resolveParameterisedType(array $col): string {
-        $dataType = $col['data_type'];
-        $result   = $dataType;
-
-        if ($dataType === 'character varying' || $dataType === 'character') {
-            $len    = $col['character_maximum_length'];
-            $base   = $dataType === 'character varying' ? 'varchar' : 'char';
-            $result = $len ? "$base($len)" : $base;
-        } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
-            $p      = $col['numeric_precision'];
-            $s      = $col['numeric_scale'];
-            $result = ($p !== null) ? "$dataType($p,$s)" : $dataType;
-        } elseif (str_starts_with($dataType, 'timestamp')) {
-            $p      = $col['datetime_precision'];
-            $base   = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
-            $result = ($p > 0) ? "$base($p)" : $base;
+        if (isset($simpleMap[$dataType])) {
+            return $simpleMap[$dataType];
         }
-
-        return $result;
+        if ($dataType === 'character varying' || $dataType === 'character') {
+            $len  = $col['character_maximum_length'];
+            $base = ['character varying' => 'varchar', 'character' => 'char'][$dataType];
+            return $len ? "$base($len)" : $base;
+        }
+        if ($dataType === 'numeric' || $dataType === 'decimal') {
+            $p = $col['numeric_precision'];
+            return ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
+        }
+        if (str_starts_with($dataType, 'timestamp')) {
+            $base = ['timestamp with time zone' => 'timestamptz'][$dataType] ?? 'timestamp';
+            $p    = $col['datetime_precision'];
+            return ($p > 0) ? "$base($p)" : $base;
+        }
+        return $dataType;
     }
 }
