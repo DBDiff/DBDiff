@@ -2,6 +2,7 @@
 
 use Diff\Differ\ListDiffer;
 
+use DBDiff\Logger;
 use DBDiff\Params\ParamsFactory;
 use DBDiff\Params\TableFilter;
 use DBDiff\Diff\SetDBCollation;
@@ -83,10 +84,28 @@ class DBSchema {
             $diffs[] = $diff;
         }
 
-        $commonTables = array_intersect($sourceTables, $targetTables);
+        $commonTables = array_values(array_intersect($sourceTables, $targetTables));
+
+        // Pre-scan: fetch a hash of every table's schema in two batch queries
+        // (one per DB side). Tables whose hashes match are identical and can be
+        // skipped entirely, avoiding the 7-14 per-table queries that otherwise
+        // fire for every common table — critical for large Supabase databases.
+        $sourceHashes = $this->manager->getSchemaHashMap('source', $commonTables);
+        $targetHashes = $this->manager->getSchemaHashMap('target', $commonTables);
+
+        $skipped = 0;
         foreach ($commonTables as $table) {
+            if (isset($sourceHashes[$table], $targetHashes[$table])
+                && $sourceHashes[$table] === $targetHashes[$table]) {
+                $skipped++;
+                continue;
+            }
             $tableDiff = $tableSchema->getDiff($table);
             $diffs = array_merge($diffs, $tableDiff);
+        }
+
+        if ($skipped > 0) {
+            Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
         }
 
         foreach ($deletedTables as $i => $table) {

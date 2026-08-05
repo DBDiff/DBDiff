@@ -195,6 +195,98 @@ class PostgresAdapter implements DBAdapterInterface {
         return $enums;
     }
 
+    public function getSchemaHashMap(Connection $connection, array $tables = []): array
+    {
+        // Single CTE query: hash columns + indexes + constraints per table.
+        // Each sub-CTE mirrors what fetchColumns/fetchIndexes/fetchConstraints returns.
+        $rows = $connection->select(
+            "WITH col_data AS (
+                 SELECT table_name,
+                        string_agg(
+                            column_name         || '|' || data_type              || '|' ||
+                            COALESCE(udt_name,'')                                || '|' ||
+                            COALESCE(character_maximum_length::text,'')          || '|' ||
+                            COALESCE(numeric_precision::text,'')                 || '|' ||
+                            COALESCE(numeric_scale::text,'')                     || '|' ||
+                            COALESCE(datetime_precision::text,'')                || '|' ||
+                            COALESCE(column_default, '')                         || '|' ||
+                            is_nullable                                          || '|' ||
+                            COALESCE(is_identity,'NO')                           || '|' ||
+                            COALESCE(identity_generation,'')                     || '|' ||
+                            COALESCE(is_generated,'NEVER')                       || '|' ||
+                            COALESCE(generation_expression,'')                   || '|' ||
+                            COALESCE(domain_name,''),
+                            ';' ORDER BY ordinal_position
+                        ) AS col_str
+                 FROM information_schema.columns
+                 WHERE table_schema = 'public'
+                 GROUP BY table_name
+             ),
+             idx_data AS (
+                 SELECT tablename AS table_name,
+                        string_agg(indexname || '|' || indexdef, ';' ORDER BY indexname) AS idx_str
+                 FROM pg_indexes
+                 WHERE schemaname = 'public'
+                 GROUP BY tablename
+             ),
+             con_base AS (
+                 SELECT tc.table_name,
+                        tc.constraint_name || '|' || tc.constraint_type        || '|' ||
+                        COALESCE(tc.is_deferrable,'NO')                        || '|' ||
+                        COALESCE(tc.initially_deferred,'NO')                   || '|' ||
+                        COALESCE(rc.update_rule,'')                            || '|' ||
+                        COALESCE(rc.delete_rule,'')                            || '|' ||
+                        COALESCE(rc.match_option,'')                           AS con_sig
+                 FROM information_schema.table_constraints tc
+                 LEFT JOIN information_schema.referential_constraints rc
+                   ON tc.constraint_name  = rc.constraint_name
+                  AND tc.constraint_schema = rc.constraint_schema
+                 WHERE tc.table_schema = 'public'
+             ),
+             pg_ext_data AS (
+                 SELECT c.relname AS table_name,
+                        con.conname || '|' || pg_get_constraintdef(con.oid) || '|' ||
+                        CASE WHEN con.convalidated THEN 'v' ELSE 'nv' END AS ext_sig
+                 FROM pg_constraint con
+                 JOIN pg_class c     ON con.conrelid = c.oid
+                 JOIN pg_namespace n ON c.relnamespace = n.oid
+                 WHERE n.nspname = 'public'
+                   AND con.contype IN ('c', 'x', 'n')
+             ),
+             con_data AS (
+                 SELECT table_name,
+                        string_agg(con_sig, ';' ORDER BY con_sig) AS con_str
+                 FROM con_base GROUP BY table_name
+             ),
+             ext_data AS (
+                 SELECT table_name,
+                        string_agg(ext_sig, ';' ORDER BY ext_sig) AS ext_str
+                 FROM pg_ext_data GROUP BY table_name
+             )
+             SELECT c.table_name,
+                    md5(
+                        COALESCE(c.col_str, '') || '###' ||
+                        COALESCE(i.idx_str, '') || '###' ||
+                        COALESCE(co.con_str,'') || '###' ||
+                        COALESCE(e.ext_str, '')
+                    ) AS schema_hash
+             FROM col_data c
+             LEFT JOIN idx_data i  ON i.table_name  = c.table_name
+             LEFT JOIN con_data co ON co.table_name = c.table_name
+             LEFT JOIN ext_data e  ON e.table_name  = c.table_name"
+        );
+
+        $hashMap = [];
+        foreach ($rows as $row) {
+            $name = $row['table_name'];
+            if (!empty($tables) && !in_array($name, $tables, true)) {
+                continue;
+            }
+            $hashMap[$name] = $row['schema_hash'];
+        }
+        return $hashMap;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -442,37 +534,27 @@ class PostgresAdapter implements DBAdapterInterface {
         if (!empty($col['domain_name'])) {
             return $col['domain_name'];
         }
+        $dataType  = $col['data_type'];
         $simpleMap = [
             'time without time zone' => 'time',
             'time with time zone'    => 'timetz',
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
         ];
-        return $simpleMap[$col['data_type']] ?? $this->resolveParameterisedType($col);
-    }
-
-    /**
-     * Resolve column types that carry length, precision, or scale parameters.
-     * All other types fall through to $dataType unchanged.
-     */
-    private function resolveParameterisedType(array $col): string {
-        $dataType = $col['data_type'];
-        $result   = $dataType;
-
+        if (isset($simpleMap[$dataType])) {
+            return $simpleMap[$dataType];
+        }
+        $result = $dataType;
         if ($dataType === 'character varying' || $dataType === 'character') {
-            $len    = $col['character_maximum_length'];
-            $base   = $dataType === 'character varying' ? 'varchar' : 'char';
-            $result = $len ? "$base($len)" : $base;
+            $base   = ['character varying' => 'varchar', 'character' => 'char'][$dataType];
+            $result = $col['character_maximum_length'] ? "$base({$col['character_maximum_length']})" : $base;
         } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
             $p      = $col['numeric_precision'];
-            $s      = $col['numeric_scale'];
-            $result = ($p !== null) ? "$dataType($p,$s)" : $dataType;
+            $result = ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
         } elseif (str_starts_with($dataType, 'timestamp')) {
-            $p      = $col['datetime_precision'];
-            $base   = $dataType === 'timestamp with time zone' ? 'timestamptz' : 'timestamp';
-            $result = ($p > 0) ? "$base($p)" : $base;
+            $base   = ['timestamp with time zone' => 'timestamptz'][$dataType] ?? 'timestamp';
+            $result = ($col['datetime_precision'] > 0) ? "$base({$col['datetime_precision']})" : $base;
         }
-
         return $result;
     }
 }
