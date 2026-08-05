@@ -256,7 +256,7 @@ class MySQLAdapter implements DBAdapterInterface {
                 isset($idxMap[$tableName]) ? implode(';', $idxMap[$tableName]) : '',
                 isset($conMap[$tableName]) ? implode(';', $conMap[$tableName]) : '',
             ];
-            $hashMap[$tableName] = md5(implode('###', $parts));
+            $hashMap[$tableName] = hash('sha256', implode('###', $parts));
         }
 
         return $hashMap;
