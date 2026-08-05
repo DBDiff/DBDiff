@@ -544,20 +544,17 @@ class PostgresAdapter implements DBAdapterInterface {
         if (isset($simpleMap[$dataType])) {
             return $simpleMap[$dataType];
         }
+        $result = $dataType;
         if ($dataType === 'character varying' || $dataType === 'character') {
-            $len  = $col['character_maximum_length'];
-            $base = ['character varying' => 'varchar', 'character' => 'char'][$dataType];
-            return $len ? "$base($len)" : $base;
+            $base   = ['character varying' => 'varchar', 'character' => 'char'][$dataType];
+            $result = $col['character_maximum_length'] ? "$base({$col['character_maximum_length']})" : $base;
+        } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
+            $p      = $col['numeric_precision'];
+            $result = ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
+        } elseif (str_starts_with($dataType, 'timestamp')) {
+            $base   = ['timestamp with time zone' => 'timestamptz'][$dataType] ?? 'timestamp';
+            $result = ($col['datetime_precision'] > 0) ? "$base({$col['datetime_precision']})" : $base;
         }
-        if ($dataType === 'numeric' || $dataType === 'decimal') {
-            $p = $col['numeric_precision'];
-            return ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
-        }
-        if (str_starts_with($dataType, 'timestamp')) {
-            $base = ['timestamp with time zone' => 'timestamptz'][$dataType] ?? 'timestamp';
-            $p    = $col['datetime_precision'];
-            return ($p > 0) ? "$base($p)" : $base;
-        }
-        return $dataType;
+        return $result;
     }
 }
