@@ -278,7 +278,10 @@ class MySQLAdapter implements DBAdapterInterface {
      * from a CREATE statement so that definitions can be compared across
      * environments and emitted without environment-specific metadata.
      */
-    private function normalizeCreateStatement(string $definition): string {
+    private function normalizeCreateStatement(?string $definition): string {
+        if ($definition === null) {
+            return '';
+        }
         $definition = preg_replace('/\s*ALGORITHM\s*=\s*\w+/i', '', $definition);
         $definition = preg_replace('/\s*DEFINER\s*=\s*`[^`]*`@`[^`]*`/i', '', $definition);
         $definition = preg_replace('/\s*SQL\s+SECURITY\s+(?:DEFINER|INVOKER)/i', '', $definition);
