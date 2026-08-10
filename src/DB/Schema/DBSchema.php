@@ -22,6 +22,7 @@ use DBDiff\Diff\AlterRoutine;
 use DBDiff\Diff\CreateEnum;
 use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\AlterEnum;
+use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 
 
 
@@ -93,19 +94,47 @@ class DBSchema {
         $sourceHashes = $this->manager->getSchemaHashMap('source', $commonTables);
         $targetHashes = $this->manager->getSchemaHashMap('target', $commonTables);
 
+        // Partition: unchanged tables (skipped) vs changed tables (need full diff)
+        $tablesNeedingDiff = [];
         $skipped = 0;
         foreach ($commonTables as $table) {
             if (isset($sourceHashes[$table], $targetHashes[$table])
                 && $sourceHashes[$table] === $targetHashes[$table]) {
                 $skipped++;
-                continue;
+            } else {
+                $tablesNeedingDiff[] = $table;
             }
-            $tableDiff = $tableSchema->getDiff($table);
-            $diffs = array_merge($diffs, $tableDiff);
         }
 
         if ($skipped > 0) {
             Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
+        }
+
+        // Batch-fetch full schemas for all changed tables in 7 queries per side
+        // instead of 8 queries per table per side (O(1) vs O(N) round-trips).
+        $sourceBulk = [];
+        $targetBulk = [];
+        if (!empty($tablesNeedingDiff)) {
+            $adapter = $this->manager->getAdapter();
+            if ($adapter instanceof BulkSchemaAdapterInterface) {
+                $sourceBulk = $adapter->getBulkTableSchema(
+                    $this->manager->getDB('source'), $tablesNeedingDiff
+                );
+                $targetBulk = $adapter->getBulkTableSchema(
+                    $this->manager->getDB('target'), $tablesNeedingDiff
+                );
+                $n = count($tablesNeedingDiff);
+                Logger::info("Batch schema fetch: loaded $n changed table(s) in 14 queries");
+            }
+        }
+
+        foreach ($tablesNeedingDiff as $table) {
+            $tableDiff = $tableSchema->getDiff(
+                $table,
+                $sourceBulk[$table] ?? null,
+                $targetBulk[$table] ?? null
+            );
+            $diffs = array_merge($diffs, $tableDiff);
         }
 
         foreach ($deletedTables as $i => $table) {
