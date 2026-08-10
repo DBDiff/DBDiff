@@ -29,7 +29,8 @@
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
 - Ignore specific tables or fields via a YAML config file
 - Unicode / UTF-8 aware
-- Fast — tested on databases with millions of rows
+- Fast — tested on databases with millions of rows; [schema diffs use a constant
+  number of round-trips](#schema-diff-performance) regardless of table count
 - Runs on Windows, Linux and macOS (command-line / Terminal)
 
 
@@ -652,6 +653,53 @@ Comparisons run in this order:
 ### Data
 - Compares table storage engine, collation, and row count
 - Records changed rows and missing rows per table
+
+
+## Schema Diff Performance
+
+Schema comparison is designed around round-trips rather than raw query cost —
+against a managed database (Supabase, RDS, Neon) network latency dominates, so
+the number of queries matters far more than how much each one returns.
+
+Two passes keep that number flat as a database grows:
+
+**1. Pre-scan — skip tables that are already identical.** Before diffing
+anything, DBDiff asks each side for a hash of every table's schema in a single
+query. Tables whose hashes match on both sides are byte-identical and are
+skipped entirely. On a production database compared against a staging copy,
+this is usually the overwhelming majority of tables.
+
+```
+ℹ Pre-scan: skipped 284 / 291 unchanged tables
+```
+
+**2. Batch fetch — load the remaining tables together.** The tables that *do*
+differ still need their full schema read. Rather than one set of round-trips per
+table, PostgreSQL loads all of them in a fixed 7 queries per side, no matter how
+many tables changed:
+
+```
+ℹ Batch schema fetch: loaded 7 changed table(s) in 14 queries
+```
+
+Together these turn schema diffing from `O(tables)` round-trips into a constant
+number. A 300-table database with 7 real changes costs 16 queries in total,
+against roughly 4,800 with per-table fetching.
+
+Per-driver behaviour:
+
+| Driver | Pre-scan | Batch fetch | Notes |
+| ------ | -------- | ----------- | ----- |
+| PostgreSQL | Yes | Yes | Both passes active |
+| MySQL | Yes | Not needed | A table already resolves in ~2 queries |
+| SQLite | Not needed | Not needed | Local file, no network latency |
+
+Both passes are optimisations only — they never change the generated migration.
+If an adapter cannot provide hashes, or a table is missing from a batch, DBDiff
+falls back to fetching that table individually.
+
+Data diffing scales separately, via a streaming sorted-merge that compares row
+hashes in primary-key order and only fetches rows that actually differ.
 
 
 ## Compatible Migration Tools

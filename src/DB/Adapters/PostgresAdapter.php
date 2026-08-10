@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
+use DBDiff\DB\Support\QueryHelper;
 
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
@@ -266,13 +267,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         $hashMap = [];
         foreach ($rows as $row) {
-            $name = $row['table_name'];
-            if (!empty($tables) && !in_array($name, $tables, true)) {
-                continue;
-            }
-            $hashMap[$name] = $row['schema_hash'];
+            $hashMap[$row['table_name']] = $row['schema_hash'];
         }
-        return $hashMap;
+        return QueryHelper::restrictToTables($hashMap, $tables);
     }
 
     /**
@@ -295,7 +292,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             return [];
         }
 
-        $ph = implode(',', array_fill(0, count($tables), '?'));
+        $ph = QueryHelper::placeholders($tables);
 
         $colRows = $connection->select(
             "SELECT table_name, column_name, data_type, character_maximum_length, is_nullable,
@@ -382,9 +379,12 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              LEFT JOIN information_schema.constraint_column_usage ccu
                 ON rc.unique_constraint_name   = ccu.constraint_name
                AND rc.unique_constraint_schema  = ccu.constraint_schema
+             LEFT JOIN pg_class rel
+                ON rel.relname      = tc.table_name
+               AND rel.relnamespace = 'public'::regnamespace
              LEFT JOIN pg_constraint con
-                ON tc.constraint_name = con.conname
-               AND con.connamespace    = 'public'::regnamespace
+                ON con.conname  = tc.constraint_name
+               AND con.conrelid = rel.oid
              WHERE tc.table_schema = 'public' AND tc.table_name IN ($ph)
                AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
              ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position",
@@ -498,17 +498,26 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                 $groups[$tbl][$name] = $row;
                 $groups[$tbl][$name]['columns'] = [];
             }
+            // Keyed by column name: a constraint never repeats a column, so this
+            // collapses the row fan-out produced by joining key_column_usage and
+            // constraint_column_usage together (an N-column FK referencing an
+            // N-column key yields N×N rows). Insertion order follows
+            // kcu.ordinal_position from the ORDER BY.
             if ($row['column_name']) {
-                $groups[$tbl][$name]['columns'][] = $row['column_name'];
+                $groups[$tbl][$name]['columns'][$row['column_name']] = true;
             }
         }
 
         $result = [];
         foreach ($groups as $tbl => $tblGroups) {
             foreach ($tblGroups as $name => $c) {
-                // buildConstraintDef returns null only for unknown types, which
-                // cannot appear here since the SQL filter is explicit.
-                $result[$tbl][$name] = $this->buildConstraintDef($name, $c);
+                $c['columns'] = array_keys($c['columns']);
+                // buildConstraintDef returns null for constraint types it does
+                // not render; those are dropped rather than diffed as nulls.
+                $def = $this->buildConstraintDef($name, $c);
+                if ($def !== null) {
+                    $result[$tbl][$name] = $def;
+                }
             }
         }
 

@@ -19,8 +19,11 @@ interface BulkSchemaAdapterInterface {
      *       'constraints' => [ constraintName => ddl_fragment, ... ],
      *     ], ... ]
      *
-     * Tables absent from the result (e.g. those not found in the database)
-     * are simply omitted — the caller falls back to individual queries for them.
+     * Every requested table gets an entry. A table that does not exist (or has
+     * no columns, indexes or constraints) yields empty sub-arrays rather than
+     * being omitted, so callers can index the result without an isset() guard.
+     *
+     * An empty $tables list returns an empty array without issuing any query.
      */
     public function getBulkTableSchema(Connection $connection, array $tables): array;
 }
