@@ -316,10 +316,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
         }
 
-        // Named NOT NULL constraints (PG18+ contype='n'). Built into two lookup
-        // maps: $nnByTable for constraint DDL, $nnColsByTable for column NOT NULL
-        // suppression. This single query replaces the duplicate per-table queries
-        // that fetchColumns() and fetchConstraints() previously issued separately.
+        // Named NOT NULL constraints (PG18+ contype='n'). Collected as a flat
+        // list for the constraint DDL, plus $nnColsByTable for suppressing the
+        // matching inline column NOT NULL. This single query replaces the
+        // duplicate per-table queries that fetchColumns() and fetchConstraints()
+        // previously issued separately.
         $nnRows = $connection->select(
             "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name
              FROM pg_constraint con
@@ -329,12 +330,12 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              WHERE nsp.nspname = 'public' AND rel.relname IN ($ph) AND con.contype = 'n'",
             $tables
         );
-        $nnByTable     = [];
+        $namedNotNull  = [];
         $nnColsByTable = [];
         foreach ($nnRows as $r) {
             $default = $r['table_name'] . '_' . $r['column_name'] . '_not_null';
             if ($r['conname'] !== $default || !$r['convalidated']) {
-                $nnByTable[$r['table_name']][$r['conname']]         = $r;
+                $namedNotNull[]                                    = $r;
                 $nnColsByTable[$r['table_name']][$r['column_name']] = true;
             }
         }
@@ -405,7 +406,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable);
         $keys        = $this->assembleIndexes($idxRows, $skipByTable);
-        $constraints = $this->assembleConstraints($conRows, $checkRows, $nnByTable);
+        $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
 
         $result = [];
         foreach ($tables as $t) {
@@ -487,16 +488,19 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
      * pg_constraint), and PG18+ named NOT NULL constraints.
      * Returns [tableName => [constraintName => ddlFragment]].
      */
-    private function assembleConstraints(array $conRows, array $checkRows, array $nnByTable): array
+    private function assembleConstraints(array $conRows, array $checkRows, array $namedNotNull): array
     {
-        // Group FK/UNIQUE/PK rows by table then constraint (multi-column support)
+        // Group FK/UNIQUE/PK rows by table *and* constraint (multi-column
+        // support). Both names go into one flat key joined by NUL, which no
+        // Postgres identifier can contain, so the grouping stays unambiguous
+        // without a second level of nesting. Each row keeps its own
+        // table_name/constraint_name, which is what rebuilds the map below.
         $groups = [];
         foreach ($conRows as $row) {
-            $tbl  = $row['table_name'];
-            $name = $row['constraint_name'];
-            if (!isset($groups[$tbl][$name])) {
-                $groups[$tbl][$name] = $row;
-                $groups[$tbl][$name]['columns'] = [];
+            $key = $row['table_name'] . "\0" . $row['constraint_name'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = $row;
+                $groups[$key]['columns'] = [];
             }
             // Keyed by column name: a constraint never repeats a column, so this
             // collapses the row fan-out produced by joining key_column_usage and
@@ -504,20 +508,19 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             // N-column key yields N×N rows). Insertion order follows
             // kcu.ordinal_position from the ORDER BY.
             if ($row['column_name']) {
-                $groups[$tbl][$name]['columns'][$row['column_name']] = true;
+                $groups[$key]['columns'][$row['column_name']] = true;
             }
         }
 
         $result = [];
-        foreach ($groups as $tbl => $tblGroups) {
-            foreach ($tblGroups as $name => $c) {
-                $c['columns'] = array_keys($c['columns']);
-                // buildConstraintDef returns null for constraint types it does
-                // not render; those are dropped rather than diffed as nulls.
-                $def = $this->buildConstraintDef($name, $c);
-                if ($def !== null) {
-                    $result[$tbl][$name] = $def;
-                }
+        foreach ($groups as $c) {
+            $name         = $c['constraint_name'];
+            $c['columns'] = array_keys($c['columns']);
+            // buildConstraintDef returns null for constraint types it does
+            // not render; those are dropped rather than diffed as nulls.
+            $def = $this->buildConstraintDef($name, $c);
+            if ($def !== null) {
+                $result[$c['table_name']][$name] = $def;
             }
         }
 
@@ -526,11 +529,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                 'CONSTRAINT "' . $row['constraint_name'] . '" ' . $row['definition'];
         }
 
-        foreach ($nnByTable as $tbl => $nns) {
-            foreach ($nns as $name => $nn) {
-                $notValid = $nn['convalidated'] ? '' : ' NOT VALID';
-                $result[$tbl][$name] = 'CONSTRAINT "' . $name . '" NOT NULL "' . $nn['column_name'] . '"' . $notValid;
-            }
+        foreach ($namedNotNull as $nn) {
+            $notValid = $nn['convalidated'] ? '' : ' NOT VALID';
+            $result[$nn['table_name']][$nn['conname']] =
+                'CONSTRAINT "' . $nn['conname'] . '" NOT NULL "' . $nn['column_name'] . '"' . $notValid;
         }
 
         return $result;

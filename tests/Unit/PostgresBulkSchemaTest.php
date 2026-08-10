@@ -78,6 +78,21 @@ class PostgresBulkSchemaTest extends TestCase
         ], $overrides);
     }
 
+    /** Build a PG18+ named NOT NULL constraint row (pg_constraint contype='n'). */
+    private static function notNullRow(
+        string $table,
+        string $conname,
+        string $column,
+        bool $convalidated = true
+    ): array {
+        return [
+            'table_name'   => $table,
+            'conname'      => $conname,
+            'column_name'  => $column,
+            'convalidated' => $convalidated,
+        ];
+    }
+
     // ── Interface wiring ──────────────────────────────────────────────────
 
     public function testPostgresAdapterDeclaresBulkCapability(): void
@@ -360,7 +375,7 @@ class PostgresBulkSchemaTest extends TestCase
 
     public function testAssembleConstraintsAppendsNamedNotNull(): void
     {
-        $nn = ['t' => ['email_required' => ['column_name' => 'email', 'convalidated' => true]]];
+        $nn = [self::notNullRow('t', 'email_required', 'email')];
 
         $result = $this->invoke('assembleConstraints', [[], [], $nn]);
         $this->assertSame('CONSTRAINT "email_required" NOT NULL "email"', $result['t']['email_required']);
@@ -368,17 +383,30 @@ class PostgresBulkSchemaTest extends TestCase
 
     public function testAssembleConstraintsMarksUnvalidatedNamedNotNull(): void
     {
-        $nn = ['t' => ['email_required' => ['column_name' => 'email', 'convalidated' => false]]];
+        $nn = [self::notNullRow('t', 'email_required', 'email', false)];
 
         $result = $this->invoke('assembleConstraints', [[], [], $nn]);
         $this->assertSame('CONSTRAINT "email_required" NOT NULL "email" NOT VALID', $result['t']['email_required']);
+    }
+
+    public function testAssembleConstraintsKeepsNamedNotNullScopedPerTable(): void
+    {
+        $nn = [
+            self::notNullRow('users',  'nn_shared', 'email'),
+            self::notNullRow('orders', 'nn_shared', 'ref'),
+        ];
+
+        $result = $this->invoke('assembleConstraints', [[], [], $nn]);
+
+        $this->assertSame('CONSTRAINT "nn_shared" NOT NULL "email"', $result['users']['nn_shared']);
+        $this->assertSame('CONSTRAINT "nn_shared" NOT NULL "ref"',   $result['orders']['nn_shared']);
     }
 
     public function testAssembleConstraintsCombinesAllThreeSources(): void
     {
         $rows   = [self::conRow('t', 'uniq_a', ['column_name' => 'a'])];
         $checks = [['table_name' => 't', 'constraint_name' => 'chk_a', 'definition' => 'CHECK ((a > 0))']];
-        $nn     = ['t' => ['nn_a' => ['column_name' => 'a', 'convalidated' => true]]];
+        $nn     = [self::notNullRow('t', 'nn_a', 'a')];
 
         $result = $this->invoke('assembleConstraints', [$rows, $checks, $nn]);
         $this->assertSame(['uniq_a', 'chk_a', 'nn_a'], array_keys($result['t']));

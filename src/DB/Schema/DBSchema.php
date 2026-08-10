@@ -87,46 +87,8 @@ class DBSchema {
 
         $commonTables = array_values(array_intersect($sourceTables, $targetTables));
 
-        // Pre-scan: fetch a hash of every table's schema in two batch queries
-        // (one per DB side). Tables whose hashes match are identical and can be
-        // skipped entirely, avoiding the 7-14 per-table queries that otherwise
-        // fire for every common table — critical for large Supabase databases.
-        $sourceHashes = $this->manager->getSchemaHashMap('source', $commonTables);
-        $targetHashes = $this->manager->getSchemaHashMap('target', $commonTables);
-
-        // Partition: unchanged tables (skipped) vs changed tables (need full diff)
-        $tablesNeedingDiff = [];
-        $skipped = 0;
-        foreach ($commonTables as $table) {
-            if (isset($sourceHashes[$table], $targetHashes[$table])
-                && $sourceHashes[$table] === $targetHashes[$table]) {
-                $skipped++;
-            } else {
-                $tablesNeedingDiff[] = $table;
-            }
-        }
-
-        if ($skipped > 0) {
-            Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
-        }
-
-        // Batch-fetch full schemas for all changed tables in 7 queries per side
-        // instead of 8 queries per table per side (O(1) vs O(N) round-trips).
-        $sourceBulk = [];
-        $targetBulk = [];
-        if (!empty($tablesNeedingDiff)) {
-            $adapter = $this->manager->getAdapter();
-            if ($adapter instanceof BulkSchemaAdapterInterface) {
-                $sourceBulk = $adapter->getBulkTableSchema(
-                    $this->manager->getDB('source'), $tablesNeedingDiff
-                );
-                $targetBulk = $adapter->getBulkTableSchema(
-                    $this->manager->getDB('target'), $tablesNeedingDiff
-                );
-                $n = count($tablesNeedingDiff);
-                Logger::info("Batch schema fetch: loaded $n changed table(s) in 14 queries");
-            }
-        }
+        $tablesNeedingDiff = $this->selectTablesNeedingDiff($commonTables);
+        [$sourceBulk, $targetBulk] = $this->bulkFetchSchemas($tablesNeedingDiff);
 
         foreach ($tablesNeedingDiff as $table) {
             $tableDiff = $tableSchema->getDiff(
@@ -156,6 +118,68 @@ class DBSchema {
         $diffs = array_merge($diffs, $this->diffRoutines());
 
         return $diffs;
+    }
+
+    /**
+     * Pre-scan: fetch a hash of every table's schema in two batch queries (one
+     * per DB side) and keep only the tables whose hashes differ. Matching
+     * hashes mean the table is identical on both sides, so it can skip the
+     * per-table queries that would otherwise fire — critical for large
+     * Supabase databases, where most tables are unchanged.
+     *
+     * Adapters that return no hashes simply yield every table, so this is
+     * always an optimisation and never a filter.
+     *
+     * @param  string[] $commonTables Tables present on both sides.
+     * @return string[] Tables that still need a full schema diff.
+     */
+    private function selectTablesNeedingDiff(array $commonTables): array {
+        $sourceHashes = $this->manager->getSchemaHashMap('source', $commonTables);
+        $targetHashes = $this->manager->getSchemaHashMap('target', $commonTables);
+
+        $needingDiff = [];
+        foreach ($commonTables as $table) {
+            $identical = isset($sourceHashes[$table], $targetHashes[$table])
+                && $sourceHashes[$table] === $targetHashes[$table];
+            if (!$identical) {
+                $needingDiff[] = $table;
+            }
+        }
+
+        $skipped = count($commonTables) - count($needingDiff);
+        if ($skipped > 0) {
+            Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
+        }
+
+        return $needingDiff;
+    }
+
+    /**
+     * Batch-fetch the full schema of every changed table in 7 queries per side
+     * instead of 8 queries per table per side — O(1) round-trips instead of
+     * O(N). Adapters without bulk support return empty maps, and TableSchema
+     * then falls back to querying each table individually.
+     *
+     * @param  string[] $tables Tables needing a full diff.
+     * @return array{array<string,array>, array<string,array>} [source, target]
+     */
+    private function bulkFetchSchemas(array $tables): array {
+        if (empty($tables)) {
+            return [[], []];
+        }
+
+        $adapter = $this->manager->getAdapter();
+        if (!$adapter instanceof BulkSchemaAdapterInterface) {
+            return [[], []];
+        }
+
+        $source = $adapter->getBulkTableSchema($this->manager->getDB('source'), $tables);
+        $target = $adapter->getBulkTableSchema($this->manager->getDB('target'), $tables);
+
+        $n = count($tables);
+        Logger::info("Batch schema fetch: loaded $n changed table(s) in 14 queries");
+
+        return [$source, $target];
     }
 
     /**
