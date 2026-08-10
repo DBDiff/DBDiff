@@ -307,6 +307,7 @@ _Flags always override settings in `.dbdiff`._
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
 | `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*` |
 | `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
+| `--allow-destructive` | Generate the migration even when it contains data-losing changes. See [Destructive Change Protection](#destructive-change-protection). |
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
 
@@ -653,6 +654,46 @@ Comparisons run in this order:
 ### Data
 - Compares table storage engine, collation, and row count
 - Records changed rows and missing rows per table
+
+
+## Destructive Change Protection
+
+By default DBDiff refuses to generate a migration that would drop data. If the
+diff contains a `DROP TABLE` or `DROP COLUMN`, generation stops and the offending
+changes are listed:
+
+```
+Destructive changes detected — 2 destructive error(s), 1 warning(s):
+  [error]   drop-table: table `legacy_sessions`
+             → Use --allow-destructive to proceed, or archive the table instead.
+  [error]   drop-column: column `users`.`legacy_token`
+  [warning] drop-view: view `active_users`
+
+Re-run with --allow-destructive to generate the migration anyway.
+```
+
+Two severities:
+
+- **Errors** block generation — `DROP TABLE` and `DROP COLUMN`, the changes that
+  destroy rows.
+- **Warnings** are reported but never block — dropping a view, trigger, routine
+  or enum type. These lose definitions rather than data.
+
+A dropped column paired with an added column of the same type on the same table
+is treated as a likely rename: it is downgraded from an error to a
+`possible-rename` warning, so it is still reported but no longer blocks.
+
+To proceed anyway, pass `--allow-destructive`:
+
+```bash
+dbdiff diff --allow-destructive server1.db1:server2.db2
+```
+
+Or set it permanently in your config file:
+
+```yaml
+allowDestructive: true
+```
 
 
 ## Schema Diff Performance
