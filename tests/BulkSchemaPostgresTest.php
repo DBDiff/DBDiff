@@ -263,6 +263,69 @@ class BulkSchemaPostgresTest extends TestCase
         $this->assertMatchesRegularExpression('/\btotal\b.*\*.*\bqty\b/', $orders['line']);
     }
 
+    /**
+     * The FK/UNIQUE/PK query reads pg_catalog directly and maps catalog codes
+     * back to the strings information_schema would have produced (issue #184).
+     * This pins every arm of that mapping, since a wrong code silently emits
+     * the wrong referential action into a migration.
+     */
+    public function testForeignKeyActionsAndModifiersRenderCorrectly(): void
+    {
+        $this->connection->unprepared(<<<'SQL'
+            CREATE TABLE fk_target (a integer, b integer, PRIMARY KEY (a, b));
+            CREATE TABLE fk_src (
+                id integer PRIMARY KEY,
+                cas_a integer, cas_b integer,
+                sn_a integer,  sn_b integer,
+                sd_a integer DEFAULT 0, sd_b integer DEFAULT 0,
+                rs_a integer,  rs_b integer,
+                full_a integer, full_b integer,
+                def_a integer, def_b integer,
+                imm_a integer, imm_b integer,
+                CONSTRAINT fk_cascade FOREIGN KEY (cas_a, cas_b) REFERENCES fk_target (a, b)
+                    ON UPDATE CASCADE ON DELETE CASCADE,
+                CONSTRAINT fk_setnull FOREIGN KEY (sn_a, sn_b) REFERENCES fk_target (a, b)
+                    ON DELETE SET NULL,
+                CONSTRAINT fk_setdefault FOREIGN KEY (sd_a, sd_b) REFERENCES fk_target (a, b)
+                    ON DELETE SET DEFAULT,
+                CONSTRAINT fk_restrict FOREIGN KEY (rs_a, rs_b) REFERENCES fk_target (a, b)
+                    ON UPDATE RESTRICT ON DELETE RESTRICT,
+                CONSTRAINT fk_matchfull FOREIGN KEY (full_a, full_b) REFERENCES fk_target (a, b)
+                    MATCH FULL,
+                CONSTRAINT fk_deferred FOREIGN KEY (def_a, def_b) REFERENCES fk_target (a, b)
+                    DEFERRABLE INITIALLY DEFERRED,
+                CONSTRAINT fk_immediate FOREIGN KEY (imm_a, imm_b) REFERENCES fk_target (a, b)
+                    DEFERRABLE INITIALLY IMMEDIATE
+            );
+            ALTER TABLE fk_src ADD CONSTRAINT fk_unvalidated
+                FOREIGN KEY (cas_a, cas_b) REFERENCES fk_target (a, b) NOT VALID;
+        SQL);
+
+        $c = $this->adapter->getBulkTableSchema($this->connection, ['fk_src'])['fk_src']['constraints'];
+
+        // Referential actions
+        $this->assertStringEndsWith('ON UPDATE CASCADE ON DELETE CASCADE',       $c['fk_cascade']);
+        $this->assertStringEndsWith('ON UPDATE NO ACTION ON DELETE SET NULL',    $c['fk_setnull']);
+        $this->assertStringEndsWith('ON UPDATE NO ACTION ON DELETE SET DEFAULT', $c['fk_setdefault']);
+        $this->assertStringEndsWith('ON UPDATE RESTRICT ON DELETE RESTRICT',     $c['fk_restrict']);
+
+        // MATCH FULL is emitted; simple match (the default) maps to NONE and
+        // must emit nothing at all.
+        $this->assertStringContainsString('MATCH FULL', $c['fk_matchfull']);
+        $this->assertStringNotContainsString('MATCH', $c['fk_cascade']);
+
+        // Deferrability and validation state
+        $this->assertStringEndsWith('DEFERRABLE INITIALLY DEFERRED',  $c['fk_deferred']);
+        $this->assertStringEndsWith('DEFERRABLE INITIALLY IMMEDIATE', $c['fk_immediate']);
+        $this->assertStringEndsWith('NOT VALID', $c['fk_unvalidated']);
+
+        // Composite key columns appear once each, in ordinal order.
+        $this->assertStringContainsString(
+            'FOREIGN KEY ("cas_a", "cas_b") REFERENCES "fk_target" ("a")',
+            $c['fk_cascade']
+        );
+    }
+
     public function testMultiColumnUniqueConstraintListsEachColumnOnce(): void
     {
         $bulk = $this->adapter->getBulkTableSchema($this->connection, ['orders']);

@@ -362,33 +362,54 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
+        // FK/UNIQUE/PK constraints, read straight from pg_catalog.
+        //
+        // The information_schema equivalent (table_constraints joined to
+        // key_column_usage, referential_constraints and constraint_column_usage)
+        // is ~900x slower: those views wrap the catalogs in per-row privilege
+        // checks, which stops the planner pushing `relname IN (...)` down, so
+        // they are largely materialised before the filter applies. On a
+        // 1000-table database that single join was 99% of the whole batch
+        // fetch — 8.4s against 9ms here. See issue #184.
+        //
+        // The CASE arms reproduce exactly what the information_schema views
+        // emit, so the assembled DDL is unchanged. Note Postgres maps simple
+        // match ('s') to 'NONE', not 'SIMPLE'.
         $conRows = $connection->select(
-            "SELECT tc.table_name, tc.constraint_name, tc.constraint_type,
-                    tc.is_deferrable, tc.initially_deferred,
-                    kcu.column_name, kcu.ordinal_position,
-                    ccu.table_name AS foreign_table, ccu.column_name AS foreign_column,
-                    rc.update_rule, rc.delete_rule, rc.match_option,
+            "SELECT rel.relname AS table_name,
+                    con.conname AS constraint_name,
+                    CASE con.contype
+                         WHEN 'f' THEN 'FOREIGN KEY'
+                         WHEN 'u' THEN 'UNIQUE'
+                         ELSE 'PRIMARY KEY'
+                    END AS constraint_type,
+                    CASE WHEN con.condeferrable THEN 'YES' ELSE 'NO' END AS is_deferrable,
+                    CASE WHEN con.condeferred   THEN 'YES' ELSE 'NO' END AS initially_deferred,
+                    att.attname  AS column_name,
+                    cols.ord     AS ordinal_position,
+                    frel.relname AS foreign_table,
+                    fatt.attname AS foreign_column,
+                    CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
+                                         WHEN 'a' THEN 'NO ACTION' END AS update_rule,
+                    CASE con.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
+                                         WHEN 'a' THEN 'NO ACTION' END AS delete_rule,
+                    CASE con.confmatchtype WHEN 'f' THEN 'FULL' WHEN 'p' THEN 'PARTIAL'
+                                           WHEN 's' THEN 'NONE' END AS match_option,
                     con.convalidated
-             FROM information_schema.table_constraints tc
-             LEFT JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name  = kcu.constraint_name
-               AND tc.constraint_schema = kcu.constraint_schema
-               AND tc.table_name        = kcu.table_name
-             LEFT JOIN information_schema.referential_constraints rc
-                ON tc.constraint_name  = rc.constraint_name
-               AND tc.constraint_schema = rc.constraint_schema
-             LEFT JOIN information_schema.constraint_column_usage ccu
-                ON rc.unique_constraint_name   = ccu.constraint_name
-               AND rc.unique_constraint_schema  = ccu.constraint_schema
-             LEFT JOIN pg_class rel
-                ON rel.relname      = tc.table_name
-               AND rel.relnamespace = 'public'::regnamespace
-             LEFT JOIN pg_constraint con
-                ON con.conname  = tc.constraint_name
-               AND con.conrelid = rel.oid
-             WHERE tc.table_schema = 'public' AND tc.table_name IN ($ph)
-               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
-             ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position",
+             FROM pg_constraint con
+             JOIN pg_class rel     ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             LEFT JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
+             LEFT JOIN pg_attribute att  ON att.attrelid  = con.conrelid
+                                        AND att.attnum    = cols.attnum
+             LEFT JOIN pg_class frel     ON con.confrelid = frel.oid
+             LEFT JOIN pg_attribute fatt ON fatt.attrelid = con.confrelid
+                                        AND fatt.attnum   = con.confkey[1]
+             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+               AND con.contype IN ('f', 'u', 'p')
+             ORDER BY rel.relname, con.conname, cols.ord",
             $tables
         );
 
