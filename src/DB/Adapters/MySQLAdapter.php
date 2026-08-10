@@ -3,6 +3,7 @@
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use DBDiff\DB\Support\QueryHelper;
 
 
 class MySQLAdapter implements DBAdapterInterface {
@@ -193,11 +194,11 @@ class MySQLAdapter implements DBAdapterInterface {
         $idxMap = $this->fetchIdxMap($connection, $db);
         $conMap = $this->fetchConMap($connection, $db);
 
+        // Narrow before hashing so we only pay for the tables we were asked about.
+        $engineMap = QueryHelper::restrictToTables($engineMap, $tables);
+
         $hashMap = [];
         foreach (array_keys($engineMap) as $tableName) {
-            if (!empty($tables) && !in_array($tableName, $tables, true)) {
-                continue;
-            }
             $parts = [
                 $engineMap[$tableName],
                 isset($colMap[$tableName]) ? implode(';', $colMap[$tableName]) : '',

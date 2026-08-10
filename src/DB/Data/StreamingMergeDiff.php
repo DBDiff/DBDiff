@@ -7,6 +7,7 @@ use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use DBDiff\Params\ParamsFactory;
 use DBDiff\Params\TableFilter;
+use DBDiff\DB\Support\QueryHelper;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 
@@ -298,7 +299,7 @@ class StreamingMergeDiff
         if (count($key) === 1) {
             $pkCol        = $key[0];
             $values       = array_map(fn($pk) => $pk[$pkCol], $pks);
-            $placeholders = implode(',', array_fill(0, count($values), '?'));
+            $placeholders = QueryHelper::placeholders($values);
             $qCol         = $this->quoteIdentifier($pkCol);
             $sql          = "SELECT {$colList} FROM {$q} WHERE {$qCol} IN ({$placeholders}) ORDER BY {$orderBy}";
             return $this->normaliseRows($conn->select($sql, $values));
