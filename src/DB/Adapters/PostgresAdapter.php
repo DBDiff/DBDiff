@@ -2,9 +2,10 @@
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
+use DBDiff\DB\Support\QueryHelper;
 
 
-class PostgresAdapter implements DBAdapterInterface {
+class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
         return [
@@ -54,26 +55,20 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     public function getTableSchema(Connection $connection, string $table): array {
-        $columns     = $this->fetchColumns($connection, $table);
-        $keys        = $this->fetchIndexes($connection, $table);
-        $constraints = $this->fetchConstraints($connection, $table);
-
-        return [
-            'engine'      => null,
-            'collation'   => null,
-            'columns'     => $columns,
-            'keys'        => $keys,
-            'constraints' => $constraints,
+        $bulk = $this->getBulkTableSchema($connection, [$table]);
+        return $bulk[$table] ?? [
+            'engine' => null, 'collation' => null,
+            'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
 
     public function getCreateStatement(Connection $connection, string $table): string {
-        // Reconstruct a CREATE TABLE statement from information_schema.
-        $columns     = $this->fetchColumns($connection, $table);
-        $keys        = $this->fetchIndexes($connection, $table);
-        $constraints = $this->fetchConstraints($connection, $table);
+        $bulk        = $this->getBulkTableSchema($connection, [$table]);
+        $schema      = $bulk[$table] ?? ['columns' => [], 'keys' => [], 'constraints' => []];
+        $columns     = $schema['columns'];
+        $keys        = $schema['keys'];
+        $constraints = $schema['constraints'];
 
-        // Primary key
         $pk = $this->getPrimaryKey($connection, $table);
 
         $parts = array_values($columns);
@@ -89,7 +84,6 @@ class PostgresAdapter implements DBAdapterInterface {
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
 
-        // Append CREATE INDEX statements after the main DDL
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
         }
@@ -98,13 +92,10 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     public function getDBVariable(Connection $connection, string $variable): ?string {
-        // Postgres does not have MySQL-style server variables for collation/charset
         return null;
     }
 
     public function getBinaryColumns(Connection $connection, string $table): array {
-        // PostgreSQL bytea columns are rare in typical use; the streaming-merge
-        // path handles them via ::text cast. Returning [] for now.
         return [];
     }
 
@@ -197,8 +188,6 @@ class PostgresAdapter implements DBAdapterInterface {
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
-        // Single CTE query: hash columns + indexes + constraints per table.
-        // Each sub-CTE mirrors what fetchColumns/fetchIndexes/fetchConstraints returns.
         $rows = $connection->select(
             "WITH col_data AS (
                  SELECT table_name,
@@ -278,223 +267,296 @@ class PostgresAdapter implements DBAdapterInterface {
 
         $hashMap = [];
         foreach ($rows as $row) {
-            $name = $row['table_name'];
-            if (!empty($tables) && !in_array($name, $tables, true)) {
-                continue;
-            }
-            $hashMap[$name] = $row['schema_hash'];
+            $hashMap[$row['table_name']] = $row['schema_hash'];
         }
-        return $hashMap;
+        return QueryHelper::restrictToTables($hashMap, $tables);
+    }
+
+    /**
+     * Fetch full schema detail for all $tables in 7 fixed queries (regardless
+     * of table count), then assemble per-table schema maps identical to those
+     * returned by getTableSchema().
+     *
+     * Query budget per call:
+     *   1. information_schema.columns      (all tables, one query)
+     *   2. pg_type domains                 (schema-global, one query)
+     *   3. pg_constraint NOT NULL (PG18+)  (all tables, one query)
+     *   4. pg_constraint constraint-index names to skip
+     *   5. pg_indexes                      (all tables, one query)
+     *   6. information_schema FK/UNIQUE/PK (all tables, one query)
+     *   7. pg_constraint CHECK/EXCLUDE     (all tables, one query)
+     */
+    public function getBulkTableSchema(Connection $connection, array $tables): array
+    {
+        if (empty($tables)) {
+            return [];
+        }
+
+        $ph = QueryHelper::placeholders($tables);
+
+        $colRows = $connection->select(
+            "SELECT table_name, column_name, data_type, character_maximum_length, is_nullable,
+                    column_default, numeric_precision, numeric_scale, udt_name,
+                    datetime_precision, is_identity, identity_generation,
+                    is_generated, generation_expression, domain_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name IN ($ph)
+             ORDER BY table_name, ordinal_position",
+            $tables
+        );
+
+        $domainRows = $connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        );
+        $domainNotNull = [];
+        foreach ($domainRows as $d) {
+            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
+        }
+
+        // Named NOT NULL constraints (PG18+ contype='n'). Collected as a flat
+        // list for the constraint DDL, plus $nnColsByTable for suppressing the
+        // matching inline column NOT NULL. This single query replaces the
+        // duplicate per-table queries that fetchColumns() and fetchConstraints()
+        // previously issued separately.
+        $nnRows = $connection->select(
+            "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = con.conkey[1]
+             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph) AND con.contype = 'n'",
+            $tables
+        );
+        $namedNotNull  = [];
+        $nnColsByTable = [];
+        foreach ($nnRows as $r) {
+            $default = $r['table_name'] . '_' . $r['column_name'] . '_not_null';
+            if ($r['conname'] !== $default || !$r['convalidated']) {
+                $namedNotNull[]                                    = $r;
+                $nnColsByTable[$r['table_name']][$r['column_name']] = true;
+            }
+        }
+
+        $skipRows = $connection->select(
+            "SELECT rel.relname AS table_name, con.conname
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+               AND con.contype IN ('p', 'u', 'x')",
+            $tables
+        );
+        $skipByTable = [];
+        foreach ($skipRows as $r) {
+            $skipByTable[$r['table_name']][$r['conname']] = true;
+        }
+
+        $idxRows = $connection->select(
+            "SELECT tablename AS table_name, indexname, indexdef
+             FROM pg_indexes
+             WHERE schemaname = 'public' AND tablename IN ($ph)
+             ORDER BY tablename, indexname",
+            $tables
+        );
+
+        // FK/UNIQUE/PK constraints, read straight from pg_catalog.
+        //
+        // The information_schema equivalent (table_constraints joined to
+        // key_column_usage, referential_constraints and constraint_column_usage)
+        // is ~900x slower: those views wrap the catalogs in per-row privilege
+        // checks, which stops the planner pushing `relname IN (...)` down, so
+        // they are largely materialised before the filter applies. On a
+        // 1000-table database that single join was 99% of the whole batch
+        // fetch — 8.4s against 9ms here. See issue #184.
+        //
+        // The CASE arms reproduce exactly what the information_schema views
+        // emit, so the assembled DDL is unchanged. Note Postgres maps simple
+        // match ('s') to 'NONE', not 'SIMPLE'.
+        $conRows = $connection->select(
+            "SELECT rel.relname AS table_name,
+                    con.conname AS constraint_name,
+                    CASE con.contype
+                         WHEN 'f' THEN 'FOREIGN KEY'
+                         WHEN 'u' THEN 'UNIQUE'
+                         ELSE 'PRIMARY KEY'
+                    END AS constraint_type,
+                    CASE WHEN con.condeferrable THEN 'YES' ELSE 'NO' END AS is_deferrable,
+                    CASE WHEN con.condeferred   THEN 'YES' ELSE 'NO' END AS initially_deferred,
+                    att.attname  AS column_name,
+                    cols.ord     AS ordinal_position,
+                    frel.relname AS foreign_table,
+                    fatt.attname AS foreign_column,
+                    CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
+                                         WHEN 'a' THEN 'NO ACTION' END AS update_rule,
+                    CASE con.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
+                                         WHEN 'a' THEN 'NO ACTION' END AS delete_rule,
+                    CASE con.confmatchtype WHEN 'f' THEN 'FULL' WHEN 'p' THEN 'PARTIAL'
+                                           WHEN 's' THEN 'NONE' END AS match_option,
+                    con.convalidated
+             FROM pg_constraint con
+             JOIN pg_class rel     ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             LEFT JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
+             LEFT JOIN pg_attribute att  ON att.attrelid  = con.conrelid
+                                        AND att.attnum    = cols.attnum
+             LEFT JOIN pg_class frel     ON con.confrelid = frel.oid
+             LEFT JOIN pg_attribute fatt ON fatt.attrelid = con.confrelid
+                                        AND fatt.attnum   = con.confkey[1]
+             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+               AND con.contype IN ('f', 'u', 'p')
+             ORDER BY rel.relname, con.conname, cols.ord",
+            $tables
+        );
+
+        $checkRows = $connection->select(
+            "SELECT rel.relname AS table_name, con.conname AS constraint_name,
+                    pg_get_constraintdef(con.oid) AS definition
+             FROM pg_constraint con
+             JOIN pg_class rel ON con.conrelid = rel.oid
+             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
+             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+               AND con.contype IN ('c', 'x')
+             ORDER BY rel.relname, con.conname",
+            $tables
+        );
+
+        $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable);
+        $keys        = $this->assembleIndexes($idxRows, $skipByTable);
+        $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
+
+        $result = [];
+        foreach ($tables as $t) {
+            $result[$t] = [
+                'engine'      => null,
+                'collation'   => null,
+                'columns'     => $columns[$t]     ?? [],
+                'keys'        => $keys[$t]        ?? [],
+                'constraints' => $constraints[$t] ?? [],
+            ];
+        }
+        return $result;
     }
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private function fetchColumns(Connection $connection, string $table): array {
-        $rows = $connection->select(
-            "SELECT column_name, data_type, character_maximum_length, is_nullable,
-                    column_default, numeric_precision, numeric_scale, udt_name,
-                    datetime_precision, is_identity, identity_generation,
-                    is_generated, generation_expression, domain_name
-             FROM information_schema.columns
-             WHERE table_schema = 'public' AND table_name = ?
-             ORDER BY ordinal_position",
-            [$table]
-        );
+    /**
+     * Build per-table column DDL maps from pre-fetched information_schema rows.
+     * Returns [tableName => [columnName => ddlFragment]].
+     */
+    private function assembleColumns(array $colRows, array $domainNotNull, array $nnColsByTable): array
+    {
+        $result = [];
+        foreach ($colRows as $row) {
+            $tbl  = $row['table_name'];
+            $name = $row['column_name'];
+            if (!isset($result[$tbl])) {
+                $result[$tbl] = [];
+            }
 
-        // Map of public-schema domains that are themselves NOT NULL, so we can
-        // skip a redundant column-level NOT NULL when the domain enforces it.
-        $domainNotNull = [];
-        foreach ($connection->select(
-            "SELECT t.typname, t.typnotnull
-             FROM pg_type t
-             JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public' AND t.typtype = 'd'"
-        ) as $d) {
-            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
-        }
-        // Columns whose NOT NULL is enforced by a custom-named constraint
-        // (PG18 contype='n'): emit those as a separate constraint, not inline,
-        // to preserve the constraint name.
-        $customNotNullCols = [];
-        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $nn) {
-            $customNotNullCols[$nn['column']] = true;
-        }
-
-        $columns = [];
-        foreach ($rows as $row) {
-            $name    = $row['column_name'];
-            $type    = $this->buildColumnType($row);
-            // Skip redundant NOT NULL when the domain itself enforces it, or
-            // when a custom-named NOT NULL constraint carries it.
-            $domainName = $row['domain_name'] ?? null;
-            $domainIsNotNull = $domainName && ($domainNotNull[$domainName] ?? false);
-            $notNull = ($row['is_nullable'] === 'NO' && !$domainIsNotNull
-                        && !isset($customNotNullCols[$name])) ? ' NOT NULL' : '';
+            $type        = $this->buildColumnType($row);
+            $domIsNotNull = $row['domain_name'] && ($domainNotNull[$row['domain_name']] ?? false);
+            $notNull     = ($row['is_nullable'] === 'NO' && !$domIsNotNull
+                            && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
 
             if ($row['is_identity'] === 'YES') {
                 $gen = $row['identity_generation'] ?? 'BY DEFAULT';
-                $columns[$name] = '"' . $name . '" ' . $type . $notNull
+                $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull
                     . ' GENERATED ' . $gen . ' AS IDENTITY';
-            } elseif ($row['is_generated'] === 'ALWAYS') {
-                $expr = $row['generation_expression'] ?? '';
-                $columns[$name] = '"' . $name . '" ' . $type . $notNull
-                    . ' GENERATED ALWAYS AS (' . $expr . ') STORED';
-            } else {
-                $default = '';
-                if (!is_null($row['column_default'])) {
-                    $default = ' DEFAULT ' . $row['column_default'];
-                }
-                $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
+                continue;
             }
+            if ($row['is_generated'] === 'ALWAYS') {
+                $expr = $row['generation_expression'] ?? '';
+                $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull
+                    . ' GENERATED ALWAYS AS (' . $expr . ') STORED';
+                continue;
+            }
+            $default = $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
+            $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull . $default;
         }
-        return $columns;
+        return $result;
     }
 
     /**
-     * PG18+ named NOT NULL constraints (pg_constraint.contype = 'n'), excluding
-     * the auto-generated "<table>_<column>_not_null" names — those are already
-     * reproduced by the column's own NOT NULL. Returns [conname => column].
+     * Build per-table index DDL maps, excluding constraint-backed indexes.
+     * Returns [tableName => [indexName => indexdef]].
      */
-    private function fetchNamedNotNullConstraints(Connection $connection, string $table): array {
-        $rows = $connection->select(
-            "SELECT con.conname, con.convalidated, att.attname AS column_name
-             FROM pg_constraint con
-             JOIN pg_class rel ON con.conrelid = rel.oid
-             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             JOIN pg_attribute att ON att.attrelid = con.conrelid
-                                  AND att.attnum = con.conkey[1]
-             WHERE nsp.nspname = 'public' AND rel.relname = ?
-               AND con.contype = 'n'",
-            [$table]
-        );
-        $custom = [];
-        foreach ($rows as $row) {
-            $default   = $table . '_' . $row['column_name'] . '_not_null';
-            $isDefault = $row['conname'] === $default;
-            // A default-named, validated NOT NULL is reproduced by the column's
-            // own NOT NULL, so skip it. Custom names and any unvalidated (NOT
-            // VALID) constraint must be emitted explicitly to round-trip.
-            if (!$isDefault || !$row['convalidated']) {
-                $custom[$row['conname']] = [
-                    'column'   => $row['column_name'],
-                    'notValid' => !$row['convalidated'],
-                ];
+    private function assembleIndexes(array $idxRows, array $skipByTable): array
+    {
+        $result = [];
+        foreach ($idxRows as $row) {
+            $tbl = $row['table_name'];
+            if (!isset($result[$tbl])) {
+                $result[$tbl] = [];
             }
-        }
-        return $custom;
-    }
-
-    private function fetchIndexes(Connection $connection, string $table): array {
-        // Collect names of indexes that back constraints (PK, UNIQUE, EXCLUDE)
-        // so we can skip them — they're handled via fetchConstraints() instead.
-        $constraintIndexes = $connection->select(
-            "SELECT con.conname
-             FROM pg_constraint con
-             JOIN pg_class rel ON con.conrelid = rel.oid
-             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             WHERE nsp.nspname = 'public' AND rel.relname = ?
-               AND con.contype IN ('p', 'u', 'x')",
-            [$table]
-        );
-        $skip = [];
-        foreach ($constraintIndexes as $row) {
-            $skip[$row['conname']] = true;
-        }
-
-        $rows = $connection->select(
-            "SELECT indexname, indexdef
-             FROM pg_indexes
-             WHERE schemaname = 'public' AND tablename = ?",
-            [$table]
-        );
-
-        $keys = [];
-        foreach ($rows as $row) {
-            if (isset($skip[$row['indexname']])) {
+            if (isset($skipByTable[$tbl][$row['indexname']])) {
                 continue;
             }
-            $keys[$row['indexname']] = $row['indexdef'];
+            $result[$tbl][$row['indexname']] = $row['indexdef'];
         }
-        return $keys;
+        return $result;
     }
 
-    private function fetchConstraints(Connection $connection, string $table): array {
-        $rows = $connection->select(
-            "SELECT tc.constraint_name, tc.constraint_type,
-                    tc.is_deferrable, tc.initially_deferred,
-                    kcu.column_name, kcu.ordinal_position,
-                    ccu.table_name  AS foreign_table,
-                    ccu.column_name AS foreign_column,
-                    rc.update_rule, rc.delete_rule, rc.match_option,
-                    con.convalidated
-             FROM information_schema.table_constraints tc
-             LEFT JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-               AND tc.constraint_schema = kcu.constraint_schema
-             LEFT JOIN information_schema.referential_constraints rc
-                ON tc.constraint_name = rc.constraint_name
-               AND tc.constraint_schema = rc.constraint_schema
-             LEFT JOIN information_schema.constraint_column_usage ccu
-                ON rc.unique_constraint_name = ccu.constraint_name
-               AND rc.unique_constraint_schema = ccu.constraint_schema
-             LEFT JOIN pg_constraint con
-                ON tc.constraint_name = con.conname
-               AND con.connamespace = 'public'::regnamespace
-             WHERE tc.table_schema = 'public' AND tc.table_name = ?
-               AND tc.constraint_type IN ('FOREIGN KEY', 'UNIQUE', 'PRIMARY KEY')
-             ORDER BY tc.constraint_name, kcu.ordinal_position",
-            [$table]
-        );
-
-        // Group by constraint name
+    /**
+     * Build per-table constraint DDL maps from pre-fetched rows.
+     * Covers FK/UNIQUE/PK (from information_schema), CHECK/EXCLUDE (from
+     * pg_constraint), and PG18+ named NOT NULL constraints.
+     * Returns [tableName => [constraintName => ddlFragment]].
+     */
+    private function assembleConstraints(array $conRows, array $checkRows, array $namedNotNull): array
+    {
+        // Group FK/UNIQUE/PK rows by table *and* constraint (multi-column
+        // support). Both names go into one flat key joined by NUL, which no
+        // Postgres identifier can contain, so the grouping stays unambiguous
+        // without a second level of nesting. Each row keeps its own
+        // table_name/constraint_name, which is what rebuilds the map below.
         $groups = [];
-        foreach ($rows as $row) {
-            $name = $row['constraint_name'];
-            if (!isset($groups[$name])) {
-                $groups[$name] = $row;
-                $groups[$name]['columns'] = [];
+        foreach ($conRows as $row) {
+            $key = $row['table_name'] . "\0" . $row['constraint_name'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = $row;
+                $groups[$key]['columns'] = [];
             }
+            // Keyed by column name: a constraint never repeats a column, so this
+            // collapses the row fan-out produced by joining key_column_usage and
+            // constraint_column_usage together (an N-column FK referencing an
+            // N-column key yields N×N rows). Insertion order follows
+            // kcu.ordinal_position from the ORDER BY.
             if ($row['column_name']) {
-                $groups[$name]['columns'][] = $row['column_name'];
+                $groups[$key]['columns'][$row['column_name']] = true;
             }
         }
 
-        $constraints = [];
-        foreach ($groups as $name => $c) {
-            $constraints[$name] = $this->buildConstraintDef($name, $c);
-        }
-        $constraints = array_filter($constraints);
-
-        // CHECK constraints — query pg_constraint directly since
-        // information_schema doesn't expose the check expression.
-        $checks = $connection->select(
-            "SELECT con.conname AS constraint_name,
-                    pg_get_constraintdef(con.oid) AS definition
-             FROM pg_constraint con
-             JOIN pg_class rel ON con.conrelid = rel.oid
-             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             WHERE nsp.nspname = 'public'
-               AND rel.relname = ?
-               AND con.contype IN ('c', 'x')
-             ORDER BY con.conname",
-            [$table]
-        );
-
-        foreach ($checks as $row) {
-            $name = $row['constraint_name'];
-            $constraints[$name] = "CONSTRAINT \"$name\" " . $row['definition'];
+        $result = [];
+        foreach ($groups as $c) {
+            $name         = $c['constraint_name'];
+            $c['columns'] = array_keys($c['columns']);
+            // buildConstraintDef returns null for constraint types it does
+            // not render; those are dropped rather than diffed as nulls.
+            $def = $this->buildConstraintDef($name, $c);
+            if ($def !== null) {
+                $result[$c['table_name']][$name] = $def;
+            }
         }
 
-        // PG18+ custom-named NOT NULL constraints (contype='n'), including the
-        // unvalidated (NOT VALID) variant.
-        foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $name => $nn) {
-            $notValid = $nn['notValid'] ? ' NOT VALID' : '';
-            $constraints[$name] = "CONSTRAINT \"$name\" NOT NULL \"{$nn['column']}\"" . $notValid;
+        foreach ($checkRows as $row) {
+            $result[$row['table_name']][$row['constraint_name']] =
+                'CONSTRAINT "' . $row['constraint_name'] . '" ' . $row['definition'];
         }
 
-        return $constraints;
+        foreach ($namedNotNull as $nn) {
+            $notValid = $nn['convalidated'] ? '' : ' NOT VALID';
+            $result[$nn['table_name']][$nn['conname']] =
+                'CONSTRAINT "' . $nn['conname'] . '" NOT NULL "' . $nn['column_name'] . '"' . $notValid;
+        }
+
+        return $result;
     }
 
     private function buildConstraintDef(string $name, array $c): ?string {

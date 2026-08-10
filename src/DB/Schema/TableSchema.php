@@ -38,12 +38,12 @@ class TableSchema {
         return $this->manager->getTableSchema($connection, $table);
     }
 
-    public function getDiff($table) {
+    public function getDiff(string $table, ?array $sourceSchema = null, ?array $targetSchema = null): array {
         Logger::info("Now calculating schema diff for table `$table`");
 
         $diffSequence = [];
-        $sourceSchema = $this->getSchema('source', $table);
-        $targetSchema = $this->getSchema('target', $table);
+        $sourceSchema = $sourceSchema ?? $this->getSchema('source', $table);
+        $targetSchema = $targetSchema ?? $this->getSchema('target', $table);
 
         $driver = $this->manager->getDriver();
 
