@@ -113,10 +113,14 @@ jobs:
             musl:     false
             artifact: dbdiff-linux-arm64
 
-          # ── Linux musl (Alpine) ───────────────────────────────────────────
-          # The build runs inside an Alpine Docker container so the resulting
-          # binary is musl-linked.  The host OS still needs to be the right
-          # architecture so that `docker run alpine` uses the correct image.
+          # ── Linux musl ────────────────────────────────────────────────────
+          # NOTE: these legs currently build on the ubuntu host exactly like the
+          # glibc ones — the `musl` flag below is not referenced by any step, and
+          # no Alpine container is used. SPC links everything against its own
+          # musl toolchain anyway (see the note above the SPC download step), so
+          # the resulting binaries are byte-identical to the glibc ones today.
+          # Building these inside Alpine would let `spc doctor` skip the
+          # musl-wrapper install entirely; tracked in #185.
           - target:   linux-x64-musl
             os:       ubuntu-latest
             musl:     true
@@ -193,7 +197,24 @@ jobs:
           # calls before the spc download step runs.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./spc doctor --auto-fix
+          # `spc doctor --auto-fix` installs the musl cross-compiler by fetching
+          # musl source from musl.libc.org — a single lightly-provisioned origin
+          # with no CDN, and spc performs no retry of its own. A connection
+          # timeout there (curl exit 28, after ~134s) killed three Linux legs of
+          # the v3.0.0-rc.5 release and shipped a partial package set. See #185.
+          # Retry with backoff so one transient timeout does not fail the leg.
+          for attempt in 1 2 3; do
+            if ./spc doctor --auto-fix; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::spc doctor --auto-fix failed after 3 attempts"
+              exit 1
+            fi
+            backoff=$((attempt * 30))
+            echo "spc doctor attempt ${attempt} failed — retrying in ${backoff}s ..."
+            sleep "$backoff"
+          done
           ./spc download \
             "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
             --with-php="${{ env.SPC_PHP_VERSION }}"
@@ -269,7 +290,11 @@ jobs:
   github-release:
     name: GitHub Release
     needs: [build-phar, build-binary]
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
+    # Must check build-binary too. The matrix runs with fail-fast: false so that
+    # one broken target does not cancel the rest, which means a partial build
+    # completes "successfully" from the workflow's point of view. Gating only on
+    # build-phar published v3.0.0-rc.5 with three platforms missing (#185).
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -350,7 +375,9 @@ jobs:
   publish-npm:
     name: Publish npm packages
     needs: [build-phar, build-binary, github-release]
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
+    # See the note on github-release above — build-binary must be checked here
+    # too, or a partially built matrix still reaches the registries.
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -418,6 +445,37 @@ jobs:
           copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
           copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
+
+      # Last line of defence before anything reaches a registry. The job gate
+      # already requires build-binary to have succeeded, but an artifact that
+      # failed to download would still slip through as a silently missing
+      # platform — which is exactly how v3.0.0-rc.5 shipped without linux-x64
+      # (#185). The copy step above only emits a ::warning:: in that case.
+      - name: Verify every platform package has its binary
+        run: |
+          # @dbdiff/cli-win32-arm64 is intentionally binary-less: SPC cannot
+          # build that target (see the matrix comment), so it ships as a
+          # PHAR-fallback skeleton and is exempt from this check.
+          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
+          missing=""
+          for pkg_dir in packages/@dbdiff/cli-*/; do
+            pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
+            if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
+              echo "  ${pkg_name} — PHAR fallback, no binary expected"
+              continue
+            fi
+            if [ -f "${pkg_dir}dbdiff" ] || [ -f "${pkg_dir}dbdiff.exe" ]; then
+              echo "  ${pkg_name} — ok"
+            else
+              echo "::error::${pkg_name} has no binary"
+              missing="${missing} ${pkg_name}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Refusing to publish a partial release. Missing binaries for:${missing}"
+            exit 1
+          fi
+          echo "All platform packages have a binary."
 
       - name: Bundle PHAR into @dbdiff/cli for PHP fallback
         run: cp binaries/dbdiff-phar/dbdiff.phar packages/@dbdiff/cli/dbdiff.phar
