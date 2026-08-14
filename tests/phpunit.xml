@@ -28,6 +28,7 @@
             <file>./End2EndPostgresTest.php</file>
             <file>./DBDiffComprehensivePostgresTest.php</file>
             <file>./BulkSchemaPostgresTest.php</file>
+            <file>./RoutineOverloadPostgresTest.php</file>
         </testsuite>
         <testsuite name="SQLite">
             <file>./End2EndSQLiteTest.php</file>

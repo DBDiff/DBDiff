@@ -138,24 +138,43 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                AND n.nspname = 'public'
              ORDER BY t.tgname"
         );
+        // Keyed by table and name: trigger names are unique per table, not per
+        // schema, so two tables may legitimately share one. Keying on the name
+        // alone silently dropped all but the last (issue #187). The bare name
+        // is carried through so the emitted DDL is unaffected.
         $triggers = [];
         foreach ($result as $row) {
-            $triggers[$row['name']] = [
+            $triggers[$row['table_name'] . '.' . $row['name']] = [
                 'definition' => $row['definition'],
                 'table'      => $row['table_name'],
+                'name'       => $row['name'],
             ];
         }
         return $triggers;
     }
 
+    /**
+     * Routines keyed by signature, not bare name.
+     *
+     * Postgres allows overloads — several functions sharing a name with
+     * different argument types. Keying on proname made them overwrite each
+     * other, so N-1 overloads were invisible to the diff and which one
+     * survived depended on row order, which differs between databases. Two
+     * identical schemas could therefore report drift, and the generated
+     * migration dropped every overload to recreate one. See issue #187.
+     *
+     * regprocedure renders as `cosine_distance(integer,integer)` — unique per
+     * overload and stable across databases, unlike oid. Ordering by the same
+     * expression keeps output deterministic where proname left ties unordered.
+     */
     public function getRoutines(Connection $connection): array {
         $result = $connection->select(
-            "SELECT p.proname AS name, pg_get_functiondef(p.oid) AS definition
+            "SELECT p.oid::regprocedure::text AS name, pg_get_functiondef(p.oid) AS definition
              FROM pg_proc p
              JOIN pg_namespace n ON p.pronamespace = n.oid
              WHERE n.nspname = 'public'
                AND p.prokind IN ('f', 'p')
-             ORDER BY p.proname"
+             ORDER BY p.oid::regprocedure::text"
         );
         $routines = [];
         foreach ($result as $row) {

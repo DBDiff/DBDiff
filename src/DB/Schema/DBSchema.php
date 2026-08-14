@@ -217,16 +217,25 @@ class DBSchema {
         $targetTriggers = $this->manager->getTriggers('target');
         $diffs = [];
 
-        foreach (array_diff_key($sourceTriggers, $targetTriggers) as $name => $data) {
-            $diffs[] = new CreateTrigger($name, $data['table'], $data['definition']);
+        // Keys are "table.trigger" so same-named triggers on different tables
+        // stay distinct (issue #187); the emitted DDL uses the bare name the
+        // adapter carries alongside, falling back to the key for adapters that
+        // do not supply one.
+        foreach (array_diff_key($sourceTriggers, $targetTriggers) as $key => $data) {
+            $diffs[] = new CreateTrigger($data['name'] ?? $key, $data['table'], $data['definition']);
         }
-        foreach (array_diff_key($targetTriggers, $sourceTriggers) as $name => $data) {
-            $diffs[] = new DropTrigger($name, $data['table'], $data['definition']);
+        foreach (array_diff_key($targetTriggers, $sourceTriggers) as $key => $data) {
+            $diffs[] = new DropTrigger($data['name'] ?? $key, $data['table'], $data['definition']);
         }
-        foreach (array_intersect_key($sourceTriggers, $targetTriggers) as $name => $srcData) {
-            $tgtData = $targetTriggers[$name];
+        foreach (array_intersect_key($sourceTriggers, $targetTriggers) as $key => $srcData) {
+            $tgtData = $targetTriggers[$key];
             if ($srcData['definition'] !== $tgtData['definition']) {
-                $diffs[] = new AlterTrigger($name, $srcData['table'], $srcData['definition'], $tgtData['definition']);
+                $diffs[] = new AlterTrigger(
+                    $srcData['name'] ?? $key,
+                    $srcData['table'],
+                    $srcData['definition'],
+                    $tgtData['definition']
+                );
             }
         }
         return $diffs;
