@@ -103,7 +103,11 @@ jobs:
 
     services:
       dolt:
-        image: dolthub/dolt-sql-server:latest
+        # Pinned like every other DB service here. Dolt 2.3.0 (published
+        # 2026-08-13) aborts DDL mid-statement with "General error: 1105
+        # context canceled" at random, so `latest` broke CI on a day nobody
+        # touched the code. 2.2.3 is the last version this suite was green on.
+        image: dolthub/dolt-sql-server:2.2.3
         env:
           DOLT_ROOT_PASSWORD: rootpass
           DOLT_ROOT_HOST: "%"
