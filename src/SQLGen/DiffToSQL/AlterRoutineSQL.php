@@ -16,20 +16,13 @@ class AlterRoutineSQL implements SQLGenInterface {
     }
 
     public function getUp(): string {
-        $drop = $this->buildDrop($this->obj->targetDefinition, $this->obj->name);
+        $drop = RoutineDrop::build($this->obj->targetDefinition, $this->obj->name, $this->dialect);
         return $drop . "\n" . $this->obj->sourceDefinition . ';';
     }
 
     public function getDown(): string {
-        $drop = $this->buildDrop($this->obj->sourceDefinition, $this->obj->name);
+        $drop = RoutineDrop::build($this->obj->sourceDefinition, $this->obj->name, $this->dialect);
         return $drop . "\n" . $this->obj->targetDefinition . ';';
     }
 
-    private function buildDrop(string $definition, string $name): string {
-        $type = 'FUNCTION';
-        if (preg_match('/\bPROCEDURE\b/i', $definition)) {
-            $type = 'PROCEDURE';
-        }
-        return "DROP $type IF EXISTS " . $this->dialect->quote($name) . ';';
-    }
 }

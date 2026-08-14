@@ -2,8 +2,8 @@
 DROP TYPE IF EXISTS "old_status";
 DROP VIEW IF EXISTS "old_report";
 DROP TRIGGER IF EXISTS "trg_old_audit" ON "products";
-DROP FUNCTION IF EXISTS "cleanup_products";
-DROP FUNCTION IF EXISTS "trg_old_audit_fn";
+DROP FUNCTION IF EXISTS "cleanup_products"();
+DROP FUNCTION IF EXISTS "trg_old_audit_fn"();
 CREATE TYPE "order_status" AS ENUM ('pending', 'processing', 'shipped', 'delivered');
 DROP TYPE IF EXISTS "priority";
 CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high', 'critical');
@@ -48,8 +48,8 @@ BEGIN
   RETURN OLD;
 END;
 $function$;
-DROP FUNCTION IF EXISTS "get_product_count";
-DROP FUNCTION IF EXISTS "trg_products_updated_fn";
+DROP FUNCTION IF EXISTS "get_product_count"();
+DROP FUNCTION IF EXISTS "trg_products_updated_fn"();
 CREATE TRIGGER trg_old_audit AFTER DELETE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_old_audit_fn();
 DROP TRIGGER IF EXISTS "trg_products_updated" ON "products";
 CREATE VIEW "old_report" AS SELECT products.id,

@@ -20,17 +20,7 @@ class CreateRoutineSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        return $this->buildDrop($this->obj->definition, $this->obj->name);
+        return RoutineDrop::build($this->obj->definition, $this->obj->name, $this->dialect);
     }
 
-    /**
-     * Build a DROP statement that matches the routine type (PROCEDURE or FUNCTION).
-     */
-    private function buildDrop(string $definition, string $name): string {
-        $type = 'FUNCTION';
-        if (preg_match('/\bPROCEDURE\b/i', $definition)) {
-            $type = 'PROCEDURE';
-        }
-        return "DROP $type IF EXISTS " . $this->dialect->quote($name) . ';';
-    }
 }
