@@ -161,6 +161,14 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
     }
 
     public function getTriggers(Connection $connection): array {
+        // tgparentid <> 0 marks a trigger PostgreSQL created on a partition as
+        // a clone of one declared on the partitioned parent. Emitting those
+        // produced a migration that creates the parent trigger — which
+        // propagates to every partition — and then tries to create the
+        // propagated copies as well:
+        //   ERROR: trigger "after_delete_trigger" for relation
+        //          "customers_americas" already exists
+        // Only the parent's own declaration is ours to reproduce.
         $result = $connection->select(
             "SELECT t.tgname AS name, c.relname AS table_name,
                     pg_get_triggerdef(t.oid) AS definition
@@ -168,6 +176,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              JOIN pg_class c ON t.tgrelid = c.oid
              JOIN pg_namespace n ON c.relnamespace = n.oid
              WHERE NOT t.tgisinternal
+               AND t.tgparentid = 0
                AND n.nspname = 'public'
              ORDER BY t.tgname"
         );
