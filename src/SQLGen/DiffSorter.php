@@ -43,12 +43,16 @@ class DiffSorter {
         "InsertData",
         "UpdateData",
 
+        // Routines first: both a view and a trigger may call a function, and
+        // creating either before the function exists fails with
+        //   ERROR: function f() does not exist
+        // CreateRoutine used to sit last, after the objects depending on it.
+        "CreateRoutine",
+        "AlterRoutine",
         "CreateView",
         "AlterView",
         "CreateTrigger",
         "AlterTrigger",
-        "CreateRoutine",
-        "AlterRoutine",
     ];
 
     private $down_order = [
