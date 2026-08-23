@@ -68,6 +68,20 @@ class PostgresAdapter implements DBAdapterInterface {
     }
 
     public function getCreateStatement(Connection $connection, string $table): string {
+        $partition = $this->fetchPartitionMeta($connection, $table);
+
+        // A partition is declared against its parent, which supplies the
+        // columns, constraints and indexes. Reconstructing it as a standalone
+        // CREATE TABLE produced a detached ordinary table: the rows still went
+        // somewhere, but the partitioning was silently gone.
+        if ($partition['is_partition']) {
+            $ddl = "CREATE TABLE \"$table\" PARTITION OF \"{$partition['parent']}\" {$partition['bound']}";
+            foreach ($this->fetchIndexes($connection, $table) as $idxDef) {
+                $ddl .= ";\n$idxDef";
+            }
+            return $ddl;
+        }
+
         // Reconstruct a CREATE TABLE statement from information_schema.
         $columns     = $this->fetchColumns($connection, $table);
         $keys        = $this->fetchIndexes($connection, $table);
@@ -90,12 +104,53 @@ class PostgresAdapter implements DBAdapterInterface {
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
 
+        // Without this the parent came out as an ordinary table and every
+        // partition attached to it had nowhere to go.
+        if ($partition['partition_by'] !== null) {
+            // pg_get_partkeydef() returns just the strategy and key, e.g.
+            // "RANGE (order_date)", so the PARTITION BY keyword is ours to add.
+            $ddl .= ' PARTITION BY ' . $partition['partition_by'];
+        }
+
         // Append CREATE INDEX statements after the main DDL
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
         }
 
         return $ddl;
+    }
+
+    /**
+     * Partitioning facts for a table: whether it is a partitioned parent (and
+     * on what key), and whether it is itself a partition (of what, for which
+     * bound). Both are empty for an ordinary table.
+     */
+    private function fetchPartitionMeta(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "SELECT c.relkind,
+                    c.relispartition,
+                    CASE WHEN c.relkind = 'p'
+                         THEN pg_get_partkeydef(c.oid) END AS partition_by,
+                    parent.relname AS parent,
+                    CASE WHEN c.relispartition
+                         THEN pg_get_expr(c.relpartbound, c.oid) END AS bound
+               FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+               LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
+               LEFT JOIN pg_class parent ON parent.oid = i.inhparent
+              WHERE n.nspname = 'public' AND c.relname = ?",
+            [$table]
+        );
+        $row = $rows[0] ?? null;
+        if (!$row) {
+            return ['partition_by' => null, 'is_partition' => false, 'parent' => null, 'bound' => null];
+        }
+        return [
+            'partition_by' => $row['partition_by'] ?? null,
+            'is_partition' => (bool) ($row['relispartition'] ?? false),
+            'parent'       => $row['parent'] ?? null,
+            'bound'        => $row['bound'] ?? null,
+        ];
     }
 
     public function getDBVariable(Connection $connection, string $variable): ?string {
@@ -122,6 +177,22 @@ class PostgresAdapter implements DBAdapterInterface {
         foreach ($result as $row) {
             $map[$row['table_name']][] = $row['referenced_table'];
         }
+
+        // A partition depends on its parent exactly the way a child table
+        // depends on the table it references: CREATE TABLE ... PARTITION OF
+        // fails if the parent does not exist yet. Feeding the edge into the
+        // same map means the existing topological sort handles the ordering.
+        foreach ($connection->select(
+            "SELECT c.relname AS child, p.relname AS parent
+               FROM pg_inherits i
+               JOIN pg_class c ON c.oid = i.inhrelid
+               JOIN pg_class p ON p.oid = i.inhparent
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public'"
+        ) as $row) {
+            $map[$row['child']][] = $row['parent'];
+        }
+
         return empty($map) ? $map : array_map(fn($p) => array_values(array_unique($p)), $map);
     }
 
