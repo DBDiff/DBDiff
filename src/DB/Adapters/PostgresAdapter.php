@@ -204,7 +204,7 @@ class PostgresAdapter implements DBAdapterInterface {
         $rows = $connection->select(
             "SELECT column_name, data_type, character_maximum_length, is_nullable,
                     column_default, numeric_precision, numeric_scale, udt_name,
-                    datetime_precision, is_identity, identity_generation,
+                    udt_schema, datetime_precision, is_identity, identity_generation,
                     is_generated, generation_expression, domain_name
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = ?
@@ -510,8 +510,29 @@ class PostgresAdapter implements DBAdapterInterface {
             'time with time zone'    => 'timetz',
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
+            // information_schema reports every enum, composite and extension
+            // type as the literal string 'USER-DEFINED'; the real name is in
+            // udt_name. Without this, an enum column was emitted as
+            //   "status" USER-DEFINED
+            // which is a syntax error, so no table using an enum could be
+            // created — and enums are ubiquitous in Supabase schemas.
+            'USER-DEFINED'           => $this->qualifiedUdt($col),
         ];
         return $simpleMap[$col['data_type']] ?? $this->resolveParameterisedType($col);
+    }
+
+    /**
+     * Quote a user-defined type, qualifying it with its schema when it does not
+     * live in public (Supabase puts extension types in "extensions", which is
+     * not usually on the search_path of the session running the migration).
+     */
+    private function qualifiedUdt(array $col): string {
+        $name   = '"' . $col['udt_name'] . '"';
+        $schema = $col['udt_schema'] ?? null;
+        if ($schema && !in_array($schema, ['public', 'pg_catalog'], true)) {
+            return '"' . $schema . '".' . $name;
+        }
+        return $name;
     }
 
     /**

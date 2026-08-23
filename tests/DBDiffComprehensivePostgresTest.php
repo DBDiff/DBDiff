@@ -240,6 +240,50 @@ class DBDiffComprehensivePostgresTest extends AbstractComprehensiveTest
         );
     }
 
+    /**
+     * information_schema reports every enum, composite and extension type as
+     * the literal string 'USER-DEFINED'; the real name lives in udt_name. That
+     * string was being written straight into the DDL:
+     *
+     *   "status" USER-DEFINED
+     *   ERROR: syntax error at or near "USER"
+     *
+     * so no table using an enum could be created — and enums are ubiquitous in
+     * Supabase schemas.
+     */
+    public function testGeneratedEnumColumnIsValidSql(): void
+    {
+        $db1 = $this->connectTo($this->db1);
+        $db1->exec("CREATE TYPE enum_target_status AS ENUM ('active','paused','closed')");
+        $db1->exec(
+            'CREATE TABLE enum_target (
+                id     bigint PRIMARY KEY,
+                status enum_target_status NOT NULL DEFAULT \'active\'
+            )'
+        );
+
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=up', '--nocomments', $this->dbInputArg()]
+        ));
+
+        $this->assertStringNotContainsString(
+            'USER-DEFINED',
+            $output,
+            'Enum columns must be emitted with their type name, not the information_schema placeholder'
+        );
+
+        $db2 = $this->connectTo($this->db2);
+        $db2->exec($this->stripMigrationMarkers($output));
+
+        $type = $db2->query(
+            "SELECT udt_name FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'enum_target'
+                AND column_name = 'status'"
+        )->fetchColumn();
+        $this->assertSame('enum_target_status', $type, 'Enum column should keep its type');
+    }
+
     /** Connect to one of the scratch databases with exceptions enabled. */
     private function connectTo(string $dbName): PDO
     {

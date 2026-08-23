@@ -188,10 +188,13 @@ class DiffSorterProgrammableTest extends TestCase
     }
 
     /**
-     * UP order: CreateEnum comes after data ops but before CreateView and
-     * after AddTable in the sorted order (tables first, then enums, then views).
+     * UP order: CreateEnum must come BEFORE AddTable. A table with an enum
+     * column cannot be created until the type exists — PostgreSQL rejects it
+     * with 'type "x" does not exist'. Enums are Postgres-only here (the MySQL
+     * and SQLite adapters both report no enums), so ordering them ahead of
+     * tables affects nothing else.
      */
-    public function testUpOrderCreateEnumAfterTableBeforeView(): void
+    public function testUpOrderCreateEnumBeforeTableAndView(): void
     {
         $stub = $this->createMock(\DBDiff\DB\DBManager::class);
 
@@ -207,7 +210,7 @@ class DiffSorterProgrammableTest extends TestCase
         $addIdx    = array_search('AddTable', $names);
         $enumIdx   = array_search('CreateEnum', $names);
         $viewIdx   = array_search('CreateView', $names);
-        $this->assertLessThan($enumIdx, $addIdx, 'AddTable before CreateEnum');
+        $this->assertLessThan($addIdx, $enumIdx, 'CreateEnum before AddTable');
         $this->assertLessThan($viewIdx, $enumIdx, 'CreateEnum before CreateView');
     }
 
@@ -245,8 +248,10 @@ class DiffSorterProgrammableTest extends TestCase
         $this->assertLessThan($addTableIdx, $dropViewIdx);
         $this->assertLessThan($addTableIdx, $dropTrigIdx);
 
-        // All creates after AddTable
-        $this->assertGreaterThan($addTableIdx, $createEnumIdx);
+        // Enums precede the tables that may reference them
+        $this->assertLessThan($addTableIdx, $createEnumIdx);
+
+        // Views and triggers still come after the tables they depend on
         $this->assertGreaterThan($addTableIdx, $createViewIdx);
         $this->assertGreaterThan($addTableIdx, $createTrigIdx);
 
