@@ -192,6 +192,54 @@ class DBDiffComprehensivePostgresTest extends AbstractComprehensiveTest
         $this->assertEquals(1, $exists, 'Replayed migration should create the table');
     }
 
+    /**
+     * A serial column carries DEFAULT nextval('<table>_<col>_seq'), but that
+     * sequence is owned by the table and was never emitted by the migration,
+     * so replaying the CREATE TABLE failed with:
+     *
+     *   ERROR: relation "books_id_seq" does not exist
+     *
+     * Writing the column back as serial re-creates the owned sequence
+     * implicitly. Asserting on the resulting default (rather than the DDL text)
+     * proves the column round-trips to the same thing it started as.
+     */
+    public function testGeneratedSerialColumnIsValidSql(): void
+    {
+        $this->connectTo($this->db1)->exec(
+            'CREATE TABLE serial_target (
+                id     serial PRIMARY KEY,
+                big    bigserial,
+                small  smallserial,
+                title  text
+            )'
+        );
+
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=up', '--nocomments', $this->dbInputArg()]
+        ));
+
+        $db2 = $this->connectTo($this->db2);
+        $db2->exec($this->stripMigrationMarkers($output));
+
+        $defaults = $db2->query(
+            "SELECT column_name, column_default FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'serial_target'
+                AND column_name IN ('id','big','small')
+              ORDER BY column_name"
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        $this->assertSame(
+            [
+                'big'   => "nextval('serial_target_big_seq'::regclass)",
+                'id'    => "nextval('serial_target_id_seq'::regclass)",
+                'small' => "nextval('serial_target_small_seq'::regclass)",
+            ],
+            $defaults,
+            'Serial columns must round-trip to their own sequence'
+        );
+    }
+
     /** Connect to one of the scratch databases with exceptions enabled. */
     private function connectTo(string $dbName): PDO
     {

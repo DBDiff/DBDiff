@@ -230,6 +230,7 @@ class PostgresAdapter implements DBAdapterInterface {
         foreach ($this->fetchNamedNotNullConstraints($connection, $table) as $nn) {
             $customNotNullCols[$nn['column']] = true;
         }
+        $serialCols = $this->fetchSerialColumns($connection, $table);
 
         $columns = [];
         foreach ($rows as $row) {
@@ -255,10 +256,71 @@ class PostgresAdapter implements DBAdapterInterface {
                 if (!is_null($row['column_default'])) {
                     $default = ' DEFAULT ' . $row['column_default'];
                 }
-                $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
+
+                // A serial column's default is nextval('<table>_<col>_seq'),
+                // but that sequence belongs to the table and is not emitted
+                // anywhere in this migration, so replaying the CREATE TABLE
+                // failed with: relation "<table>_<col>_seq" does not exist.
+                // Writing the column back as serial/bigserial re-creates the
+                // owned sequence implicitly and restores the same default.
+                $serialType = $this->serialTypeFor($row, $serialCols);
+                if ($serialType !== null) {
+                    $columns[$name] = '"' . $name . '" ' . $serialType;
+                } else {
+                    $columns[$name] = '"' . $name . '" ' . $type . $notNull . $default;
+                }
             }
         }
         return $columns;
+    }
+
+    /**
+     * Return 'smallserial'/'serial'/'bigserial' when this column is a genuine
+     * serial: an integer, NOT NULL, defaulting to nextval() on a sequence the
+     * column actually owns. Anything else (a shared or standalone sequence, a
+     * nullable column) returns null and keeps its explicit DEFAULT, because
+     * serial would change the semantics rather than preserve them.
+     */
+    private function serialTypeFor(array $row, array $serialCols): ?string {
+        if (!isset($serialCols[$row['column_name']])) {
+            return null;
+        }
+        if ($row['is_nullable'] !== 'NO') {
+            return null; // serial implies NOT NULL
+        }
+        if (!preg_match('/^nextval\(/i', (string) $row['column_default'])) {
+            return null;
+        }
+        return [
+            'smallint' => 'smallserial',
+            'integer'  => 'serial',
+            'bigint'   => 'bigserial',
+        ][$row['data_type']] ?? null;
+    }
+
+    /**
+     * Columns that own their sequence, i.e. real serial columns.
+     * pg_get_serial_sequence() returns null for a sequence the column merely
+     * references, which is exactly the distinction that matters here.
+     */
+    private function fetchSerialColumns(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "SELECT a.attname AS column_name
+               FROM pg_attribute a
+               JOIN pg_class c ON c.oid = a.attrelid
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public'
+                AND c.relname = ?
+                AND a.attnum > 0
+                AND NOT a.attisdropped
+                AND pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) IS NOT NULL",
+            [$table]
+        );
+        $out = [];
+        foreach ($rows as $r) {
+            $out[$r['column_name']] = true;
+        }
+        return $out;
     }
 
     /**
