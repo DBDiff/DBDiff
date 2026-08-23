@@ -178,11 +178,19 @@ jobs:
             cp -a spc-cache/downloads downloads
           fi
 
-          ./spc doctor --auto-fix
-
           if [ -f buildroot/bin/micro.sfx ]; then
-            echo "Cache hit — reusing micro.sfx"
+            # No compile on a cache hit, so no musl toolchain is needed and
+            # musl.libc.org is never contacted.
+            echo "Cache hit — reusing micro.sfx, skipping SPC doctor"
           else
+            mkdir -p spc-cache
+            .github/scripts/prepare-musl.sh spc-cache
+
+            SPC_DOWNLOAD_RETRIES=3 ./spc doctor --auto-fix
+
+            tar -czf spc-cache/musl-prefix.tar.gz \
+              /usr/local/musl "/lib/ld-musl-$(uname -m).so.1" 2>/dev/null || true
+
             ./spc download \
               "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
               --with-php="${{ env.SPC_PHP_VERSION }}"

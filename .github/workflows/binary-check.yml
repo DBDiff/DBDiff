@@ -152,6 +152,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Restore cached artifacts so we can skip the 30-60 min compile.
+          mkdir -p spc-cache
           if [ -d spc-cache/buildroot ]; then
             echo "Restoring SPC buildroot from cache..."
             cp -a spc-cache/buildroot buildroot
@@ -164,12 +165,26 @@ jobs:
             cp -a spc-cache/downloads downloads
           fi
 
-          ./spc doctor --auto-fix
-
           if [ -f buildroot/bin/micro.sfx ]; then
-            echo "Cache hit — reusing micro.sfx, skipping SPC download + build."
+            # Nothing is compiled on a cache hit, so the musl toolchain is not
+            # needed. Running doctor here anyway meant a fully cached run — one
+            # that does no build at all — still reached out to musl.libc.org and
+            # failed with it when that host was down.
+            echo "Cache hit — reusing micro.sfx, skipping SPC doctor, download and build."
           else
             echo "No cache — building from scratch (~30-60 min)..."
+
+            # Restore or pre-seed musl before doctor, so fix-musl-wrapper does
+            # not depend on a single origin being reachable. See the script.
+            .github/scripts/prepare-musl.sh spc-cache
+
+            SPC_DOWNLOAD_RETRIES=3 ./spc doctor --auto-fix
+
+            # Keep the installed toolchain for the next run: spc's musl checks
+            # are file-existence tests, so a restored install skips the fix.
+            tar -czf spc-cache/musl-prefix.tar.gz \
+              /usr/local/musl "/lib/ld-musl-$(uname -m).so.1" 2>/dev/null || true
+
             ./spc download \
               "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
               --with-php="${{ env.SPC_PHP_VERSION }}"
