@@ -111,4 +111,17 @@ interface DBAdapterInterface {
      * MySQL and SQLite return [] (enums are column-level, not standalone types).
      */
     public function getEnums(Connection $connection): array;
+
+    /**
+     * Return a hash-per-table map for schema pre-scan.
+     *
+     * Returns [tableName => hashString] covering columns, indexes, constraints,
+     * engine, and collation. When source and target hashes match for a table,
+     * the diff layer can skip all per-table queries for that table.
+     *
+     * When $tables is non-empty only those tables are included in the result.
+     * Drivers that cannot implement an efficient batch hash (e.g. SQLite) should
+     * return [] — the caller falls back to diffing all common tables normally.
+     */
+    public function getSchemaHashMap(Connection $connection, array $tables = []): array;
 }

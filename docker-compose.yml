@@ -396,7 +396,7 @@ services:
 
   # Dolt (MySQL-compatible, version-controlled database)
   db-dolt:
-    image: docker.io/dolthub/dolt-sql-server:latest
+    image: docker.io/dolthub/dolt-sql-server:${DOLT_VERSION}
     restart: always
     ports:
       - '${DB_PORT_DOLT}:3306'

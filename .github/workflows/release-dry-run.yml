@@ -27,6 +27,10 @@ env:
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
+  # Pin static-php-cli to a known-good release. 'latest' (2.8.4/2.8.5) regressed
+  # the Windows php-src extraction; 2.8.3 built all targets cleanly. Bump
+  # deliberately after verifying a newer SPC works on Windows.
+  SPC_VERSION: "2.8.3"
   DRY_RUN_VERSION: ${{ inputs.version || '0.0.0-dry-run' }}
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -104,7 +108,10 @@ jobs:
             os: macos-latest
             artifact: dbdiff-darwin-arm64
           - target: win32-x64
-            os: windows-latest
+            # windows-latest rolled to windows-2025, where static-php-cli's
+            # 7za|tar php-src extraction fails ("system cannot find the path").
+            # Pin to windows-2022 — the last image where the Windows build worked.
+            os: windows-2022
             artifact: dbdiff-win32-x64
 
     runs-on: ${{ matrix.os }}
@@ -147,7 +154,7 @@ jobs:
             macOS-ARM64)  SPC_TARBALL="spc-macos-aarch64.tar.gz" ;;
           esac
           curl -fsSL \
-            "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/${SPC_TARBALL}" \
+            "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/${SPC_TARBALL}" \
             | tar xz
           chmod +x spc
 
@@ -200,7 +207,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/crazywhalecc/static-php-cli/releases/latest/download/spc-windows-x64.exe" -OutFile spc.exe
+          Invoke-WebRequest -Uri "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe" -OutFile spc.exe
 
       - name: Build static PHP binary (Windows)
         if: runner.os == 'Windows'
@@ -257,6 +264,21 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+
+      # `npm publish --dry-run` never authenticates, so it can't tell us whether
+      # NPM_TOKEN is still valid. `npm whoami` makes a real authenticated call —
+      # it fails fast here if the token is missing/expired, before a real release
+      # would fail at the publish step.
+      - name: Verify NPM_TOKEN is valid
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm whoami --registry=https://registry.npmjs.org; then
+            echo "✅ NPM_TOKEN is valid (authenticated as the user above)."
+          else
+            echo "❌ NPM_TOKEN is missing, expired, or invalid — the real release publish would fail."
+            exit 1
+          fi
 
       - name: Inject version into package.json files
         run: |
