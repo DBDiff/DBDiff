@@ -341,6 +341,62 @@ class DBDiffComprehensivePostgresTest extends AbstractComprehensiveTest
         );
     }
 
+    /**
+     * A trigger declared on a partitioned parent is propagated by PostgreSQL to
+     * every partition, recorded with tgparentid pointing at the parent's.
+     * Reproducing those clones made the migration create the parent trigger
+     * (which propagates) and then try to create the copies too:
+     *
+     *   ERROR: trigger "..." for relation "..." already exists
+     *
+     * Only the parent's declaration is ours to emit. Surfaced by replaying the
+     * Supabase docs corpus once partitions were being attached properly rather
+     * than flattened into standalone tables.
+     */
+    public function testPartitionTriggerClonesAreNotDuplicated(): void
+    {
+        $this->connectTo($this->db1)->exec(
+            "CREATE TABLE trg_part (
+                 id bigint NOT NULL,
+                 region text NOT NULL,
+                 PRIMARY KEY (region, id)
+             ) PARTITION BY LIST (region);
+             CREATE TABLE trg_part_emea PARTITION OF trg_part FOR VALUES IN ('emea');
+             CREATE TABLE trg_part_apac PARTITION OF trg_part FOR VALUES IN ('apac');
+             CREATE FUNCTION trg_part_noop() RETURNS trigger LANGUAGE plpgsql
+                 AS $$ BEGIN RETURN NEW; END $$;
+             CREATE TRIGGER trg_part_after_ins AFTER INSERT ON trg_part
+                 FOR EACH ROW EXECUTE FUNCTION trg_part_noop();"
+        );
+
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=up', '--nocomments', $this->dbInputArg()]
+        ));
+
+        $this->assertSame(
+            1,
+            substr_count($output, 'CREATE TRIGGER trg_part_after_ins'),
+            "The trigger must be emitted once, for the parent only:\n$output"
+        );
+
+        // The real assertion: PostgreSQL accepts the whole migration.
+        $db2 = $this->connectTo($this->db2);
+        $db2->exec($this->stripMigrationMarkers($output));
+
+        // Count every row, internal or not: PostgreSQL 14 marks a propagated
+        // clone tgisinternal = true, while 15+ leaves it false. That change is
+        // exactly why the duplicate only appears on 15+ — on 14 the existing
+        // NOT tgisinternal filter already excluded clones by accident.
+        $count = $db2->query(
+            "SELECT count(*) FROM pg_trigger t
+               JOIN pg_class c ON c.oid = t.tgrelid
+              WHERE t.tgname = 'trg_part_after_ins'"
+        )->fetchColumn();
+        // One declared on the parent, propagated to both partitions.
+        $this->assertEquals(3, $count, 'Parent trigger should propagate to each partition');
+    }
+
     /** Connect to one of the scratch databases with exceptions enabled. */
     private function connectTo(string $dbName): PDO
     {

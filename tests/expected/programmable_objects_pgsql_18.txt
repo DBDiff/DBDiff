@@ -7,16 +7,6 @@ DROP FUNCTION IF EXISTS "trg_old_audit_fn"();
 CREATE TYPE "order_status" AS ENUM ('pending', 'processing', 'shipped', 'delivered');
 DROP TYPE IF EXISTS "priority";
 CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high', 'critical');
-CREATE VIEW "product_names" AS SELECT id,
-    name
-   FROM products;
-DROP VIEW IF EXISTS "expensive_products";
-CREATE VIEW "expensive_products" AS SELECT id,
-    name,
-    price
-   FROM products
-  WHERE (price > (10)::numeric);
-CREATE TRIGGER trg_products_updated BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_products_updated_fn();
 CREATE OR REPLACE FUNCTION public.get_product_count()
  RETURNS integer
  LANGUAGE sql
@@ -33,6 +23,16 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+CREATE VIEW "product_names" AS SELECT id,
+    name
+   FROM products;
+DROP VIEW IF EXISTS "expensive_products";
+CREATE VIEW "expensive_products" AS SELECT id,
+    name,
+    price
+   FROM products
+  WHERE (price > (10)::numeric);
+CREATE TRIGGER trg_products_updated BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_products_updated_fn();
 #---------- DOWN ----------
 CREATE OR REPLACE FUNCTION public.cleanup_products()
  RETURNS void
