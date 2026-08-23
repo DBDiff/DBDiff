@@ -73,14 +73,15 @@ class PostgresAdapter implements DBAdapterInterface {
         $keys        = $this->fetchIndexes($connection, $table);
         $constraints = $this->fetchConstraints($connection, $table);
 
-        // Primary key
-        $pk = $this->getPrimaryKey($connection, $table);
-
+        // The primary key is NOT added separately here: fetchConstraints()
+        // already returns it as CONSTRAINT "<name>" PRIMARY KEY (...), because
+        // its query includes constraint_type 'PRIMARY KEY'. Emitting it here as
+        // well produced two PRIMARY KEY clauses in one CREATE TABLE, which
+        // PostgreSQL rejects outright:
+        //   ERROR: multiple primary keys for table "t" are not allowed
+        // Keeping the named form (rather than a bare "PRIMARY KEY (cols)")
+        // preserves the constraint name, so the table round-trips faithfully.
         $parts = array_values($columns);
-        if (!empty($pk)) {
-            $pkCols = implode(', ', array_map(fn($c) => '"' . $c . '"', $pk));
-            $parts[] = "PRIMARY KEY ($pkCols)";
-        }
         foreach ($constraints as $constraintDef) {
             $parts[] = $constraintDef;
         }
