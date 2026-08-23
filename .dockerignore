@@ -20,6 +20,11 @@ vendor/
 docker-compose*.yml
 docs/
 images/
-scripts/
-tests/
 .github/
+
+# scripts/ and tests/ are NOT excluded: docker/Dockerfile (the "full" image)
+# copies both, because that image exists for local development and
+# cross-version testing via start.sh. Excluding them made every full-image
+# build fail at COPY with `"/scripts": not found`, and the failure went
+# unnoticed for months because the release step is continue-on-error.
+# Dockerfile.slim copies neither, so this costs it only build context.

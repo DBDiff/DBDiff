@@ -713,6 +713,36 @@ jobs:
             echo "::warning::❌ GHCR login failed"
           fi
 
+      # ── Validate both images before any push ──────────────────────────────
+      # The push steps below are continue-on-error so a registry outage cannot
+      # block the rest of the release. That also swallowed genuine build
+      # failures: docker/Dockerfile could not build at all for months (COPY of
+      # paths excluded by .dockerignore) and every release still reported
+      # success while publishing no full image.
+      #
+      # These steps build without pushing and are NOT continue-on-error, so a
+      # broken Dockerfile fails the release loudly. Layers land in the gha
+      # cache, so the push steps below reuse them rather than rebuilding.
+      - name: Validate slim image builds
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.slim
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validate full image builds
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       # ── Slim image (PHAR + PHP Alpine) ────────────────────────────────────
       # Tags: latest, {version}, slim-{version}
       - name: Build and push slim image to GHCR
