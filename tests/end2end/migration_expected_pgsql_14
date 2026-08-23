@@ -3,7 +3,6 @@ ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
 ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
 CREATE TABLE "cc" (
   "id" integer NOT NULL,
-  PRIMARY KEY ("id"),
   CONSTRAINT "cc_pkey" PRIMARY KEY ("id")
 );
 DELETE FROM "zz" WHERE "id" = '1' AND "name" = 'name';
@@ -36,7 +35,6 @@ CREATE TABLE "zz" (
   "id" integer NOT NULL,
   "name" varchar(13) NOT NULL DEFAULT 'lol'::character varying,
   "bool" boolean NOT NULL,
-  PRIMARY KEY ("id", "name"),
   CONSTRAINT "zz_name_key" UNIQUE ("name"),
   CONSTRAINT "zz_pkey" PRIMARY KEY ("id", "name")
 );

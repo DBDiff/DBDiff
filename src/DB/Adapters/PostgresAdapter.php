@@ -3,6 +3,7 @@
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use DBDiff\DB\Support\QueryHelper;
+use DBDiff\DB\Support\PostgresSchemaHelper;
 
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
@@ -63,19 +64,29 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
     }
 
     public function getCreateStatement(Connection $connection, string $table): string {
+        $partition = PostgresSchemaHelper::partitionMeta($connection, $table);
+
+        // A partition is declared against its parent, which supplies the columns,
+        // constraints and indexes. Rebuilding it as a standalone CREATE TABLE
+        // produced a detached ordinary table: rows still inserted, but the
+        // partitioning was silently gone.
+        if ($partition['is_partition']) {
+            return "CREATE TABLE \"$table\" PARTITION OF \"{$partition['parent']}\" {$partition['bound']}";
+        }
+
         $bulk        = $this->getBulkTableSchema($connection, [$table]);
         $schema      = $bulk[$table] ?? ['columns' => [], 'keys' => [], 'constraints' => []];
         $columns     = $schema['columns'];
         $keys        = $schema['keys'];
         $constraints = $schema['constraints'];
 
-        $pk = $this->getPrimaryKey($connection, $table);
-
+        // The primary key is NOT added separately here: the constraint list
+        // already contains it as CONSTRAINT "<name>" PRIMARY KEY (...). Emitting
+        // it again produced two PRIMARY KEY clauses in one CREATE TABLE, which
+        // PostgreSQL rejects outright:
+        //   ERROR: multiple primary keys for table "t" are not allowed
+        // Keeping the named form preserves the constraint name.
         $parts = array_values($columns);
-        if (!empty($pk)) {
-            $pkCols = implode(', ', array_map(fn($c) => '"' . $c . '"', $pk));
-            $parts[] = "PRIMARY KEY ($pkCols)";
-        }
         foreach ($constraints as $constraintDef) {
             $parts[] = $constraintDef;
         }
@@ -83,6 +94,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         $ddl  = "CREATE TABLE \"$table\" (\n";
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
+
+        // Without this the parent came out as an ordinary table and every
+        // partition attached to it had nowhere to go. pg_get_partkeydef()
+        // returns only the strategy and key, e.g. "RANGE (order_date)".
+        if ($partition['partition_by'] !== null) {
+            $ddl .= ' PARTITION BY ' . $partition['partition_by'];
+        }
 
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
@@ -111,6 +129,21 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         $map = [];
         foreach ($result as $row) {
             $map[$row['table_name']][] = $row['referenced_table'];
+        }
+
+        // A partition depends on its parent exactly the way a child table
+        // depends on the table it references: CREATE TABLE ... PARTITION OF
+        // fails if the parent does not exist yet. Feeding the edge into the
+        // same map means the existing topological sort handles the ordering.
+        foreach ($connection->select(
+            "SELECT c.relname AS child, p.relname AS parent
+               FROM pg_inherits i
+               JOIN pg_class c ON c.oid = i.inhrelid
+               JOIN pg_class p ON p.oid = i.inhparent
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public'"
+        ) as $row) {
+            $map[$row['child']][] = $row['parent'];
         }
         return empty($map) ? $map : array_map(fn($p) => array_values(array_unique($p)), $map);
     }
@@ -315,7 +348,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         $colRows = $connection->select(
             "SELECT table_name, column_name, data_type, character_maximum_length, is_nullable,
-                    column_default, numeric_precision, numeric_scale, udt_name,
+                    column_default, numeric_precision, numeric_scale, udt_name, udt_schema,
+                    -- Sequence ownership, resolved inline rather than by a second
+                    -- round trip: the bulk fetch is required to stay at a constant
+                    -- number of queries no matter how many tables are involved.
+                    pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name) AS owned_sequence,
                     datetime_precision, is_identity, identity_generation,
                     is_generated, generation_expression, domain_name
              FROM information_schema.columns
@@ -479,25 +516,12 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                 $result[$tbl] = [];
             }
 
-            $type        = $this->buildColumnType($row);
+            $type         = $this->buildColumnType($row);
             $domIsNotNull = $row['domain_name'] && ($domainNotNull[$row['domain_name']] ?? false);
-            $notNull     = ($row['is_nullable'] === 'NO' && !$domIsNotNull
-                            && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
+            $notNull      = ($row['is_nullable'] === 'NO' && !$domIsNotNull
+                             && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
 
-            if ($row['is_identity'] === 'YES') {
-                $gen = $row['identity_generation'] ?? 'BY DEFAULT';
-                $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull
-                    . ' GENERATED ' . $gen . ' AS IDENTITY';
-                continue;
-            }
-            if ($row['is_generated'] === 'ALWAYS') {
-                $expr = $row['generation_expression'] ?? '';
-                $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull
-                    . ' GENERATED ALWAYS AS (' . $expr . ') STORED';
-                continue;
-            }
-            $default = $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
-            $result[$tbl][$name] = '"' . $name . '" ' . $type . $notNull . $default;
+            $result[$tbl][$name] = PostgresSchemaHelper::columnDefinition($row, $type, $notNull);
         }
         return $result;
     }
@@ -621,6 +645,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             'time with time zone'    => 'timetz',
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
+            // information_schema reports every enum, composite and extension
+            // type as the literal string 'USER-DEFINED'; the real name is in
+            // udt_name. Without this an enum column was emitted as
+            //   "status" USER-DEFINED
+            // which is a syntax error, so no table using an enum could be
+            // created — and enums are ubiquitous in Supabase schemas.
+            'USER-DEFINED'           => PostgresSchemaHelper::qualifiedUdt($col),
         ];
         if (isset($simpleMap[$dataType])) {
             return $simpleMap[$dataType];

@@ -14,6 +14,13 @@ class DiffSorter {
 
         "AlterTableDropConstraint",
 
+        // Enums must exist before anything can reference them: a CREATE TABLE
+        // with an enum column, or a column added or retyped to one, fails with
+        // 'type "x" does not exist' when CREATE TYPE comes later in the file.
+        // These previously sat after AddTable, alongside views and routines.
+        "CreateEnum",
+        "AlterEnum",
+
         "AddTable",
 
         "DeleteData",
@@ -36,8 +43,6 @@ class DiffSorter {
         "InsertData",
         "UpdateData",
 
-        "CreateEnum",
-        "AlterEnum",
         "CreateView",
         "AlterView",
         "CreateTrigger",
