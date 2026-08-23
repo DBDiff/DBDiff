@@ -84,23 +84,29 @@ class PostgresSchemaHelper {
     public static function columnDefinition(array $row, string $type, string $notNull): string {
         $quoted = '"' . $row['column_name'] . '"';
 
+        // serial carries its own type and implies NOT NULL, so it replaces both
+        // the resolved type and the suffix rather than decorating them.
+        $serialType = self::serialTypeFor($row);
+
+        return $serialType !== null
+            ? "$quoted $serialType"
+            : $quoted . ' ' . $type . $notNull . self::columnSuffix($row);
+    }
+
+    /**
+     * What follows the type on a non-serial column: an identity clause, a
+     * generated-column expression, or a plain DEFAULT.
+     */
+    private static function columnSuffix(array $row): string {
         if ($row['is_identity'] === 'YES') {
-            $gen = $row['identity_generation'] ?? 'BY DEFAULT';
-            return "$quoted $type$notNull GENERATED $gen AS IDENTITY";
+            return ' GENERATED ' . ($row['identity_generation'] ?? 'BY DEFAULT') . ' AS IDENTITY';
         }
 
         if ($row['is_generated'] === 'ALWAYS') {
-            $expr = $row['generation_expression'] ?? '';
-            return "$quoted $type$notNull GENERATED ALWAYS AS ($expr) STORED";
+            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') STORED';
         }
 
-        $serialType = self::serialTypeFor($row);
-        if ($serialType !== null) {
-            return "$quoted $serialType";
-        }
-
-        $default = $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
-        return "$quoted $type$notNull$default";
+        return $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
     }
 
     /**
