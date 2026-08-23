@@ -188,6 +188,24 @@ jobs:
         run: |
           echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
 
+      # ── musl toolchain cache (Linux) ──────────────────────────────────────
+      # spc's fix-musl-wrapper fetches musl source from musl.libc.org, a single
+      # origin with no CDN. Its checks are file-existence tests, so a restored
+      # install makes doctor a no-op and the release stops depending on that
+      # host being up. Keyed on the spc version, which pins the musl version.
+      - name: Cache musl toolchain (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: musl-cache
+          key: musl-${{ runner.os }}-${{ runner.arch }}-spc${{ env.SPC_VERSION }}
+
+      - name: Restore or pre-seed musl (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p musl-cache
+          .github/scripts/prepare-musl.sh musl-cache
+
       # ── Build static PHP micro SAPI (all Unix targets) ────────────────────
       - name: Build static PHP binary (Unix)
         if: runner.os != 'Windows'
@@ -203,6 +221,9 @@ jobs:
           # timeout there (curl exit 28, after ~134s) killed three Linux legs of
           # the v3.0.0-rc.5 release and shipped a partial package set. See #185.
           # Retry with backoff so one transient timeout does not fail the leg.
+          # SPC_DOWNLOAD_RETRIES makes spc retry inside a single doctor run;
+          # the loop below still covers a failure that survives those.
+          export SPC_DOWNLOAD_RETRIES=3
           for attempt in 1 2 3; do
             if ./spc doctor --auto-fix; then
               break
@@ -215,6 +236,15 @@ jobs:
             echo "spc doctor attempt ${attempt} failed — retrying in ${backoff}s ..."
             sleep "$backoff"
           done
+
+          # Persist the toolchain so the next release restores it instead of
+          # downloading musl again.
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            mkdir -p musl-cache
+            tar -czf musl-cache/musl-prefix.tar.gz \
+              /usr/local/musl "/lib/ld-musl-$(uname -m).so.1" 2>/dev/null || true
+          fi
+
           ./spc download \
             "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
             --with-php="${{ env.SPC_PHP_VERSION }}"
