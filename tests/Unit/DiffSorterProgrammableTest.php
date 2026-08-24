@@ -32,8 +32,11 @@ class DiffSorterProgrammableTest extends TestCase
     }
 
     /**
-     * UP order: DropView/DropTrigger/DropRoutine come before AddTable,
-     * and CreateView/CreateTrigger/CreateRoutine come after data ops.
+     * UP order: DropView/DropTrigger/DropRoutine come before AddTable, and
+     * CreateView/CreateTrigger come after data ops.
+     *
+     * CreateRoutine is no longer in that trailing group — see
+     * testUpOrderCreateRoutineBeforeItsCallers.
      */
     public function testUpOrderDropsProgrammableBeforeTables(): void
     {
@@ -185,6 +188,39 @@ class DiffSorterProgrammableTest extends TestCase
         $names  = array_map([$this, 'className'], $sorted);
 
         $this->assertSame(['DropEnum', 'AddTable'], $names);
+    }
+
+    /**
+     * A function must exist before anything that calls it.
+     *
+     * CreateRoutine used to sort last, after CreateView and CreateTrigger, so a
+     * trigger whose function was also new was emitted before the function:
+     *
+     *   CREATE TRIGGER tg ... EXECUTE FUNCTION f();
+     *   CREATE OR REPLACE FUNCTION public.f() ...
+     *   ERROR: function f() does not exist
+     *
+     * The fix shipped in 3.0.0-rc.9 but had no test of its own — it was only
+     * covered incidentally by a partition-trigger test that happens to need a
+     * function, so a regression would have pointed at triggers rather than at
+     * ordering. Views have the same dependency and are asserted here too.
+     */
+    public function testUpOrderCreateRoutineBeforeItsCallers(): void
+    {
+        $diffs = [
+            new CreateTrigger('trg1', 't1', 'CREATE TRIGGER ...'),
+            new CreateView('v1', 'CREATE VIEW ...'),
+            new CreateRoutine('fn1', 'CREATE FUNCTION ...'),
+        ];
+
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'up'));
+
+        $routineIdx = array_search('CreateRoutine', $names);
+        $viewIdx    = array_search('CreateView', $names);
+        $triggerIdx = array_search('CreateTrigger', $names);
+
+        $this->assertLessThan($viewIdx, $routineIdx, 'CreateRoutine before CreateView');
+        $this->assertLessThan($triggerIdx, $routineIdx, 'CreateRoutine before CreateTrigger');
     }
 
     /**
