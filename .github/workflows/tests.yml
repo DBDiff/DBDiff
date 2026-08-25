@@ -540,6 +540,16 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
+    # The schema fingerprint and the DDL corpus are shared with SupaForge and
+    # published to npm. DBDiff is a Composer project and uses node for nothing
+    # else, so this is test-only tooling.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    - name: Install shared conformance data
+      run: npm ci
+
     - name: Run PG conformance tests
       run: ./scripts/pg-conformance/run.sh --host=127.0.0.1 --port=5432 --user=dbdiff --pass=rootpass --verbose
 
