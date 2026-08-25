@@ -12,6 +12,13 @@
     "wrong_output: DBDiff produces a diff, but applying it does not reproduce",
     "the target schema. These are defects in existing behaviour."
   ],
+  "known_failures": [
+    "obj_create_composite",
+    "obj_create_domain",
+    "obj_create_matview",
+    "obj_create_policy",
+    "obj_create_sequence"
+  ],
   "unmodelled_kind": [
     "obj_create_composite",
     "obj_create_domain",
@@ -19,39 +26,5 @@
     "obj_create_policy",
     "obj_create_sequence"
   ],
-  "wrong_output": [
-    "alter_table_change_type_136",
-    "alter_table_drop_default_139",
-    "identity_add_column_28",
-    "identity_add_identity_20",
-    "identity_add_identity_22",
-    "identity_add_identity_24",
-    "identity_add_identity_36",
-    "identity_add_identity_38",
-    "identity_add_identity_5",
-    "identity_change_type_18",
-    "identity_change_type_30",
-    "identity_drop_default_37",
-    "obj_create_identity_increment"
-  ],
-  "known_failures": [
-    "alter_table_change_type_136",
-    "alter_table_drop_default_139",
-    "identity_add_column_28",
-    "identity_add_identity_20",
-    "identity_add_identity_22",
-    "identity_add_identity_24",
-    "identity_add_identity_36",
-    "identity_add_identity_38",
-    "identity_add_identity_5",
-    "identity_change_type_18",
-    "identity_change_type_30",
-    "identity_drop_default_37",
-    "obj_create_composite",
-    "obj_create_domain",
-    "obj_create_identity_increment",
-    "obj_create_matview",
-    "obj_create_policy",
-    "obj_create_sequence"
-  ]
+  "wrong_output": []
 }

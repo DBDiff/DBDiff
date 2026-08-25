@@ -263,6 +263,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             is_nullable                                          || '|' ||
                             COALESCE(is_identity,'NO')                           || '|' ||
                             COALESCE(identity_generation,'')                     || '|' ||
+                            COALESCE(identity_start,'')                          || '|' ||
+                            COALESCE(identity_increment,'')                      || '|' ||
+                            COALESCE(identity_maximum,'')                        || '|' ||
+                            COALESCE(identity_minimum,'')                        || '|' ||
+                            COALESCE(identity_cycle,'')                          || '|' ||
                             COALESCE(is_generated,'NEVER')                       || '|' ||
                             COALESCE(generation_expression,'')                   || '|' ||
                             COALESCE(domain_name,''),
@@ -363,6 +368,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                     -- number of queries no matter how many tables are involved.
                     pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name) AS owned_sequence,
                     datetime_precision, is_identity, identity_generation,
+                    -- An identity column carries a sequence, and that sequence's
+                    -- options are part of the column definition: recreating it
+                    -- without them silently resets the counter.
+                    identity_start, identity_increment, identity_maximum,
+                    identity_minimum, identity_cycle,
                     is_generated, generation_expression, domain_name
              FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name IN ($ph)
