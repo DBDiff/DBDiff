@@ -266,6 +266,26 @@ jobs:
           $url = "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe"
           Invoke-WebRequest -Uri $url -OutFile spc.exe
 
+      # OpenSSL's Windows build assembles with NASM. It was present on the
+      # runner image until it was not, and `spc doctor --auto-fix` only repairs
+      # the prerequisites it knows about — so it reported a clean bill of health
+      # and the build died much later with "NASM not found", inside the openssl
+      # module, with nothing pointing at the real cause.
+      #
+      # Installing it explicitly also pins the responsibility here rather than
+      # on whatever the image happens to ship next month.
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          $nasm = "C:\Program Files\NASM"
+          if (-not (Test-Path "$nasm\nasm.exe")) {
+            throw "NASM was not installed at $nasm"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nasm
+          & "$nasm\nasm.exe" -v
+
       - name: Build static PHP binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -296,50 +316,49 @@ jobs:
       # ── Smoke-test the combined binary ──────────────────────────────────────
       - name: Smoke-test binary (Unix)
         if: runner.os != 'Windows'
-        run: ./dbdiff --version
+        run: |
+          set -euo pipefail
+          ./dbdiff --version
+
+          # --version passes even if every database driver is missing. The
+          # Windows leg builds pdo_pgsql against libpq copied out of the
+          # postgresql-win archive, and that copy has failed silently before —
+          # leaving a Postgres diff tool with no Postgres support.
+          #
+          # PDO reports a missing driver as exactly "could not find driver",
+          # and an unreachable server as a connection error, so pointing each
+          # driver at a closed port tells the two apart.
+          for scheme in postgresql mysql; do
+            out="$(./dbdiff diff \
+              --server1-url "$scheme://u:p@127.0.0.1:1/x" \
+              --server2-url "$scheme://u:p@127.0.0.1:1/y" 2>&1 || true)"
+            if printf '%s' "$out" | grep -q 'could not find driver'; then
+              echo "::error::$scheme driver missing from the binary"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "$scheme driver present"
+          done
 
       - name: Smoke-test binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\dbdiff.exe --version
+        run: |
+          .\dbdiff.exe --version
 
-      # ── Upload platform artifact ────────────────────────────────────────────
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: dbdiff${{ startsWith(matrix.target, 'win32') && '.exe' || '' }}
-          retention-days: 1
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # JOB 3 — Create GitHub Release + git tag
-  #
-  # Runs as soon as the PHAR succeeds, even if some binary builds failed.
-  # The GitHub Release is the primary distribution channel — it must never
-  # be blocked by npm registry issues (tombstones, E409 conflicts, etc.).
-  # ═══════════════════════════════════════════════════════════════════════════
-  github-release:
-    name: GitHub Release
-    needs: [build-phar, build-binary]
-    # Must check build-binary too. The matrix runs with fail-fast: false so that
-    # one broken target does not cancel the rest, which means a partial build
-    # completes "successfully" from the workflow's point of view. Gating only on
-    # build-phar published v3.0.0-rc.5 with three platforms missing (#185).
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: binaries/
-          pattern: dbdiff-*
-          merge-multiple: false
+          # See the Unix smoke test: --version cannot tell a working binary
+          # from one built without its database drivers.
+          foreach ($scheme in @('postgresql', 'mysql')) {
+            $out = (& .\dbdiff.exe diff `
+              --server1-url "${scheme}://u:p@127.0.0.1:1/x" `
+              --server2-url "${scheme}://u:p@127.0.0.1:1/y" 2>&1 | Out-String)
+            if ($out -match 'could not find driver') {
+              Write-Output "::error::$scheme driver missing from the binary"
+              Write-Output $out
+              exit 1
+            }
+            Write-Output "$scheme driver present"
+          }
 
       - name: Detect pre-release
         run: |

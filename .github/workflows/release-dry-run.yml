@@ -217,6 +217,26 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe" -OutFile spc.exe
 
+      # OpenSSL's Windows build assembles with NASM. It was present on the
+      # runner image until it was not, and `spc doctor --auto-fix` only repairs
+      # the prerequisites it knows about — so it reported a clean bill of health
+      # and the build died much later with "NASM not found", inside the openssl
+      # module, with nothing pointing at the real cause.
+      #
+      # Installing it explicitly also pins the responsibility here rather than
+      # on whatever the image happens to ship next month.
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          $nasm = "C:\Program Files\NASM"
+          if (-not (Test-Path "$nasm\nasm.exe")) {
+            throw "NASM was not installed at $nasm"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nasm
+          & "$nasm\nasm.exe" -v
+
       - name: Build static PHP binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -237,46 +257,50 @@ jobs:
       # ── Smoke-test ──────────────────────────────────────────────────────
       - name: Smoke-test binary (Unix)
         if: runner.os != 'Windows'
-        run: ./dbdiff --version
+        run: |
+          set -euo pipefail
+          ./dbdiff --version
+
+          # --version passes even if every database driver is missing. The
+          # Windows leg builds pdo_pgsql against libpq copied out of the
+          # postgresql-win archive, and that copy has failed silently before —
+          # leaving a Postgres diff tool with no Postgres support.
+          #
+          # PDO reports a missing driver as exactly "could not find driver",
+          # and an unreachable server as a connection error, so pointing each
+          # driver at a closed port tells the two apart.
+          for scheme in postgresql mysql; do
+            out="$(./dbdiff diff \
+              --server1-url "$scheme://u:p@127.0.0.1:1/x" \
+              --server2-url "$scheme://u:p@127.0.0.1:1/y" 2>&1 || true)"
+            if printf '%s' "$out" | grep -q 'could not find driver'; then
+              echo "::error::$scheme driver missing from the binary"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "$scheme driver present"
+          done
 
       - name: Smoke-test binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\dbdiff.exe --version
+        run: |
+          .\dbdiff.exe --version
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: dbdiff${{ startsWith(matrix.target, 'win32') && '.exe' || '' }}
-          retention-days: 1
+          # See the Unix smoke test: --version cannot tell a working binary
+          # from one built without its database drivers.
+          foreach ($scheme in @('postgresql', 'mysql')) {
+            $out = (& .\dbdiff.exe diff `
+              --server1-url "${scheme}://u:p@127.0.0.1:1/x" `
+              --server2-url "${scheme}://u:p@127.0.0.1:1/y" 2>&1 | Out-String)
+            if ($out -match 'could not find driver') {
+              Write-Output "::error::$scheme driver missing from the binary"
+              Write-Output $out
+              exit 1
+            }
+            Write-Output "$scheme driver present"
+          }
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # JOB 3 — npm dry-run publish + registry health check
-  # ═══════════════════════════════════════════════════════════════════════════
-  npm-dry-run:
-    name: "npm dry-run publish"
-    needs: [build-phar, build-binary]
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: binaries/
-          pattern: dbdiff-*
-          merge-multiple: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-
-      # `npm publish --dry-run` never authenticates, so it can't tell us whether
-      # NPM_TOKEN is still valid. `npm whoami` makes a real authenticated call —
-      # it fails fast here if the token is missing/expired, before a real release
-      # would fail at the publish step.
       - name: Verify NPM_TOKEN is valid
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
