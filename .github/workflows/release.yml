@@ -269,11 +269,9 @@ jobs:
       # OpenSSL's Windows build assembles with NASM. It was present on the
       # runner image until it was not, and `spc doctor --auto-fix` only repairs
       # the prerequisites it knows about — so it reported a clean bill of health
-      # and the build died much later with "NASM not found", inside the openssl
-      # module, with nothing pointing at the real cause.
-      #
-      # Installing it explicitly also pins the responsibility here rather than
-      # on whatever the image happens to ship next month.
+      # and the build died much later inside the openssl module, with nothing
+      # pointing at the real cause. Unlike the musl failures this is not
+      # transient: there is nothing to retry.
       - name: Install NASM (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -320,14 +318,14 @@ jobs:
           set -euo pipefail
           ./dbdiff --version
 
-          # --version passes even if every database driver is missing. The
+          # --version passes even with no database drivers compiled in. The
           # Windows leg builds pdo_pgsql against libpq copied out of the
-          # postgresql-win archive, and that copy has failed silently before —
-          # leaving a Postgres diff tool with no Postgres support.
+          # postgresql-win archive, and those copies have failed silently
+          # before — which would ship a Postgres diff tool with no Postgres.
           #
-          # PDO reports a missing driver as exactly "could not find driver",
-          # and an unreachable server as a connection error, so pointing each
-          # driver at a closed port tells the two apart.
+          # PDO reports a missing driver as exactly "could not find driver" and
+          # an unreachable server as a connection error, so a closed port tells
+          # the two apart without needing a live database.
           for scheme in postgresql mysql; do
             out="$(./dbdiff diff \
               --server1-url "$scheme://u:p@127.0.0.1:1/x" \
@@ -359,6 +357,44 @@ jobs:
             }
             Write-Output "$scheme driver present"
           }
+
+      # ── Upload platform artifact ────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dbdiff${{ startsWith(matrix.target, 'win32') && '.exe' || '' }}
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Create GitHub Release + git tag
+  #
+  # Runs as soon as the PHAR succeeds, even if some binary builds failed.
+  # The GitHub Release is the primary distribution channel — it must never
+  # be blocked by npm registry issues (tombstones, E409 conflicts, etc.).
+  # ═══════════════════════════════════════════════════════════════════════════
+  github-release:
+    name: GitHub Release
+    needs: [build-phar, build-binary]
+    # Must check build-binary too. The matrix runs with fail-fast: false so that
+    # one broken target does not cancel the rest, which means a partial build
+    # completes "successfully" from the workflow's point of view. Gating only on
+    # build-phar published v3.0.0-rc.5 with three platforms missing (#185).
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+          pattern: dbdiff-*
+          merge-multiple: false
 
       - name: Detect pre-release
         run: |
