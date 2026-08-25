@@ -1,0 +1,38 @@
+name: Auto-merge conformance updates
+
+# Turns a published patch of @akalforge/pg-conformance into a merged lockfile
+# bump without anyone doing anything — while keeping `npm ci` reproducible,
+# which is the whole reason the lockfile has to move at all.
+#
+# Nothing is merged blind. `--auto` waits for every required check, so a
+# conformance release that broke this consumer would leave the pull request
+# open and red rather than landing.
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect the update
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Scoped twice over: dependabot.yml already limits what gets opened, and
+      # this refuses anything else that reaches here. A workflow that merges
+      # whatever dependabot proposes is a supply-chain hole, not a convenience.
+      - name: Enable auto-merge for patch updates to the shared corpus
+        if: >-
+          steps.meta.outputs.dependency-names == '@akalforge/pg-conformance' &&
+          steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
