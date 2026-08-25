@@ -55,6 +55,32 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         return Arr::pluck($result, 'column_name');
     }
 
+    /**
+     * Per-column storage metadata for one table, for the statements that have
+     * to follow CREATE TABLE rather than sit inside it.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function attrMetaFor(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "SELECT a.attname AS column_name,
+                    a.attstorage::text AS att_storage,
+                    t.typstorage::text AS type_storage
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_type t ON t.oid = a.atttypid
+             WHERE c.relnamespace = 'public'::regnamespace AND c.relname = ?
+               AND a.attnum > 0 AND NOT a.attisdropped",
+            [$table]
+        );
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[$r['column_name']] = $r;
+        }
+        return $out;
+    }
+
     public function getTableSchema(Connection $connection, string $table): array {
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
@@ -91,7 +117,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $parts[] = $constraintDef;
         }
 
-        $ddl  = "CREATE TABLE \"$table\" (\n";
+        $unlogged = $partition['unlogged'] ? 'UNLOGGED ' : '';
+        $ddl  = "CREATE {$unlogged}TABLE \"$table\" (\n";
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
 
@@ -102,8 +129,20 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $ddl .= ' PARTITION BY ' . $partition['partition_by'];
         }
 
+        // fillfactor, autovacuum thresholds, parallel_workers and the rest are
+        // part of how the table behaves, not cosmetic.
+        if ($partition['reloptions'] !== null) {
+            $ddl .= ' WITH (' . $partition['reloptions'] . ')';
+        }
+
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
+        }
+
+        // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
+        // so it trails the statement instead.
+        foreach (PostgresSchemaHelper::storageStatements($table, $this->attrMetaFor($connection, $table)) as $stmt) {
+            $ddl .= ";\n$stmt";
         }
 
         return $ddl;
@@ -380,6 +419,32 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
+        // information_schema has no concept of storage, compression or the
+        // distinction between an explicit collation and an inherited one, so
+        // these come from the catalog. One extra query for every table at once,
+        // which keeps the fetch at a constant number of round trips.
+        $attrRows = $connection->select(
+            "SELECT c.relname AS table_name, a.attname AS column_name,
+                    CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
+                         THEN co.collname END AS explicit_collation,
+                    a.attstorage::text AS att_storage,
+                    t.typstorage::text  AS type_storage,
+                    NULLIF(a.attcompression::text, '') AS att_compression
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_type t ON t.oid = a.atttypid
+             LEFT JOIN pg_collation co ON co.oid = a.attcollation
+             WHERE c.relnamespace = 'public'::regnamespace
+               AND c.relname IN ($ph)
+               AND a.attnum > 0 AND NOT a.attisdropped",
+            $tables
+        );
+
+        $attrByCol = [];
+        foreach ($attrRows as $r) {
+            $attrByCol[$r['table_name']][$r['column_name']] = $r;
+        }
+
         $domainRows = $connection->select(
             "SELECT t.typname, t.typnotnull
              FROM pg_type t
@@ -500,7 +565,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
-        $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable);
+        $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable, $attrByCol);
         $keys        = $this->assembleIndexes($idxRows, $skipByTable);
         $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
 
@@ -525,7 +590,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
      * Build per-table column DDL maps from pre-fetched information_schema rows.
      * Returns [tableName => [columnName => ddlFragment]].
      */
-    private function assembleColumns(array $colRows, array $domainNotNull, array $nnColsByTable): array
+    private function assembleColumns(array $colRows, array $domainNotNull, array $nnColsByTable, array $attrByCol = []): array
     {
         $result = [];
         foreach ($colRows as $row) {
@@ -540,6 +605,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $notNull      = ($row['is_nullable'] === 'NO' && !$domIsNotNull
                              && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
 
+            $row += $attrByCol[$tbl][$name] ?? [];
             $result[$tbl][$name] = PostgresSchemaHelper::columnDefinition($row, $type, $notNull);
         }
         return $result;

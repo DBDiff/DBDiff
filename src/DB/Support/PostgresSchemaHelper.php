@@ -38,7 +38,11 @@ class PostgresSchemaHelper {
                          THEN pg_get_partkeydef(c.oid) END AS partition_by,
                     parent.relname AS parent,
                     CASE WHEN c.relispartition
-                         THEN pg_get_expr(c.relpartbound, c.oid) END AS bound
+                         THEN pg_get_expr(c.relpartbound, c.oid) END AS bound,
+                    -- UNLOGGED is not decoration: an unlogged table is not
+                    -- crash-safe and is emptied on recovery.
+                    c.relpersistence,
+                    array_to_string(c.reloptions, ', ') AS reloptions
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
                LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
@@ -53,6 +57,8 @@ class PostgresSchemaHelper {
             'is_partition' => (bool) ($row['relispartition'] ?? false),
             'parent'       => $row['parent'] ?? null,
             'bound'        => $row['bound'] ?? null,
+            'unlogged'     => ($row['relpersistence'] ?? 'p') === 'u',
+            'reloptions'   => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
         ];
     }
 
@@ -88,9 +94,66 @@ class PostgresSchemaHelper {
         // the resolved type and the suffix rather than decorating them.
         $serialType = self::serialTypeFor($row);
 
-        return $serialType !== null
-            ? "$quoted $serialType"
-            : $quoted . ' ' . $type . $notNull . self::columnSuffix($row);
+        if ($serialType !== null) {
+            return "$quoted $serialType";
+        }
+
+        // COLLATE decides comparison and sort order. Dropping it produces a
+        // column that applies cleanly and orders its rows differently, which is
+        // the worst shape of bug this renderer can emit. Only an explicit,
+        // non-default collation is written: spelling out the inherited one
+        // would make every column read as changed.
+        $collate = isset($row['explicit_collation']) && $row['explicit_collation'] !== null
+            ? ' COLLATE "' . $row['explicit_collation'] . '"'
+            : '';
+
+        // Compression is per-column and only meaningful when set away from the
+        // server default, which is what NULLIF on attcompression captures.
+        $compression = self::compressionClause($row);
+
+        return $quoted . ' ' . $type . $collate . $notNull . $compression . self::columnSuffix($row);
+    }
+
+    /** `COMPRESSION <method>`, or empty when the column uses the default. */
+    private static function compressionClause(array $row): string {
+        $method = $row['att_compression'] ?? null;
+        if ($method === null || $method === '') {
+            return '';
+        }
+
+        return match ($method) {
+            'l' => ' COMPRESSION lz4',
+            'p' => ' COMPRESSION pglz',
+            default => '',
+        };
+    }
+
+    /**
+     * `ALTER TABLE ... SET STORAGE` for any column whose storage differs from
+     * its type's default.
+     *
+     * Emitted separately because SET STORAGE inside CREATE TABLE only arrived
+     * in PostgreSQL 16, and this has to keep working against 14 and 15.
+     *
+     * @return list<string>
+     */
+    public static function storageStatements(string $table, array $attrByCol): array {
+        $out = [];
+        foreach ($attrByCol as $column => $attr) {
+            $actual  = $attr['att_storage'] ?? null;
+            $default = $attr['type_storage'] ?? null;
+            if ($actual === null || $default === null || $actual === $default) {
+                continue;
+            }
+            $word = match ($actual) {
+                'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED',
+                default => null,
+            };
+            if ($word !== null) {
+                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE $word";
+            }
+        }
+        return $out;
     }
 
     /**
