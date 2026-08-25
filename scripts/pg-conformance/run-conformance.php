@@ -108,111 +108,41 @@ function connectDb(string $host, string $port, string $user, string $pass, strin
     return $pdo;
 }
 
+/**
+ * Structural fingerprint of the public schema.
+ *
+ * The query comes from @akalforge/pg-conformance so that this harness, the
+ * SupaForge convergence proof and its e2e harness all ask the database the
+ * same question. Four separate definitions had accumulated between the two
+ * projects and drifted apart; one of them called two schemas identical when a
+ * view's predicate had been inverted.
+ *
+ * Returned as one entry per line rather than as a nested structure, so a
+ * mismatch can be reported as exactly which objects differ.
+ */
+// The shared fingerprint is published to npm, which is where the corpus lives
+// too. DBDiff is a Composer project, so it is required by path rather than
+// autoloaded; `npm ci` in the conformance job puts it here.
+$conformancePath = __DIR__ . '/../../node_modules/@akalforge/pg-conformance/src/Conformance.php';
+if (!is_file($conformancePath)) {
+    fwrite(STDERR, "Missing @akalforge/pg-conformance. Run `npm ci` in the repository root.\n");
+    exit(1);
+}
+require_once $conformancePath;
+use Akalforge\PgConformance\Conformance;
+
 function getSchemaFingerprint(PDO $pdo): array {
-    // Get columns for all user tables
-    $cols = $pdo->query(
-        "SELECT table_name, column_name, data_type, is_nullable, column_default,
-                character_maximum_length, numeric_precision, numeric_scale
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-         ORDER BY table_name, ordinal_position"
-    )->fetchAll(PDO::FETCH_ASSOC);
+    $row = $pdo->query(Conformance::fingerprintSql(['public']))->fetch(PDO::FETCH_ASSOC);
 
-    // Get constraints
-    $constraints = $pdo->query(
-        "SELECT conname, contype, conrelid::regclass::text as table_name,
-                pg_get_constraintdef(oid) as definition
-         FROM pg_constraint
-         WHERE connamespace = 'public'::regnamespace
-         ORDER BY conrelid::regclass::text, conname"
-    )->fetchAll(PDO::FETCH_ASSOC);
+    // A fingerprint that came back empty would make every comparison succeed,
+    // so an unexpected shape is a fault rather than "no differences".
+    if (!is_array($row) || !array_key_exists('fingerprint', $row)) {
+        throw new RuntimeException('fingerprint query returned no "fingerprint" column');
+    }
 
-    // Get indexes
-    $indexes = $pdo->query(
-        "SELECT indexname, tablename, indexdef
-         FROM pg_indexes
-         WHERE schemaname = 'public'
-         ORDER BY tablename, indexname"
-    )->fetchAll(PDO::FETCH_ASSOC);
+    $text = (string) ($row['fingerprint'] ?? '');
 
-    // Relation kind and partition bound. information_schema cannot express
-    // either: a partitioned table and an ordinary one are indistinguishable
-    // there, which is how a migration that silently flattened partitioning
-    // passed this suite. relkind and relpartbound are the only evidence.
-    $relations = $pdo->query(
-        "SELECT c.relname, c.relkind::text AS relkind,
-                COALESCE(pg_get_expr(c.relpartbound, c.oid), '-') AS partition_bound,
-                c.relrowsecurity::text AS rls
-         FROM pg_class c
-         WHERE c.relnamespace = 'public'::regnamespace
-           AND c.relkind IN ('r','p','v','m','S','f')
-         ORDER BY c.relname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    // Views compare by their stored definition, not the text that created them:
-    // PostgreSQL rewrites both sides the same way, so this is stable.
-    $views = $pdo->query(
-        "SELECT viewname, definition FROM pg_views WHERE schemaname = 'public'
-         ORDER BY viewname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    // tgparentid = 0 excludes the copies PostgreSQL clones onto partitions;
-    // they are not separately declared and re-creating them is an error.
-    $triggers = $pdo->query(
-        "SELECT t.tgname, c.relname AS table_name, pg_get_triggerdef(t.oid) AS definition
-         FROM pg_trigger t
-         JOIN pg_class c ON c.oid = t.tgrelid
-         WHERE c.relnamespace = 'public'::regnamespace
-           AND NOT t.tgisinternal AND t.tgparentid = 0
-         ORDER BY c.relname, t.tgname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $routines = $pdo->query(
-        "SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args,
-                pg_get_functiondef(p.oid) AS definition
-         FROM pg_proc p
-         WHERE p.pronamespace = 'public'::regnamespace AND p.prokind IN ('f','p')
-         ORDER BY p.proname, args"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    // Enum labels in sort order, so a reordered or renamed label is drift.
-    $types = $pdo->query(
-        "SELECT t.typname, t.typtype::text AS typtype,
-                COALESCE((SELECT string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder)
-                          FROM pg_enum e WHERE e.enumtypid = t.oid), '-') AS labels
-         FROM pg_type t
-         WHERE t.typnamespace = 'public'::regnamespace AND t.typtype IN ('e','c','d','r')
-         ORDER BY t.typname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $policies = $pdo->query(
-        "SELECT tablename, policyname, cmd, roles::text AS roles,
-                COALESCE(qual,'-') AS qual, COALESCE(with_check,'-') AS with_check
-         FROM pg_policies WHERE schemaname = 'public'
-         ORDER BY tablename, policyname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $sequences = $pdo->query(
-        "SELECT c.relname, s.seqstart::text, s.seqincrement::text,
-                s.seqmin::text, s.seqmax::text, s.seqcycle::text
-         FROM pg_sequence s
-         JOIN pg_class c ON c.oid = s.seqrelid
-         WHERE c.relnamespace = 'public'::regnamespace
-         ORDER BY c.relname"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    return [
-        'columns' => $cols,
-        'constraints' => $constraints,
-        'indexes' => $indexes,
-        'relations' => $relations,
-        'views' => $views,
-        'triggers' => $triggers,
-        'routines' => $routines,
-        'types' => $types,
-        'policies' => $policies,
-        'sequences' => $sequences,
-    ];
+    return $text === '' ? [] : explode("\n", $text);
 }
 
 function schemasMatch(array $a, array $b): bool {
@@ -422,12 +352,15 @@ foreach ($patterns as $i => $pattern) {
         if ($verbose) {
             echo "        ALTER: {$pattern['alter_sql']}\n";
             echo "        DIFF:  $diffSQL\n";
-            $diff = array_diff_assoc(
-                array_map('json_encode', $fpAfter['columns']),
-                array_map('json_encode', $fpTest['columns'])
-            );
-            if ($diff) {
-                echo "        Column differences: " . json_encode(array_keys($diff)) . "\n";
+            // Every differing entry, not just columns: the previous report
+            // looked only at $fp['columns'], so a mismatch in a view body, a
+            // trigger or a partition bound showed up as a bare "schema
+            // mismatch" with nothing to point at.
+            foreach (array_slice(array_diff($fpAfter, $fpTest), 0, 5) as $line) {
+                echo "        expected: $line\n";
+            }
+            foreach (array_slice(array_diff($fpTest, $fpAfter), 0, 5) as $line) {
+                echo "        actual:   $line\n";
             }
         }
         $results['fail_mismatch']++;
