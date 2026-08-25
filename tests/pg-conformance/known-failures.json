@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "Failures recorded so the suite fails on NEW regressions rather than on an",
+    "existing backlog. Remove an id when its bug is fixed \u2014 the runner reports",
+    "an entry that starts passing, so this list cannot rot silently.",
+    "",
+    "unmodelled_kind: DBDiff produces NO diff while the schemas genuinely",
+    "differ, because it does not model that object kind at all. These are",
+    "feature gaps, and the more dangerous class: a user sees 'no drift' and",
+    "believes their environments match.",
+    "",
+    "wrong_output: DBDiff produces a diff, but applying it does not reproduce",
+    "the target schema. These are defects in existing behaviour."
+  ],
+  "known_failures": [
+    "obj_create_composite",
+    "obj_create_domain",
+    "obj_create_matview",
+    "obj_create_policy",
+    "obj_create_sequence"
+  ],
+  "unmodelled_kind": [
+    "obj_create_composite",
+    "obj_create_domain",
+    "obj_create_matview",
+    "obj_create_policy",
+    "obj_create_sequence"
+  ],
+  "wrong_output": []
+}

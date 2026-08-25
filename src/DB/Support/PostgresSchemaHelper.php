@@ -99,7 +99,8 @@ class PostgresSchemaHelper {
      */
     private static function columnSuffix(array $row): string {
         if ($row['is_identity'] === 'YES') {
-            return ' GENERATED ' . ($row['identity_generation'] ?? 'BY DEFAULT') . ' AS IDENTITY';
+            return ' GENERATED ' . ($row['identity_generation'] ?? 'BY DEFAULT') . ' AS IDENTITY'
+                . self::identityOptions($row);
         }
 
         if ($row['is_generated'] === 'ALWAYS') {
@@ -107,6 +108,59 @@ class PostgresSchemaHelper {
         }
 
         return $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
+    }
+
+    /**
+     * The sequence options attached to an identity column, as a parenthesised
+     * clause — or an empty string when every option is the default.
+     *
+     * These are part of the column definition, not decoration. Recreating
+     * `GENERATED ALWAYS AS IDENTITY (INCREMENT 10 START 100)` without its
+     * options yields a column that increments by one from one, so the next
+     * insert collides with rows the migration was meant to preserve.
+     *
+     * Only non-default options are emitted, because the defaults depend on the
+     * column's type — MAXVALUE for an `integer` identity is not the MAXVALUE for
+     * a `bigint` one — and spelling out an inherited default would turn a
+     * type change into a false difference.
+     */
+    private static function identityOptions(array $row): string {
+        $ascending = ($row['identity_increment'] ?? '1')[0] !== '-';
+        $limits    = self::identityLimits($row['data_type'] ?? 'bigint', $ascending);
+
+        $parts = [];
+        foreach ([
+            'INCREMENT BY' => ['identity_increment', '1'],
+            'MINVALUE'     => ['identity_minimum',   $limits['min']],
+            'MAXVALUE'     => ['identity_maximum',   $limits['max']],
+            'START WITH'   => ['identity_start',     $ascending ? $limits['min'] : $limits['max']],
+        ] as $keyword => [$column, $default]) {
+            $value = $row[$column] ?? null;
+            if ($value !== null && $value !== '' && (string) $value !== (string) $default) {
+                $parts[] = "$keyword $value";
+            }
+        }
+
+        if (($row['identity_cycle'] ?? 'NO') === 'YES') {
+            $parts[] = 'CYCLE';
+        }
+
+        return $parts === [] ? '' : ' (' . implode(' ', $parts) . ')';
+    }
+
+    /** Default MINVALUE/MAXVALUE for an identity column of the given type. */
+    private static function identityLimits(string $dataType, bool $ascending): array {
+        // Written out rather than derived: bigint's floor cannot be computed in
+        // native PHP integers without overflow, and bcmath is not a dependency.
+        [$floor, $ceiling] = match (strtolower($dataType)) {
+            'smallint' => ['-32768',                '32767'],
+            'integer'  => ['-2147483648',           '2147483647'],
+            default    => ['-9223372036854775808',  '9223372036854775807'],
+        };
+
+        return $ascending
+            ? ['min' => '1',    'max' => $ceiling]
+            : ['min' => $floor, 'max' => '-1'];
     }
 
     /**
