@@ -20,3 +20,6 @@ tests/logs/
 tests/pg-conformance/report.json
 .env
 docs/
+
+# Test-only npm tooling (shared conformance data)
+node_modules/
