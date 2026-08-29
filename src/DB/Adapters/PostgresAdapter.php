@@ -55,32 +55,6 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         return Arr::pluck($result, 'column_name');
     }
 
-    /**
-     * Per-column storage metadata for one table, for the statements that have
-     * to follow CREATE TABLE rather than sit inside it.
-     *
-     * @return array<string, array<string, mixed>>
-     */
-    private function attrMetaFor(Connection $connection, string $table): array {
-        $rows = $connection->select(
-            "SELECT a.attname AS column_name,
-                    a.attstorage::text AS att_storage,
-                    t.typstorage::text AS type_storage
-             FROM pg_attribute a
-             JOIN pg_class c ON c.oid = a.attrelid
-             JOIN pg_type t ON t.oid = a.atttypid
-             WHERE c.relnamespace = 'public'::regnamespace AND c.relname = ?
-               AND a.attnum > 0 AND NOT a.attisdropped",
-            [$table]
-        );
-
-        $out = [];
-        foreach ($rows as $r) {
-            $out[$r['column_name']] = $r;
-        }
-        return $out;
-    }
-
     public function getTableSchema(Connection $connection, string $table): array {
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
@@ -141,7 +115,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
         // so it trails the statement instead.
-        foreach (PostgresSchemaHelper::storageStatements($table, $this->attrMetaFor($connection, $table)) as $stmt) {
+        foreach (PostgresSchemaHelper::storageStatements(
+            $table,
+            PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? []
+        ) as $stmt) {
             $ddl .= ";\n$stmt";
         }
 
@@ -419,42 +396,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
-        // information_schema has no concept of storage, compression or the
-        // distinction between an explicit collation and an inherited one, so
-        // these come from the catalog. One extra query for every table at once,
-        // which keeps the fetch at a constant number of round trips.
-        $attrRows = $connection->select(
-            "SELECT c.relname AS table_name, a.attname AS column_name,
-                    CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
-                         THEN co.collname END AS explicit_collation,
-                    a.attstorage::text AS att_storage,
-                    t.typstorage::text  AS type_storage,
-                    NULLIF(a.attcompression::text, '') AS att_compression
-             FROM pg_attribute a
-             JOIN pg_class c ON c.oid = a.attrelid
-             JOIN pg_type t ON t.oid = a.atttypid
-             LEFT JOIN pg_collation co ON co.oid = a.attcollation
-             WHERE c.relnamespace = 'public'::regnamespace
-               AND c.relname IN ($ph)
-               AND a.attnum > 0 AND NOT a.attisdropped",
-            $tables
-        );
+        $attrByCol = PostgresSchemaHelper::attributeMeta($connection, $tables);
 
-        $attrByCol = [];
-        foreach ($attrRows as $r) {
-            $attrByCol[$r['table_name']][$r['column_name']] = $r;
-        }
-
-        $domainRows = $connection->select(
-            "SELECT t.typname, t.typnotnull
-             FROM pg_type t
-             JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public' AND t.typtype = 'd'"
-        );
-        $domainNotNull = [];
-        foreach ($domainRows as $d) {
-            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
-        }
+        $domainNotNull = PostgresSchemaHelper::domainNotNullMap($connection);
 
         // Named NOT NULL constraints (PG18+ contype='n'). Collected as a flat
         // list for the constraint DDL, plus $nnColsByTable for suppressing the

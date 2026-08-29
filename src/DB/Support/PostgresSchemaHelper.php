@@ -114,6 +114,70 @@ class PostgresSchemaHelper {
         return $quoted . ' ' . $type . $collate . $notNull . $compression . self::columnSuffix($row);
     }
 
+    /**
+     * Which domains carry their own NOT NULL.
+     *
+     * A column of such a domain must not repeat NOT NULL: the constraint
+     * belongs to the type, and emitting it on the column too makes the two
+     * sides read as different when they are not.
+     *
+     * @return array<string, bool>
+     */
+    public static function domainNotNullMap(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row['typname']] = (bool) $row['typnotnull'];
+        }
+        return $out;
+    }
+
+    /**
+     * Per-column attributes that information_schema cannot express.
+     *
+     * Storage, compression, and whether a collation was set explicitly or
+     * merely inherited, are all catalog-only. One query covers every table
+     * given, so the caller's round-trip count stays independent of how many
+     * tables are involved.
+     *
+     * @param  list<string> $tables
+     * @return array<string, array<string, array<string, mixed>>> keyed table → column
+     */
+    public static function attributeMeta(Connection $connection, array $tables): array {
+        if ($tables === []) {
+            return [];
+        }
+
+        $rows = $connection->select(
+            "SELECT c.relname AS table_name, a.attname AS column_name,
+                    CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
+                         THEN co.collname END AS explicit_collation,
+                    a.attstorage::text AS att_storage,
+                    t.typstorage::text  AS type_storage,
+                    NULLIF(a.attcompression::text, '') AS att_compression
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_type t ON t.oid = a.atttypid
+             LEFT JOIN pg_collation co ON co.oid = a.attcollation
+             WHERE c.relnamespace = 'public'::regnamespace
+               AND c.relname IN (" . QueryHelper::placeholders($tables) . ")
+               AND a.attnum > 0 AND NOT a.attisdropped",
+            $tables
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row['table_name']][$row['column_name']] = $row;
+        }
+        return $out;
+    }
+
     /** `COMPRESSION <method>`, or empty when the column uses the default. */
     private static function compressionClause(array $row): string {
         $method = $row['att_compression'] ?? null;
