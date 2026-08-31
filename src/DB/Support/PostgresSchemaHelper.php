@@ -38,7 +38,11 @@ class PostgresSchemaHelper {
                          THEN pg_get_partkeydef(c.oid) END AS partition_by,
                     parent.relname AS parent,
                     CASE WHEN c.relispartition
-                         THEN pg_get_expr(c.relpartbound, c.oid) END AS bound
+                         THEN pg_get_expr(c.relpartbound, c.oid) END AS bound,
+                    -- UNLOGGED is not decoration: an unlogged table is not
+                    -- crash-safe and is emptied on recovery.
+                    c.relpersistence,
+                    array_to_string(c.reloptions, ', ') AS reloptions
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
                LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
@@ -53,6 +57,8 @@ class PostgresSchemaHelper {
             'is_partition' => (bool) ($row['relispartition'] ?? false),
             'parent'       => $row['parent'] ?? null,
             'bound'        => $row['bound'] ?? null,
+            'unlogged'     => ($row['relpersistence'] ?? 'p') === 'u',
+            'reloptions'   => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
         ];
     }
 
@@ -88,9 +94,130 @@ class PostgresSchemaHelper {
         // the resolved type and the suffix rather than decorating them.
         $serialType = self::serialTypeFor($row);
 
-        return $serialType !== null
-            ? "$quoted $serialType"
-            : $quoted . ' ' . $type . $notNull . self::columnSuffix($row);
+        if ($serialType !== null) {
+            return "$quoted $serialType";
+        }
+
+        // COLLATE decides comparison and sort order. Dropping it produces a
+        // column that applies cleanly and orders its rows differently, which is
+        // the worst shape of bug this renderer can emit. Only an explicit,
+        // non-default collation is written: spelling out the inherited one
+        // would make every column read as changed.
+        $collate = isset($row['explicit_collation']) && $row['explicit_collation'] !== null
+            ? ' COLLATE "' . $row['explicit_collation'] . '"'
+            : '';
+
+        // Compression is per-column and only meaningful when set away from the
+        // server default, which is what NULLIF on attcompression captures.
+        $compression = self::compressionClause($row);
+
+        return $quoted . ' ' . $type . $collate . $notNull . $compression . self::columnSuffix($row);
+    }
+
+    /**
+     * Which domains carry their own NOT NULL.
+     *
+     * A column of such a domain must not repeat NOT NULL: the constraint
+     * belongs to the type, and emitting it on the column too makes the two
+     * sides read as different when they are not.
+     *
+     * @return array<string, bool>
+     */
+    public static function domainNotNullMap(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT t.typname, t.typnotnull
+             FROM pg_type t
+             JOIN pg_namespace n ON t.typnamespace = n.oid
+             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row['typname']] = (bool) $row['typnotnull'];
+        }
+        return $out;
+    }
+
+    /**
+     * Per-column attributes that information_schema cannot express.
+     *
+     * Storage, compression, and whether a collation was set explicitly or
+     * merely inherited, are all catalog-only. One query covers every table
+     * given, so the caller's round-trip count stays independent of how many
+     * tables are involved.
+     *
+     * @param  list<string> $tables
+     * @return array<string, array<string, array<string, mixed>>> keyed table → column
+     */
+    public static function attributeMeta(Connection $connection, array $tables): array {
+        if ($tables === []) {
+            return [];
+        }
+
+        $rows = $connection->select(
+            "SELECT c.relname AS table_name, a.attname AS column_name,
+                    CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
+                         THEN co.collname END AS explicit_collation,
+                    a.attstorage::text AS att_storage,
+                    t.typstorage::text  AS type_storage,
+                    NULLIF(a.attcompression::text, '') AS att_compression
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_type t ON t.oid = a.atttypid
+             LEFT JOIN pg_collation co ON co.oid = a.attcollation
+             WHERE c.relnamespace = 'public'::regnamespace
+               AND c.relname IN (" . QueryHelper::placeholders($tables) . ")
+               AND a.attnum > 0 AND NOT a.attisdropped",
+            $tables
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[$row['table_name']][$row['column_name']] = $row;
+        }
+        return $out;
+    }
+
+    /** `COMPRESSION <method>`, or empty when the column uses the default. */
+    private static function compressionClause(array $row): string {
+        $method = $row['att_compression'] ?? null;
+        if ($method === null || $method === '') {
+            return '';
+        }
+
+        return match ($method) {
+            'l' => ' COMPRESSION lz4',
+            'p' => ' COMPRESSION pglz',
+            default => '',
+        };
+    }
+
+    /**
+     * `ALTER TABLE ... SET STORAGE` for any column whose storage differs from
+     * its type's default.
+     *
+     * Emitted separately because SET STORAGE inside CREATE TABLE only arrived
+     * in PostgreSQL 16, and this has to keep working against 14 and 15.
+     *
+     * @return list<string>
+     */
+    public static function storageStatements(string $table, array $attrByCol): array {
+        $out = [];
+        foreach ($attrByCol as $column => $attr) {
+            $actual  = $attr['att_storage'] ?? null;
+            $default = $attr['type_storage'] ?? null;
+            if ($actual === null || $default === null || $actual === $default) {
+                continue;
+            }
+            $word = match ($actual) {
+                'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED',
+                default => null,
+            };
+            if ($word !== null) {
+                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE $word";
+            }
+        }
+        return $out;
     }
 
     /**

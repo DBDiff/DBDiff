@@ -91,7 +91,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $parts[] = $constraintDef;
         }
 
-        $ddl  = "CREATE TABLE \"$table\" (\n";
+        $unlogged = $partition['unlogged'] ? 'UNLOGGED ' : '';
+        $ddl  = "CREATE {$unlogged}TABLE \"$table\" (\n";
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
 
@@ -102,8 +103,23 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $ddl .= ' PARTITION BY ' . $partition['partition_by'];
         }
 
+        // fillfactor, autovacuum thresholds, parallel_workers and the rest are
+        // part of how the table behaves, not cosmetic.
+        if ($partition['reloptions'] !== null) {
+            $ddl .= ' WITH (' . $partition['reloptions'] . ')';
+        }
+
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
+        }
+
+        // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
+        // so it trails the statement instead.
+        foreach (PostgresSchemaHelper::storageStatements(
+            $table,
+            PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? []
+        ) as $stmt) {
+            $ddl .= ";\n$stmt";
         }
 
         return $ddl;
@@ -380,16 +396,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
-        $domainRows = $connection->select(
-            "SELECT t.typname, t.typnotnull
-             FROM pg_type t
-             JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public' AND t.typtype = 'd'"
-        );
-        $domainNotNull = [];
-        foreach ($domainRows as $d) {
-            $domainNotNull[$d['typname']] = (bool) $d['typnotnull'];
-        }
+        $attrByCol = PostgresSchemaHelper::attributeMeta($connection, $tables);
+
+        $domainNotNull = PostgresSchemaHelper::domainNotNullMap($connection);
 
         // Named NOT NULL constraints (PG18+ contype='n'). Collected as a flat
         // list for the constraint DDL, plus $nnColsByTable for suppressing the
@@ -500,7 +509,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
-        $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable);
+        $columns     = $this->assembleColumns($colRows, $domainNotNull, $nnColsByTable, $attrByCol);
         $keys        = $this->assembleIndexes($idxRows, $skipByTable);
         $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
 
@@ -525,7 +534,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
      * Build per-table column DDL maps from pre-fetched information_schema rows.
      * Returns [tableName => [columnName => ddlFragment]].
      */
-    private function assembleColumns(array $colRows, array $domainNotNull, array $nnColsByTable): array
+    private function assembleColumns(array $colRows, array $domainNotNull, array $nnColsByTable, array $attrByCol = []): array
     {
         $result = [];
         foreach ($colRows as $row) {
@@ -540,6 +549,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $notNull      = ($row['is_nullable'] === 'NO' && !$domIsNotNull
                              && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
 
+            $row += $attrByCol[$tbl][$name] ?? [];
             $result[$tbl][$name] = PostgresSchemaHelper::columnDefinition($row, $type, $notNull);
         }
         return $result;

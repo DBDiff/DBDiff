@@ -350,7 +350,12 @@ class BulkSchemaPostgresTest extends TestCase
         $this->adapter->getBulkTableSchema($this->connection, self::TABLES);
         $allTables = count($this->connection->getQueryLog());
 
-        $this->assertSame(7, $oneTable, 'Expected a fixed 7-query budget per side');
+        // 8 rather than 7 since the attribute fetch was added: information_schema
+        // cannot express storage, compression or whether a collation was set
+        // explicitly, so those come from the catalog in one more query for all
+        // tables at once. The property under test is that the count does not
+        // grow with the number of tables, which the next assertion checks.
+        $this->assertSame(8, $oneTable, 'Expected a fixed 8-query budget per side');
         $this->assertSame($oneTable, $allTables, 'Query count grew with the number of tables');
     }
 
