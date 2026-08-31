@@ -1,0 +1,21 @@
+# DBDiff is a Composer project; the only npm dependency is the shared
+# conformance data used by the Postgres conformance harness, which publishes a
+# patch on every merge to its own repository.
+#
+# `npm ci` installs strictly from the lockfile and ignores the range in
+# package.json, so something has to move the lockfile for a published release
+# to reach this repository at all. That is this.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: "@akalforge/pg-conformance"
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+    open-pull-requests-limit: 3
