@@ -217,6 +217,24 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe" -OutFile spc.exe
 
+      # OpenSSL's Windows build assembles with NASM. It was present on the
+      # runner image until it was not, and `spc doctor --auto-fix` only repairs
+      # the prerequisites it knows about — so it reported a clean bill of health
+      # and the build died much later inside the openssl module, with nothing
+      # pointing at the real cause. Unlike the musl failures this is not
+      # transient: there is nothing to retry.
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          $nasm = "C:\Program Files\NASM"
+          if (-not (Test-Path "$nasm\nasm.exe")) {
+            throw "NASM was not installed at $nasm"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nasm
+          & "$nasm\nasm.exe" -v
+
       - name: Build static PHP binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -237,12 +255,49 @@ jobs:
       # ── Smoke-test ──────────────────────────────────────────────────────
       - name: Smoke-test binary (Unix)
         if: runner.os != 'Windows'
-        run: ./dbdiff --version
+        run: |
+          set -euo pipefail
+          ./dbdiff --version
+
+          # --version passes even with no database drivers compiled in. The
+          # Windows leg builds pdo_pgsql against libpq copied out of the
+          # postgresql-win archive, and those copies have failed silently
+          # before — which would ship a Postgres diff tool with no Postgres.
+          #
+          # PDO reports a missing driver as exactly "could not find driver" and
+          # an unreachable server as a connection error, so a closed port tells
+          # the two apart without needing a live database.
+          for scheme in postgresql mysql; do
+            out="$(./dbdiff diff \
+              --server1-url "$scheme://u:p@127.0.0.1:1/x" \
+              --server2-url "$scheme://u:p@127.0.0.1:1/y" 2>&1 || true)"
+            if printf '%s' "$out" | grep -q 'could not find driver'; then
+              echo "::error::$scheme driver missing from the binary"
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            echo "$scheme driver present"
+          done
 
       - name: Smoke-test binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\dbdiff.exe --version
+        run: |
+          .\dbdiff.exe --version
+
+          # See the Unix smoke test: --version cannot tell a working binary
+          # from one built without its database drivers.
+          foreach ($scheme in @('postgresql', 'mysql')) {
+            $out = (& .\dbdiff.exe diff `
+              --server1-url "${scheme}://u:p@127.0.0.1:1/x" `
+              --server2-url "${scheme}://u:p@127.0.0.1:1/y" 2>&1 | Out-String)
+            if ($out -match 'could not find driver') {
+              Write-Output "::error::$scheme driver missing from the binary"
+              Write-Output $out
+              exit 1
+            }
+            Write-Output "$scheme driver present"
+          }
 
       - uses: actions/upload-artifact@v4
         with:
