@@ -221,6 +221,22 @@ jobs:
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
 
+    # PgDumpRendererPostgresTest skips without these, and the renderer itself
+    # steps aside when they are missing — so the job would go green having
+    # tested none of it.
+    - name: Install PostgreSQL client (pg_dump / pg_restore)
+      run: |
+        set -euo pipefail
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+          https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+        pg_dump --version
+        pg_restore --version
+
     - name: Run PostgreSQL e2e tests
       run: ./scripts/run-tests.sh --postgres 127.0.0.1
 
@@ -539,6 +555,22 @@ jobs:
 
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
+
+    # PgDumpRendererPostgresTest skips without these, and the renderer itself
+    # steps aside when they are missing — so the job would go green having
+    # tested none of it.
+    - name: Install PostgreSQL client (pg_dump / pg_restore)
+      run: |
+        set -euo pipefail
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+          https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+        pg_dump --version
+        pg_restore --version
 
     # The schema fingerprint and the DDL corpus are shared with SupaForge and
     # published to npm. DBDiff is a Composer project and uses node for nothing

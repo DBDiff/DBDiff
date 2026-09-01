@@ -14,6 +14,16 @@
          failOnNotice="true"
          failOnWarning="true"
 >
+    <php>
+        <!--
+            The pg_dump renderer is used automatically whenever pg_dump is on
+            PATH, which would make these fixtures pass or fail depending on the
+            machine. Pinning it off keeps the expected-SQL suites deterministic;
+            PgDumpRendererPostgresTest turns it back on for itself.
+        -->
+        <env name="DBDIFF_PG_DUMP_RENDERER" value="off"/>
+    </php>
+
     <testsuites>
         <testsuite name="Unit">
             <directory suffix="Test.php">./Migration</directory>
@@ -28,6 +38,7 @@
             <file>./End2EndPostgresTest.php</file>
             <file>./DBDiffComprehensivePostgresTest.php</file>
             <file>./BulkSchemaPostgresTest.php</file>
+            <file>./PgDumpRendererPostgresTest.php</file>
             <file>./RoutineOverloadPostgresTest.php</file>
         </testsuite>
         <testsuite name="SQLite">
