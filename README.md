@@ -59,6 +59,43 @@ Use `--driver=pgsql` (or `driver: pgsql` in your `.dbdiff` config).
 | PostgreSQL 17.x | ✅ Supported |
 | PostgreSQL 18.x | ✅ Supported |
 
+#### Higher-fidelity DDL with `pg_dump`
+
+When `pg_dump` and `pg_restore` are on `PATH` and at least as new as the
+server, DBDiff uses them to render `CREATE TABLE` and everything attached to
+it — indexes, constraints, identity sequence options, collations, storage,
+compression and comments. They are PostgreSQL's own tooling, maintained in
+lockstep with the server, so the DDL is what the server itself would produce.
+
+Measured against the 90-case corpus in
+[`@akalforge/pg-conformance`](https://www.npmjs.com/package/@akalforge/pg-conformance)
+by convergence — build the case, reproduce it, replay it, compare catalog
+fingerprints:
+
+| renderer | reproduces |
+|---|---|
+| built-in | 52 / 90 |
+| with `pg_dump` | **66 / 90** |
+
+Nothing is required. `pg_dump` is not bundled — the released binaries are
+static PHP and cannot carry it — so when it is absent, or older than the
+server, DBDiff falls back to its built-in renderer and says why. Partitions
+always use the built-in renderer, which handles them correctly.
+
+A migration produced this way records it, so two machines emitting different
+SQL is explainable from the file:
+
+```sql
+-- DBDiff migration
+-- Version: 20260901000613
+-- Generated: 2026-09-01 00:06:13
+-- Renderer: pg_dump
+```
+
+Set `DBDIFF_PG_DUMP_RENDERER=off` to pin a run to the built-in renderer — useful
+when you need byte-identical output across machines regardless of what is
+installed. `DBDIFF_PG_DUMP` and `DBDIFF_PG_RESTORE` override the binary paths.
+
 ### SQLite
 
 Use `--driver=sqlite`. The file path is passed as the database name:

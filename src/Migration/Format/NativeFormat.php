@@ -14,7 +14,14 @@ class NativeFormat implements FormatInterface
         $header  = "-- DBDiff migration";
         $header .= $description ? ": {$description}" : '';
         $header .= "\n-- Version: " . ($version ?: date('YmdHis'));
-        $header .= "\n-- Generated: " . date('Y-m-d H:i:s') . "\n";
+        $header .= "\n-- Generated: " . date('Y-m-d H:i:s');
+        // Which renderer produced the DDL. It is chosen from what is installed,
+        // so two machines running the same DBDiff can differ; saying so here
+        // makes that explainable without a re-run.
+        if (\DBDiff\DB\Support\PgDumpRenderer::wasUsed()) {
+            $header .= "\n-- Renderer: pg_dump";
+        }
+        $header .= "\n";
 
         $content  = $header . "\n";
         $content .= "-- ==================== UP ====================\n\n";
