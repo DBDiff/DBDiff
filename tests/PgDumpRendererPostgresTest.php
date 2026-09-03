@@ -35,6 +35,7 @@ class PgDumpRendererPostgresTest extends TestCase
             $this->markTestSkipped('DB_HOST_POSTGRES not set.');
         }
         if (!self::commandExists('pg_dump') || !self::commandExists('pg_restore')) {
+            // Legitimately absent: the renderer steps aside and so do these.
             $this->markTestSkipped('pg_dump/pg_restore not on PATH.');
         }
 
@@ -60,6 +61,22 @@ class PgDumpRendererPostgresTest extends TestCase
         $this->capsule = null;
         $this->connection = $this->connect($host, $port, $user, $pass, $this->database);
         $this->adapter = new PostgresAdapter();
+        PgDumpRenderer::reset();
+
+        // Present but unusable is a misconfiguration, not a reason to skip. On
+        // CI, Debian's pg_wrapper resolved /usr/bin/pg_dump to 16 even with
+        // postgresql-client-18 installed, so against newer servers the guard
+        // declined and every case below silently ran on the built-in renderer
+        // — passing, because the two now agree on collation and identity.
+        $reason = PgDumpRenderer::unavailableReason($this->connection);
+        if ($reason !== null) {
+            $this->fail("pg_dump is installed but unusable, so this suite would test the wrong renderer: $reason");
+        }
+
+        // That check dumps the database to find out, and the archive is cached.
+        // Each case creates its table afterwards, so the cache has to go or the
+        // renderer would look for tables in a snapshot taken before they
+        // existed — and silently fall back.
         PgDumpRenderer::reset();
     }
 
@@ -109,6 +126,20 @@ class PgDumpRendererPostgresTest extends TestCase
         return proc_close($process) === 0;
     }
 
+    /**
+     * Assert the DDL under test actually came from pg_dump.
+     *
+     * The built-in renderer now emits collations and identity options too, so
+     * an assertion on those alone passes either way and proves nothing about
+     * this path.
+     */
+    private function assertCameFromPgDump(string $ddl): void
+    {
+        $this->assertTrue(PgDumpRenderer::wasUsed(), 'DDL did not come from pg_dump');
+        // pg_dump schema-qualifies; the built-in renderer emits bare quoted names.
+        $this->assertStringContainsString('public.', $ddl);
+    }
+
     /** Collation decides sort order, and the built-in renderer dropped it. */
     public function testRendersAnExplicitCollation(): void
     {
@@ -116,6 +147,7 @@ class PgDumpRendererPostgresTest extends TestCase
 
         $ddl = $this->adapter->getCreateStatement($this->connection, 't');
 
+        $this->assertCameFromPgDump($ddl);
         $this->assertStringContainsString('COLLATE', $ddl);
         $this->assertStringContainsString('"C"', $ddl);
     }
@@ -133,6 +165,7 @@ class PgDumpRendererPostgresTest extends TestCase
 
         $ddl = $this->adapter->getCreateStatement($this->connection, 't');
 
+        $this->assertCameFromPgDump($ddl);
         $this->assertStringContainsString('GENERATED ALWAYS AS IDENTITY', $ddl);
         $this->assertStringContainsString('INCREMENT BY 10', $ddl);
         $this->assertStringContainsString('START WITH 100', $ddl);
@@ -146,6 +179,7 @@ class PgDumpRendererPostgresTest extends TestCase
 
         $ddl = $this->adapter->getCreateStatement($this->connection, 't');
 
+        $this->assertCameFromPgDump($ddl);
         $this->assertStringContainsString('CREATE INDEX t_b_idx', $ddl);
     }
 

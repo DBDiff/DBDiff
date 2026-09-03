@@ -39,7 +39,13 @@ use Illuminate\Database\Connection;
  */
 final class PgDumpRenderer
 {
-    /** Cached archive path per connection, so one run dumps each database once. */
+    /**
+     * Cached archive path per connection, so one run dumps each database once.
+     *
+     * The archive is a snapshot taken on first use. That is what a diff wants —
+     * every object rendered from one consistent view — but it does mean an
+     * object created after that point is invisible until reset() is called.
+     */
     private static array $archives = [];
 
     /** Cached table of contents per archive. */
