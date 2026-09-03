@@ -234,8 +234,27 @@ jobs:
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+
+        # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
+        # its own regardless of what was just installed — on these runners it
+        # resolved to 16 even with postgresql-client-18 present. Against a
+        # newer server the version guard then declines and the renderer under
+        # test never runs, while the job stays green. Point at the binaries
+        # directly instead.
+        echo "/usr/lib/postgresql/${{ matrix.postgres-version }}/bin" >> "$GITHUB_PATH"
+
+    - name: Verify pg_dump matches the server
+      run: |
+        set -euo pipefail
         pg_dump --version
         pg_restore --version
+        got="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+        # Via a variable: shellcheck cannot tell that the expansion is numeric.
+        want="${{ matrix.postgres-version }}"
+        if [ "$got" -lt "$want" ]; then
+          echo "::error::pg_dump $got is older than PostgreSQL $want; the pg_dump renderer would be skipped"
+          exit 1
+        fi
 
     - name: Run PostgreSQL e2e tests
       run: ./scripts/run-tests.sh --postgres 127.0.0.1
@@ -569,8 +588,27 @@ jobs:
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+
+        # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
+        # its own regardless of what was just installed — on these runners it
+        # resolved to 16 even with postgresql-client-18 present. Against a
+        # newer server the version guard then declines and the renderer under
+        # test never runs, while the job stays green. Point at the binaries
+        # directly instead.
+        echo "/usr/lib/postgresql/${{ matrix.postgres-version }}/bin" >> "$GITHUB_PATH"
+
+    - name: Verify pg_dump matches the server
+      run: |
+        set -euo pipefail
         pg_dump --version
         pg_restore --version
+        got="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+        # Via a variable: shellcheck cannot tell that the expansion is numeric.
+        want="${{ matrix.postgres-version }}"
+        if [ "$got" -lt "$want" ]; then
+          echo "::error::pg_dump $got is older than PostgreSQL $want; the pg_dump renderer would be skipped"
+          exit 1
+        fi
 
     # The schema fingerprint and the DDL corpus are shared with SupaForge and
     # published to npm. DBDiff is a Composer project and uses node for nothing
