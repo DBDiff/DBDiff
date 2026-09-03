@@ -27,29 +27,41 @@ for arg in "$@"; do
 done
 export PGCONF_DSN="host=$PG_HOST port=$PG_PORT user=$PG_USER password=$PG_PASS dbname=$PG_DB"
 
-echo "Step 1: Downloading Postgres regression files from pgrust..."
+# PostgreSQL's own regression suite, pinned to a release branch. The previous
+# source (malisper/pgrust) removed its vendor/ directory; every fetch began
+# returning 404, the extractor produced an empty patterns.json, and the suite
+# went on reporting "Passed: 15" while testing none of the ALTER patterns it
+# exists for. A silent zero is worse than a failure, so this now fails closed.
+PG_REGRESS_REF="${PG_REGRESS_REF:-REL_18_STABLE}"
+
+echo "Step 1: Downloading Postgres regression files (postgres/postgres @ ${PG_REGRESS_REF})..."
 mkdir -p /tmp/pg-regress
 
+missing=""
 for f in alter_table constraints create_index identity generated_stored domain enum; do
     target="/tmp/pg-regress/${f}.sql"
-    if [ -f "$target" ]; then
+    if [ -s "$target" ]; then
         echo "  $f.sql (cached)"
         continue
     fi
 
-    if [ "$f" = "alter_table" ]; then
-        src="alter_table"
+    if gh api "repos/postgres/postgres/contents/src/test/regress/sql/${f}.sql?ref=${PG_REGRESS_REF}" \
+        --jq '.content' 2>/dev/null | base64 -d > "$target" 2>/dev/null && [ -s "$target" ]; then
+        echo "  $f.sql ($(wc -l < "$target") lines)"
     else
-        src="$f"
+        rm -f "$target"
+        missing="$missing $f"
     fi
-
-    gh api "repos/malisper/pgrust/contents/vendor/postgres-18.3/regress/sql/${src}.sql" \
-        --jq '.content' 2>/dev/null | base64 -d > "$target" 2>/dev/null || {
-        echo "  WARN: could not fetch $f.sql"
-        continue
-    }
-    echo "  $f.sql ($(wc -l < "$target") lines)"
 done
+
+if [ -n "$missing" ]; then
+    echo ""
+    echo "ERROR: could not fetch regression files:$missing" >&2
+    echo "  Without them the ALTER patterns are not extracted and this suite" >&2
+    echo "  silently degrades to testing object creation only." >&2
+    echo "  Set PG_REGRESS_REF to a branch that has them, or pre-seed /tmp/pg-regress." >&2
+    exit 1
+fi
 
 # Symlink for extract script's expected paths
 ln -sf /tmp/pg-regress/alter_table.sql /tmp/alter_table.sql

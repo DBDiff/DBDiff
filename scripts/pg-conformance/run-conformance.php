@@ -408,9 +408,15 @@ foreach (array_keys($known) as $id) {
     if (!isset($failedIds[$id])) $fixed[] = $id;
 }
 
+// A baselined case passing is reported but not fatal. The pattern set is
+// extracted against the live server, so it differs by version — 235 patterns
+// on PostgreSQL 16 against 270 on 18 — and a case that fails on one version
+// can legitimately pass on another. Failing the run for that would mean no
+// single baseline could ever satisfy the whole matrix.
 if (!empty($fixed)) {
-    echo "\n  " . count($fixed) . " known failure(s) now PASS — remove from known-failures.json:\n";
+    echo "\n  " . count($fixed) . " baselined case(s) pass on this server:\n";
     foreach ($fixed as $id) echo "    $id\n";
+    echo "  (informational: remove from known-failures.json once they pass on every version)\n";
 }
 if (!empty($unexpected)) {
     echo "\n  " . count($unexpected) . " NEW failure(s) not in the baseline:\n";
@@ -418,7 +424,9 @@ if (!empty($unexpected)) {
 }
 echo "\n  known failures carried: " . count($known) . "\n";
 
-$totalFail = count($unexpected) + count($fixed);
+// Only a failure absent from the baseline fails the run: that is a genuine
+// regression. See above for why a baselined case passing is not.
+$totalFail = count($unexpected);
 if ($totalFail > 0) {
     echo "\nFailed patterns:\n";
     foreach ($results['errors'] as $err) {
