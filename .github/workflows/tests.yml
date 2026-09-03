@@ -249,8 +249,10 @@ jobs:
         pg_dump --version
         pg_restore --version
         got="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
-        if [ "$got" -lt "${{ matrix.postgres-version }}" ]; then
-          echo "::error::pg_dump $got is older than PostgreSQL ${{ matrix.postgres-version }}; the pg_dump renderer would be skipped"
+        # Via a variable: shellcheck cannot tell that the expansion is numeric.
+        want="${{ matrix.postgres-version }}"
+        if [ "$got" -lt "$want" ]; then
+          echo "::error::pg_dump $got is older than PostgreSQL $want; the pg_dump renderer would be skipped"
           exit 1
         fi
 
@@ -601,8 +603,10 @@ jobs:
         pg_dump --version
         pg_restore --version
         got="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
-        if [ "$got" -lt "${{ matrix.postgres-version }}" ]; then
-          echo "::error::pg_dump $got is older than PostgreSQL ${{ matrix.postgres-version }}; the pg_dump renderer would be skipped"
+        # Via a variable: shellcheck cannot tell that the expansion is numeric.
+        want="${{ matrix.postgres-version }}"
+        if [ "$got" -lt "$want" ]; then
+          echo "::error::pg_dump $got is older than PostgreSQL $want; the pg_dump renderer would be skipped"
           exit 1
         fi
 
