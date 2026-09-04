@@ -253,8 +253,12 @@ jobs:
           # build carries on and produces a Postgres tool with no Postgres
           # driver, which `--version` reports as perfectly healthy.
           #
-          # Re-create the expected level as junctions rather than copies: no
-          # duplication, and it disappears if SPC fixes the path.
+          # `download` only fetches archives; extraction happens during `build`.
+          # Extracting explicitly first gives somewhere to apply the fix, and
+          # `build` then skips re-extracting because SourceManager honours the
+          # .spc-hash that `extract` leaves behind — so the junctions survive.
+          .\spc.exe extract postgresql-win
+
           $pg = "source\postgresql-win"
           if ((Test-Path "$pg\lib") -and -not (Test-Path "$pg\pgsql")) {
             Write-Output "Re-creating the pgsql/ level SPC stripped but still expects"
@@ -264,9 +268,11 @@ jobs:
           }
           if (-not (Test-Path "$pg\pgsql\lib\libpq.lib")) {
             Write-Output "::error::libpq.lib not found under $pg\pgsql\lib — pdo_pgsql would be built without it"
-            Get-ChildItem -Path $pg -Depth 1 | Select-Object -ExpandProperty FullName
+            if (Test-Path $pg) { Get-ChildItem -Path $pg -Depth 1 | Select-Object -ExpandProperty FullName }
+            else { Write-Output "$pg does not exist" }
             exit 1
           }
+          Write-Output "libpq.lib is in place"
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
 
       - name: Combine PHP + PHAR → binary (Windows)
