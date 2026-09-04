@@ -4,6 +4,6 @@
   "description": "Test-only tooling. DBDiff itself is a Composer project; this exists so the Postgres conformance harness can consume the shared schema fingerprint and corpus, which are published to npm.",
   "license": "MIT",
   "dependencies": {
-    "@akalforge/pg-conformance": "~0.0.1"
+    "@akalforge/pg-conformance": "~0.0.3"
   }
 }
