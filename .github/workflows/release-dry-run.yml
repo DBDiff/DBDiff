@@ -324,6 +324,13 @@ jobs:
             Write-Output "$scheme driver present"
           }
 
+          # Every dbdiff.exe call above is expected to fail — the port is
+          # closed on purpose. GitHub's pwsh shell appends `exit $LASTEXITCODE`,
+          # so without this the step inherits that deliberate failure and reports
+          # a driver check that passed as a failed job. The bash version escapes
+          # the same trap with `|| true`.
+          exit 0
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
