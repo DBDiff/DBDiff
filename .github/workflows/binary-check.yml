@@ -322,15 +322,30 @@ jobs:
           name: dbdiff-phar-ci
           path: dist/
 
+      # Key on what actually changes the build, not on the workflow file.
+      # hashFiles() over binary-check.yml meant any edit anywhere in it — a
+      # Linux-only change, a comment — produced a new key and a 12 minute
+      # rebuild. These four values are the entire input to the compile.
+      - name: Record the build inputs for cache keying
+        shell: bash
+        run: |
+          {
+            echo "${{ env.SPC_VERSION }}"
+            echo "${{ env.SPC_PHP_VERSION }}"
+            echo "${{ env.SPC_EXTENSIONS }}"
+            echo "${{ env.SPC_WINDOWS_LIBS }}"
+          } > spc-win-inputs.txt
+
+      # No restore-keys: a prefix match would restore a buildroot compiled with
+      # a different extension set, which is worse than rebuilding — the binary
+      # would be missing extensions and nothing would say so.
       - name: Cache SPC build artifacts (Windows)
         uses: actions/cache@v4
         with:
           path: |
             downloads
             buildroot
-          key: spc-win32-x64-v1-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/binary-check.yml') }}
-          restore-keys: |
-            spc-win32-x64-v1-php${{ env.SPC_PHP_VERSION }}-
+          key: spc-win32-x64-v2-${{ hashFiles('spc-win-inputs.txt') }}
 
       - name: Download SPC (Windows)
         shell: pwsh
@@ -377,11 +392,20 @@ jobs:
 
           .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
 
+      # Get-Content -AsByteStream pipes the file through PowerShell's object
+      # pipeline one byte at a time, which took 153 seconds for a ~30 MB
+      # concatenation. A stream copy does the same work in about a second.
       - name: Combine PHP + PHAR → binary (Windows)
         shell: pwsh
         run: |
-          Get-Content -AsByteStream buildroot\bin\micro.sfx, dist\dbdiff.phar |
-            Set-Content -AsByteStream dbdiff.exe
+          $out = [System.IO.File]::Create((Join-Path $PWD 'dbdiff.exe'))
+          try {
+            foreach ($part in @('buildroot\bin\micro.sfx', 'dist\dbdiff.phar')) {
+              $in = [System.IO.File]::OpenRead((Resolve-Path $part))
+              try { $in.CopyTo($out) } finally { $in.Dispose() }
+            }
+          } finally { $out.Dispose() }
+          "{0:N1} MB" -f ((Get-Item dbdiff.exe).Length / 1MB)
 
       - name: Smoke-test binary (Windows)
         shell: pwsh
