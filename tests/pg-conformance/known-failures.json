@@ -12,7 +12,8 @@
     "wrong_output: DBDiff produces a diff, but applying it does not reproduce",
     "the target schema. These are defects in existing behaviour.",
     "alter_path: failures on ALTER patterns, invisible until the regression source was fixed. The suite had been fetching 404s and testing object creation only. Seven are identity-related, mirroring on the ALTER path the CREATE-path bug already fixed.",
-    "hard_cases: the renderer corpus from @akalforge/pg-conformance, now run in CI. These are DDL shapes the renderer cannot yet reproduce \u2014 exclusion constraints, NULLS NOT DISTINCT, NOT VALID, foreign key variants and several partitioning forms. Recorded so the count can only go down."
+    "hard_cases: the renderer corpus from @akalforge/pg-conformance, now run in CI. These are DDL shapes the renderer cannot yet reproduce \u2014 exclusion constraints, NULLS NOT DISTINCT, NOT VALID, foreign key variants and several partitioning forms. Recorded so the count can only go down.",
+    "hard_table_like_including_all fails only on PostgreSQL 18, which named NOT NULL constraints. LIKE ... INCLUDING ALL copies them, and the renderer re-emits the source table's constraint names on the new table rather than letting the server derive them."
   ],
   "alter_path": [
     "alter_table_add_column_19",
@@ -61,6 +62,7 @@
     "hard_rls_policies",
     "hard_seq_owned_options",
     "hard_sequence_as_smallint",
+    "hard_table_like_including_all",
     "hard_table_of_composite_type",
     "hard_type_array_of_domain",
     "hard_type_bit_varbit",
@@ -106,6 +108,7 @@
     "hard_rls_policies",
     "hard_seq_owned_options",
     "hard_sequence_as_smallint",
+    "hard_table_like_including_all",
     "hard_table_of_composite_type",
     "hard_type_array_of_domain",
     "hard_type_bit_varbit",
