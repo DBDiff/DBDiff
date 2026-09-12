@@ -51,16 +51,51 @@ if (!file_exists($patternsFile)) {
 
 $patterns = json_decode(file_get_contents($patternsFile), true);
 
-// A second, hand-authored corpus covering the two axes the extractor cannot
-// reach: creating objects from nothing (every extracted pattern starts from an
-// existing table and ALTERs it), and object kinds other than tables, columns
-// and constraints. Both gaps hid real defects.
-$objectsFile = __DIR__ . '/../../tests/pg-conformance/patterns-objects.json';
-if (file_exists($objectsFile)) {
-    $objectPatterns = json_decode(file_get_contents($objectsFile), true) ?: [];
-    $patterns = array_merge($patterns, $objectPatterns);
-    echo "Loaded " . count($objectPatterns) . " object/create patterns\n";
+// The shared fingerprint is published to npm, which is where the corpus lives
+// too. DBDiff is a Composer project, so it is required by path rather than
+// autoloaded; `npm ci` in the conformance job puts it here.
+$conformancePath = __DIR__ . '/../../node_modules/@akalforge/pg-conformance/src/Conformance.php';
+if (!is_file($conformancePath)) {
+    fwrite(STDERR, "Missing @akalforge/pg-conformance. Run `npm ci` in the repository root.\n");
+    exit(1);
 }
+require_once $conformancePath;
+use Akalforge\PgConformance\Conformance;
+
+// Two hand-authored corpora from @akalforge/pg-conformance, covering the axes
+// the extractor cannot reach. Every extracted pattern starts from an existing
+// table and ALTERs it, so creating objects from nothing is invisible to it, as
+// are object kinds other than tables, columns and constraints.
+//
+// `objects` was previously a copy in this repository. It is read from the
+// package now for the same reason the fingerprint is: two copies of the same
+// corpus drift, and the one that drifts is the one nobody is looking at.
+$objectPatterns = Conformance::loadCorpus('objects');
+$patterns = array_merge($patterns, $objectPatterns);
+echo "Loaded " . count($objectPatterns) . " object/create patterns\n";
+
+// `hard-cases` is DDL that is awkward to reproduce — identity options,
+// generated columns, exclusion constraints, every partitioning strategy,
+// collations, storage and compression. It is expressed as a single `sql` that
+// builds the objects, which is the same shape as an object pattern with no
+// before state, so it is adapted rather than given its own runner.
+$hardCases = array_map(
+    static fn (array $c): array => [
+        'id'              => 'hard_' . $c['id'],
+        'category'        => 'hard_case',
+        'description'     => $c['id'],
+        'table'           => null,
+        'before_sql'      => '',
+        'setup_sql'       => '',
+        'alter_sql'       => $c['sql'],
+        'min_pg_version'  => $c['minPgVersion'] ?? null,
+        'skip_reason'     => null,
+        'source_file'     => 'pg-conformance/hard-cases',
+    ],
+    Conformance::loadCorpus('hard-cases')
+);
+$patterns = array_merge($patterns, $hardCases);
+echo "Loaded " . count($hardCases) . " hard cases\n";
 if ($category) {
     $patterns = array_values(array_filter($patterns, fn($p) => $p['category'] === $category));
 }
@@ -120,16 +155,6 @@ function connectDb(string $host, string $port, string $user, string $pass, strin
  * Returned as one entry per line rather than as a nested structure, so a
  * mismatch can be reported as exactly which objects differ.
  */
-// The shared fingerprint is published to npm, which is where the corpus lives
-// too. DBDiff is a Composer project, so it is required by path rather than
-// autoloaded; `npm ci` in the conformance job puts it here.
-$conformancePath = __DIR__ . '/../../node_modules/@akalforge/pg-conformance/src/Conformance.php';
-if (!is_file($conformancePath)) {
-    fwrite(STDERR, "Missing @akalforge/pg-conformance. Run `npm ci` in the repository root.\n");
-    exit(1);
-}
-require_once $conformancePath;
-use Akalforge\PgConformance\Conformance;
 
 function getSchemaFingerprint(PDO $pdo): array {
     $row = $pdo->query(Conformance::fingerprintSql(['public']))->fetch(PDO::FETCH_ASSOC);
