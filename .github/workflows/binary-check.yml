@@ -29,6 +29,8 @@ env:
   SPC_VERSION: "2.8.3"
   SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
+  # Windows links against prebuilt libraries rather than building them.
+  SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # JOB 1 — Build the PHAR (production deps only, no humbug/box in require-dev)
@@ -289,3 +291,133 @@ jobs:
           echo "--- npm diff output ($(wc -l < npm-diff.sql) lines) ---"
           cat npm-diff.sql
           test -s npm-diff.sql
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Windows x64 binary
+  #
+  # Windows had no per-PR coverage at all: the binary was only ever built by the
+  # release and dry-run workflows, which do not run on pull requests. Two
+  # Windows-specific fixes in a row (the missing NASM assembler, and the libpq
+  # headers SPC looks for one directory too deep) therefore shipped unverified
+  # and were only disproved by a release dry run twenty minutes later.
+  #
+  # This is deliberately narrower than the Linux job. GitHub does not run
+  # service containers on Windows runners, so there is no MySQL or Postgres to
+  # diff against; the live-database half stays Linux-only for now.
+  #
+  # What it does cover is exactly what went wrong twice: that the binary builds
+  # at all, and that it comes out with working database drivers rather than
+  # silently missing them while --version reports success.
+  # ═══════════════════════════════════════════════════════════════════════════
+  windows-binary:
+    name: Windows x64 binary
+    needs: build-phar
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-phar-ci
+          path: dist/
+
+      - name: Cache SPC build artifacts (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            downloads
+            buildroot
+          key: spc-win32-x64-v1-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/binary-check.yml') }}
+          restore-keys: |
+            spc-win32-x64-v1-php${{ env.SPC_PHP_VERSION }}-
+
+      - name: Download SPC (Windows)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/crazywhalecc/static-php-cli/releases/download/${{ env.SPC_VERSION }}/spc-windows-x64.exe"
+          Invoke-WebRequest -Uri $url -OutFile spc.exe
+
+      # OpenSSL's Windows build assembles with NASM, which is not on the runner.
+      # Without it the build dies inside the openssl module with nothing
+      # pointing at the cause.
+      - name: Install NASM (Windows)
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          $nasm = "C:\Program Files\NASM"
+          if (-not (Test-Path "$nasm\nasm.exe")) { throw "NASM was not installed at $nasm" }
+          Add-Content -Path $env:GITHUB_PATH -Value $nasm
+
+      - name: Build static PHP binary (Windows)
+        shell: pwsh
+        run: |
+          .\spc.exe doctor --auto-fix
+          New-Item -ItemType Directory -Force -Path source | Out-Null
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+
+          # SPC strips an archive's single top-level directory, then its
+          # postgresql_win builder copies from that stripped level. The copies
+          # fail as warnings, so the build carries on and produces a binary with
+          # no pdo_pgsql. Extract first so there is something to repair; `build`
+          # then skips re-extracting because of the .spc-hash left behind.
+          .\spc.exe extract postgresql-win
+
+          $pg = "source\postgresql-win"
+          if ((Test-Path "$pg\lib") -and -not (Test-Path "$pg\pgsql")) {
+            New-Item -ItemType Directory -Force -Path "$pg\pgsql" | Out-Null
+            New-Item -ItemType Junction -Path "$pg\pgsql\lib"     -Target (Resolve-Path "$pg\lib")     | Out-Null
+            New-Item -ItemType Junction -Path "$pg\pgsql\include" -Target (Resolve-Path "$pg\include") | Out-Null
+          }
+          if (-not (Test-Path "$pg\pgsql\lib\libpq.lib")) {
+            Write-Output "::error::libpq.lib not found under $pg\pgsql\lib — pdo_pgsql would be built without it"
+            if (Test-Path $pg) { Get-ChildItem -Path $pg -Depth 1 | Select-Object -ExpandProperty FullName }
+            exit 1
+          }
+
+          .\spc.exe build "${{ env.SPC_EXTENSIONS }}" --build-micro --debug --without-micro-ext-test
+
+      - name: Combine PHP + PHAR → binary (Windows)
+        shell: pwsh
+        run: |
+          Get-Content -AsByteStream buildroot\bin\micro.sfx, dist\dbdiff.phar |
+            Set-Content -AsByteStream dbdiff.exe
+
+      - name: Smoke-test binary (Windows)
+        shell: pwsh
+        run: |
+          .\dbdiff.exe --version
+          .\dbdiff.exe --help
+
+          # --version passes whether or not a single database driver made it in,
+          # which is how a driverless binary reached a release dry run. PDO
+          # reports a missing driver as exactly "could not find driver" and an
+          # unreachable server as a connection error, so a closed port
+          # distinguishes the two without needing a database.
+          foreach ($scheme in @('postgresql', 'mysql')) {
+            $out = (& .\dbdiff.exe diff `
+              --server1-url "${scheme}://u:p@127.0.0.1:1/x" `
+              --server2-url "${scheme}://u:p@127.0.0.1:1/y" 2>&1 | Out-String)
+            if ($out -match 'could not find driver') {
+              Write-Output "::error::$scheme driver missing from the binary"
+              Write-Output $out
+              exit 1
+            }
+            Write-Output "$scheme driver present"
+          }
+
+          # Every dbdiff.exe call above is expected to fail — the port is
+          # closed on purpose. GitHub's pwsh shell appends `exit $LASTEXITCODE`,
+          # so without this the step inherits that deliberate failure and reports
+          # a driver check that passed as a failed job. The bash version escapes
+          # the same trap with `|| true`.
+          exit 0
+
+      - name: Test the npm wrapper resolves the Windows binary
+        shell: pwsh
+        run: |
+          Copy-Item dbdiff.exe packages\@dbdiff\cli-win32-x64\dbdiff.exe -Force
+          New-Item -ItemType Directory -Force -Path node_modules\@dbdiff | Out-Null
+          New-Item -ItemType Junction -Path node_modules\@dbdiff\cli-win32-x64 -Target (Resolve-Path packages\@dbdiff\cli-win32-x64) | Out-Null
+          New-Item -ItemType Junction -Path node_modules\@dbdiff\cli          -Target (Resolve-Path packages\@dbdiff\cli)          | Out-Null
+          node packages\@dbdiff\cli\bin\dbdiff.js --version

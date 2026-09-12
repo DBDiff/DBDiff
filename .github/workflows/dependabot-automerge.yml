@@ -28,11 +28,27 @@ jobs:
       # Scoped twice over: dependabot.yml already limits what gets opened, and
       # this refuses anything else that reaches here. A workflow that merges
       # whatever dependabot proposes is a supply-chain hole, not a convenience.
+      # Enabling auto-merge can legitimately be refused — on a branch that
+      # requires a review, GITHUB_TOKEN is not authorised to do it:
+      #
+      #   GraphQL: Pull request User is not authorized for this protected
+      #   branch (enablePullRequestAutoMerge)
+      #
+      # That is a repository policy decision, not a problem with the pull
+      # request, so it is reported rather than failing an otherwise green PR
+      # and making a good update look broken.
       - name: Enable auto-merge for patch updates to the shared corpus
         if: >-
           steps.meta.outputs.dependency-names == '@akalforge/pg-conformance' &&
           steps.meta.outputs.update-type == 'version-update:semver-patch'
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: |
+          if gh pr merge --auto --merge "$PR_URL"; then
+            echo "auto-merge enabled"
+          else
+            echo "::notice::Could not enable auto-merge; this PR needs merging by hand." \
+                 "On a branch with required reviews, GITHUB_TOKEN cannot enable it" \
+                 "unless the github-actions app is allowed to bypass them."
+          fi
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
