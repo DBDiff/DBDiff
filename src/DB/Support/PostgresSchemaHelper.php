@@ -80,6 +80,23 @@ class PostgresSchemaHelper {
     }
 
     /**
+     * The WITH (...) clause for a relation's reloptions, or nothing when there
+     * are none.
+     *
+     * Tables carry fillfactor and autovacuum thresholds here, views carry
+     * security_barrier, security_invoker and the WITH CHECK OPTION, and
+     * materialised views carry both kinds. All three render the clause the same
+     * way, so they render it from here.
+     *
+     * @param string|null $options Already comma-joined, as array_to_string gives.
+     */
+    public static function withOptions(?string $options): string {
+        return ($options === null || $options === '')
+            ? ''
+            : ' WITH (' . $options . ')';
+    }
+
+    /**
      * Render one column's DDL, given its already-resolved type and NOT NULL
      * suffix.
      *

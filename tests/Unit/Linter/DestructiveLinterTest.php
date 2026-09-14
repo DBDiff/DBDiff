@@ -13,6 +13,11 @@ use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\DropRoutine;
 use DBDiff\Diff\DropTrigger;
 use DBDiff\Diff\DropView;
+use DBDiff\Diff\DropMatView;
+use DBDiff\Diff\DropSequence;
+use DBDiff\Diff\DropCompositeType;
+use DBDiff\Diff\DropDomain;
+use DBDiff\Diff\DropPolicy;
 use DBDiff\Diff\AddTable;
 
 class DestructiveLinterTest extends TestCase
@@ -177,6 +182,60 @@ class DestructiveLinterTest extends TestCase
         $warnings = $result->getWarnings();
         $this->assertCount(1, $warnings);
         $this->assertSame('drop-view', $warnings[0]->type);
+    }
+
+    // ── Newly modelled object kinds ─────────────────────────────────────────
+
+    /**
+     * These became possible to emit only once DBDiff modelled the object kinds,
+     * so the linter had no rule for them. An unguarded DROP MATERIALIZED VIEW
+     * or DROP SEQUENCE discards data or a counter.
+     */
+    public function testDropMatViewProducesWarning(): void {
+        $diff = ['schema' => [new DropMatView('daily_totals', 'CREATE MATERIALIZED VIEW ...')]];
+        $warnings = $this->linter->lint($diff)->getWarnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('drop-matview', $warnings[0]->type);
+        $this->assertStringContainsString('daily_totals', $warnings[0]->object);
+    }
+
+    public function testDropSequenceProducesWarning(): void {
+        $diff = ['schema' => [new DropSequence('invoice_no', 'CREATE SEQUENCE ...')]];
+        $warnings = $this->linter->lint($diff)->getWarnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('drop-sequence', $warnings[0]->type);
+    }
+
+    public function testDropCompositeTypeProducesWarning(): void {
+        $diff = ['schema' => [new DropCompositeType('address', 'CREATE TYPE ...')]];
+        $warnings = $this->linter->lint($diff)->getWarnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('drop-composite-type', $warnings[0]->type);
+    }
+
+    public function testDropDomainProducesWarning(): void {
+        $diff = ['schema' => [new DropDomain('positive_int', 'CREATE DOMAIN ...')]];
+        $warnings = $this->linter->lint($diff)->getWarnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('drop-domain', $warnings[0]->type);
+    }
+
+    /**
+     * Dropping a policy widens access rather than removing data, which is why
+     * it is reported at all.
+     */
+    public function testDropPolicyProducesWarningNamingItsTable(): void {
+        $diff = ['schema' => [new DropPolicy('tenant_isolation', 'documents', 'CREATE POLICY ...')]];
+        $warnings = $this->linter->lint($diff)->getWarnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertSame('drop-policy', $warnings[0]->type);
+        $this->assertStringContainsString('tenant_isolation', $warnings[0]->object);
+        $this->assertStringContainsString('documents', $warnings[0]->object);
     }
 
     // ── Clean diffs ──────────────────────────────────────────────────────────

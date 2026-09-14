@@ -7,7 +7,6 @@ use DBDiff\DB\Adapters\AdapterFactory;
 use DBDiff\DB\Adapters\DBAdapterInterface;
 use DBDiff\Exceptions\DBException;
 
-
 class DBManager {
 
     protected Capsule $capsule;
@@ -144,6 +143,7 @@ class DBManager {
     public function getEnums(string $connection): array {
         return $this->adapter->getEnums($this->getDB($connection));
     }
+
 
     public function getSchemaHashMap(string $connection, array $tables = []): array {
         return $this->adapter->getSchemaHashMap($this->getDB($connection), $tables);

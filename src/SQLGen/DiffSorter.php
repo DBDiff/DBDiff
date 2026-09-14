@@ -9,6 +9,9 @@ class DiffSorter {
 
         "DropEnum",
         "DropView",
+        // Both depend on tables, so they go before any table is touched.
+        "DropMatView",
+        "DropPolicy",
         "DropTrigger",
         "DropRoutine",
 
@@ -21,10 +24,25 @@ class DiffSorter {
         "CreateEnum",
         "AlterEnum",
 
+        // Same reason as enums: a column may be typed by a composite or a
+        // domain, or default to nextval() of a sequence.
+        "CreateCompositeType",
+        "AlterCompositeType",
+        "CreateDomain",
+        "AlterDomain",
+        "CreateSequence",
+        "AlterSequence",
+
         "AddTable",
 
         "DeleteData",
         "DropTable",
+
+        // After DropTable: a table column may still be typed by the composite
+        // or domain, or default to the sequence, being dropped here.
+        "DropSequence",
+        "DropDomain",
+        "DropCompositeType",
 
         "AlterTableEngine",
         "AlterTableCollation",
@@ -51,8 +69,17 @@ class DiffSorter {
         "AlterRoutine",
         "CreateView",
         "AlterView",
+        // After views: a materialised view may select from one.
+        "CreateMatView",
+        "AlterMatView",
         "CreateTrigger",
         "AlterTrigger",
+
+        // Last: both need their table to exist, and enabling RLS without the
+        // policies would leave the table denying every row.
+        "AlterRowSecurity",
+        "CreatePolicy",
+        "AlterPolicy",
     ];
 
     private $down_order = [
@@ -62,15 +89,32 @@ class DiffSorter {
         "DropRoutine",
         "AlterRoutine",
         "CreateRoutine",
+        // Policies and the RLS flags come off before the tables they sit on.
+        "DropPolicy",
+        "AlterPolicy",
+        "CreatePolicy",
+        "AlterRowSecurity",
         "DropTrigger",
         "AlterTrigger",
         "CreateTrigger",
+        "DropMatView",
+        "AlterMatView",
+        "CreateMatView",
         "DropView",
         "AlterView",
         "CreateView",
         "DropEnum",
         "AlterEnum",
         "CreateEnum",
+        "DropCompositeType",
+        "AlterCompositeType",
+        "CreateCompositeType",
+        "DropDomain",
+        "AlterDomain",
+        "CreateDomain",
+        "DropSequence",
+        "AlterSequence",
+        "CreateSequence",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",

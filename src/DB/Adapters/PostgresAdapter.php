@@ -6,7 +6,6 @@ use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresSchemaHelper;
 
-
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
@@ -116,9 +115,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         // fillfactor, autovacuum thresholds, parallel_workers and the rest are
         // part of how the table behaves, not cosmetic.
-        if ($partition['reloptions'] !== null) {
-            $ddl .= ' WITH (' . $partition['reloptions'] . ')';
-        }
+        $ddl .= PostgresSchemaHelper::withOptions($partition['reloptions']);
 
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
@@ -175,14 +172,37 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         return empty($map) ? $map : array_map(fn($p) => array_values(array_unique($p)), $map);
     }
 
+    /**
+     * Ordinary views, keyed by name.
+     *
+     * reloptions carries security_barrier and security_invoker — and also the
+     * WITH CHECK OPTION, which PostgreSQL stores as check_option=cascaded|local
+     * rather than anywhere in the view body. Without them a security_invoker
+     * view was recreated as a security_definer one, silently changing whose
+     * privileges the view runs under.
+     *
+     * The body still comes from pg_views rather than pg_get_viewdef(oid, true):
+     * the two differ in layout, and the expected-SQL fixtures are recorded
+     * against this one.
+     */
     public function getViews(Connection $connection): array {
         $result = $connection->select(
-            "SELECT viewname, definition FROM pg_views WHERE schemaname = 'public' ORDER BY viewname"
+            "SELECT v.viewname, v.definition,
+                    array_to_string(c.reloptions, ', ') AS options
+             FROM pg_views v
+             JOIN pg_namespace n ON n.nspname = v.schemaname
+             JOIN pg_class c ON c.relname = v.viewname
+                            AND c.relnamespace = n.oid
+                            AND c.relkind = 'v'
+             WHERE v.schemaname = 'public'
+             ORDER BY v.viewname"
         );
         $views = [];
         foreach ($result as $row) {
             $body = rtrim(trim($row['definition']), ';');
-            $views[$row['viewname']] = 'CREATE VIEW "' . $row['viewname'] . '" AS ' . $body;
+            $views[$row['viewname']] = 'CREATE VIEW "' . $row['viewname'] . '"'
+                . PostgresSchemaHelper::withOptions($row['options'])
+                . ' AS ' . $body;
         }
         return $views;
     }
