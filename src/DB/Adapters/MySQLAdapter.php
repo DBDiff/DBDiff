@@ -8,8 +8,6 @@ use DBDiff\DB\Support\QueryHelper;
 
 class MySQLAdapter implements DBAdapterInterface {
 
-    use UnsupportedObjectKindsTrait;
-
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'    => 'mysql',
@@ -176,9 +174,6 @@ class MySQLAdapter implements DBAdapterInterface {
         // MySQL enums are column-level type constraints, not standalone types.
         return [];
     }
-
-    // Composite types, domains, materialised views, policies and standalone
-    // sequences come from UnsupportedObjectKindsTrait: MySQL has none of them.
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {

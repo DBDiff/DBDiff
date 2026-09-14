@@ -1,6 +1,6 @@
 <?php
 
-use DBDiff\DB\Adapters\PostgresAdapter;
+use DBDiff\DB\Support\PostgresObjectKinds;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Events\StatementPrepared;
 use Illuminate\Events\Dispatcher;
@@ -37,7 +37,6 @@ class PostgresObjectKindsTest extends TestCase
     private ?PDO $adminDb = null;
     private $capsule;
     private $connection;
-    private PostgresAdapter $adapter;
     private string $host;
     private int $port = 5432;
     private string $user = 'dbdiff';
@@ -97,7 +96,6 @@ class PostgresObjectKindsTest extends TestCase
         $this->adminDb->exec("CREATE DATABASE {$this->db}");
 
         $this->connection = $this->connect($this->db, 'kinds');
-        $this->adapter    = new PostgresAdapter();
 
         $this->connection->unprepared(<<<'SQL'
             CREATE TYPE o_addr AS (street text, city text);
@@ -144,7 +142,7 @@ SQL);
 
     public function testSequencesExcludeSerialAndIdentityOwnedOnes(): void
     {
-        $sequences = $this->adapter->getSequences($this->connection);
+        $sequences = PostgresObjectKinds::sequences($this->connection);
 
         $this->assertSame(['o_seq', 'o_small'], array_keys($sequences));
         // o_ser_id_seq depends on its column with deptype 'a', o_ident's with
@@ -155,7 +153,7 @@ SQL);
 
     public function testCompositeTypesExcludeRelationRowTypes(): void
     {
-        $types = $this->adapter->getCompositeTypes($this->connection);
+        $types = PostgresObjectKinds::compositeTypes($this->connection);
 
         $this->assertSame(['o_addr'], array_keys($types));
         foreach (['o_mt', 'o_sec', 'o_plain', 'o_v', 'o_mv', 'o_ser', 'o_ident'] as $relation) {
@@ -169,15 +167,15 @@ SQL);
 
     public function testDomainsAreNotReportedAsCompositeTypes(): void
     {
-        $types = $this->adapter->getCompositeTypes($this->connection);
+        $types = PostgresObjectKinds::compositeTypes($this->connection);
         $this->assertArrayNotHasKey('o_pos', $types);
         $this->assertArrayNotHasKey('o_code', $types);
     }
 
     public function testMaterializedViewsAreSeparateFromViews(): void
     {
-        $views    = $this->adapter->getViews($this->connection);
-        $matviews = $this->adapter->getMaterializedViews($this->connection);
+        $views    = (new \DBDiff\DB\Adapters\PostgresAdapter())->getViews($this->connection);
+        $matviews = PostgresObjectKinds::materializedViews($this->connection);
 
         $this->assertArrayHasKey('o_v', $views);
         $this->assertArrayNotHasKey('o_mv', $views, 'a matview must not appear as an ordinary view');
@@ -188,7 +186,7 @@ SQL);
 
     public function testSequenceRendersEveryOption(): void
     {
-        $sequences = $this->adapter->getSequences($this->connection);
+        $sequences = PostgresObjectKinds::sequences($this->connection);
 
         // Every option is explicit: MINVALUE and MAXVALUE defaults follow the
         // type, so a bigint sequence recreated as an integer one would differ.
@@ -203,13 +201,13 @@ SQL);
 
     public function testCompositeTypeRendersItsAttributes(): void
     {
-        $types = $this->adapter->getCompositeTypes($this->connection);
+        $types = PostgresObjectKinds::compositeTypes($this->connection);
         $this->assertSame('CREATE TYPE "o_addr" AS (street text, city text)', $types['o_addr']);
     }
 
     public function testDomainRendersConstraintsDefaultAndNullability(): void
     {
-        $domains = $this->adapter->getDomains($this->connection);
+        $domains = PostgresObjectKinds::domains($this->connection);
 
         $this->assertSame(
             'CREATE DOMAIN "o_pos" AS integer CONSTRAINT o_pos_positive CHECK ((VALUE > 0))',
@@ -226,7 +224,7 @@ SQL);
 
     public function testMaterializedViewRendersPopulationState(): void
     {
-        $matviews = $this->adapter->getMaterializedViews($this->connection);
+        $matviews = PostgresObjectKinds::materializedViews($this->connection);
 
         $this->assertStringStartsWith('CREATE MATERIALIZED VIEW "o_mv" AS', $matviews['o_mv']);
         $this->assertStringNotContainsString('WITH NO DATA', $matviews['o_mv']);
@@ -236,7 +234,7 @@ SQL);
 
     public function testPoliciesAreKeyedByTableAndName(): void
     {
-        $policies = $this->adapter->getPolicies($this->connection);
+        $policies = PostgresObjectKinds::policies($this->connection);
 
         $this->assertSame(['o_sec.o_sec_read', 'o_sec.o_sec_write'], array_keys($policies));
         $this->assertSame('o_sec', $policies['o_sec.o_sec_read']['table']);
@@ -255,7 +253,7 @@ SQL);
 
     public function testRowSecurityFlagsAreReadPerTable(): void
     {
-        $rls = $this->adapter->getRowSecurity($this->connection);
+        $rls = PostgresObjectKinds::rowSecurity($this->connection);
 
         $this->assertSame(['enabled' => true, 'forced' => true], $rls['o_sec']);
         $this->assertSame(['enabled' => false, 'forced' => false], $rls['o_plain']);
@@ -272,14 +270,13 @@ SQL);
      */
     public function testEmittedDdlRoundTripsThroughTheServer(): void
     {
-        $adapter = $this->adapter;
         $source  = $this->connection;
 
-        $sequences = $adapter->getSequences($source);
-        $types     = $adapter->getCompositeTypes($source);
-        $domains   = $adapter->getDomains($source);
-        $matviews  = $adapter->getMaterializedViews($source);
-        $policies  = $adapter->getPolicies($source);
+        $sequences = PostgresObjectKinds::sequences($source);
+        $types     = PostgresObjectKinds::compositeTypes($source);
+        $domains   = PostgresObjectKinds::domains($source);
+        $matviews  = PostgresObjectKinds::materializedViews($source);
+        $policies  = PostgresObjectKinds::policies($source);
 
         $this->adminDb->exec("CREATE DATABASE {$this->roundTripDb}");
         $target = $this->connect($this->roundTripDb, 'kinds_rt');
@@ -301,14 +298,14 @@ SQL);
             $target->unprepared($policy['definition'] . ';');
         }
 
-        $this->assertSame($sequences, $adapter->getSequences($target));
-        $this->assertSame($types, $adapter->getCompositeTypes($target));
-        $this->assertSame($domains, $adapter->getDomains($target));
-        $this->assertSame($matviews, $adapter->getMaterializedViews($target));
-        $this->assertSame($policies, $adapter->getPolicies($target));
+        $this->assertSame($sequences, PostgresObjectKinds::sequences($target));
+        $this->assertSame($types, PostgresObjectKinds::compositeTypes($target));
+        $this->assertSame($domains, PostgresObjectKinds::domains($target));
+        $this->assertSame($matviews, PostgresObjectKinds::materializedViews($target));
+        $this->assertSame($policies, PostgresObjectKinds::policies($target));
         $this->assertSame(
-            $adapter->getRowSecurity($source)['o_sec'],
-            $adapter->getRowSecurity($target)['o_sec']
+            PostgresObjectKinds::rowSecurity($source)['o_sec'],
+            PostgresObjectKinds::rowSecurity($target)['o_sec']
         );
     }
 }

@@ -6,8 +6,6 @@ use Illuminate\Support\Arr;
 
 class SQLiteAdapter implements DBAdapterInterface {
 
-    use UnsupportedObjectKindsTrait;
-
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'   => 'sqlite',
@@ -129,9 +127,6 @@ class SQLiteAdapter implements DBAdapterInterface {
         // SQLite has no standalone enum types.
         return [];
     }
-
-    // Composite types, domains, materialised views, policies and standalone
-    // sequences come from UnsupportedObjectKindsTrait: SQLite has none of them.
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {

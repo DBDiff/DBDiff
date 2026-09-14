@@ -39,6 +39,7 @@ use DBDiff\Diff\DropPolicy;
 use DBDiff\Diff\AlterPolicy;
 use DBDiff\Diff\AlterRowSecurity;
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
+use DBDiff\DB\Support\PostgresObjectKinds;
 
 
 
@@ -133,24 +134,66 @@ class DBSchema {
         // Routines (stored procedures and functions)
         $diffs = array_merge($diffs, $this->diffRoutines());
 
-        // Composite types, domains and standalone sequences. Like enums, these
-        // can be referenced by a column — by its type, or by a nextval()
-        // default — so DiffSorter emits them ahead of the tables.
-        $diffs = array_merge($diffs, $this->diffCompositeTypes());
-        $diffs = array_merge($diffs, $this->diffDomains());
-        $diffs = array_merge($diffs, $this->diffSequences());
-
-        // Materialised views. getViews() reads pg_views, which holds only
-        // ordinary views, so these are a separate kind.
-        $diffs = array_merge($diffs, $this->diffMaterializedViews());
-
-        // Row level security: the table flag and the policies are set by
-        // separate statements, and a table with policies but the flag left off
-        // enforces none of them.
-        $diffs = array_merge($diffs, $this->diffRowSecurity($sourceTables, $targetTables));
-        $diffs = array_merge($diffs, $this->diffPolicies($sourceTables, $targetTables));
+        // The kinds only PostgreSQL has, asked for only of PostgreSQL — the same
+        // way collation and charset above are asked for only of MySQL.
+        if ($driver === 'pgsql') {
+            $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+        }
 
         return $diffs;
+    }
+
+    /**
+     * Composite types, domains, standalone sequences, materialised views and row
+     * level security.
+     *
+     * Read through PostgresObjectKinds rather than the adapter interface, so the
+     * drivers that have none of these carry no methods saying so.
+     */
+    private function diffPostgresObjectKinds(array $sourceTables, array $targetTables): array {
+        $source = $this->manager->getDB('source');
+        $target = $this->manager->getDB('target');
+
+        return array_merge(
+            // Like enums, a composite, a domain or a sequence can be referenced
+            // by a column — by its type, or by a nextval() default — so
+            // DiffSorter emits these ahead of the tables.
+            $this->diffNamedObjects(
+                PostgresObjectKinds::compositeTypes($source),
+                PostgresObjectKinds::compositeTypes($target),
+                CreateCompositeType::class, DropCompositeType::class, AlterCompositeType::class
+            ),
+            $this->diffNamedObjects(
+                PostgresObjectKinds::domains($source),
+                PostgresObjectKinds::domains($target),
+                CreateDomain::class, DropDomain::class, AlterDomain::class
+            ),
+            $this->diffNamedObjects(
+                PostgresObjectKinds::sequences($source),
+                PostgresObjectKinds::sequences($target),
+                CreateSequence::class, DropSequence::class, AlterSequence::class
+            ),
+            // getViews() reads pg_views, which holds only ordinary views.
+            $this->diffNamedObjects(
+                PostgresObjectKinds::materializedViews($source),
+                PostgresObjectKinds::materializedViews($target),
+                CreateMatView::class, DropMatView::class, AlterMatView::class
+            ),
+            // The table flag and the policies are set by separate statements,
+            // and a table with policies but the flag left off enforces none.
+            $this->diffRowSecurity(
+                PostgresObjectKinds::rowSecurity($source),
+                PostgresObjectKinds::rowSecurity($target),
+                $sourceTables,
+                $targetTables
+            ),
+            $this->diffPolicies(
+                PostgresObjectKinds::policies($source),
+                PostgresObjectKinds::policies($target),
+                $sourceTables,
+                $targetTables
+            )
+        );
     }
 
     /**
@@ -189,67 +232,20 @@ class DBSchema {
     }
 
     /**
-     * Diff standalone sequences between source and target databases.
-     */
-    private function diffSequences(): array {
-        return $this->diffNamedObjects(
-            $this->manager->getSequences('source'),
-            $this->manager->getSequences('target'),
-            CreateSequence::class,
-            DropSequence::class,
-            AlterSequence::class
-        );
-    }
-
-    /**
-     * Diff composite types between source and target databases.
-     */
-    private function diffCompositeTypes(): array {
-        return $this->diffNamedObjects(
-            $this->manager->getCompositeTypes('source'),
-            $this->manager->getCompositeTypes('target'),
-            CreateCompositeType::class,
-            DropCompositeType::class,
-            AlterCompositeType::class
-        );
-    }
-
-    /**
-     * Diff domains between source and target databases.
-     */
-    private function diffDomains(): array {
-        return $this->diffNamedObjects(
-            $this->manager->getDomains('source'),
-            $this->manager->getDomains('target'),
-            CreateDomain::class,
-            DropDomain::class,
-            AlterDomain::class
-        );
-    }
-
-    /**
-     * Diff materialised views between source and target databases.
-     */
-    private function diffMaterializedViews(): array {
-        return $this->diffNamedObjects(
-            $this->manager->getMaterializedViews('source'),
-            $this->manager->getMaterializedViews('target'),
-            CreateMatView::class,
-            DropMatView::class,
-            AlterMatView::class
-        );
-    }
-
-    /**
      * Diff row level security policies between source and target databases.
      *
      * Policies are keyed "table.policy" by the adapter. Only policies whose
      * table survived the table filter are considered, so an ignored table does
      * not reappear through its policies.
      */
-    private function diffPolicies(array $sourceTables, array $targetTables): array {
-        $source = $this->filterByTable($this->manager->getPolicies('source'), $sourceTables);
-        $target = $this->filterByTable($this->manager->getPolicies('target'), $targetTables);
+    private function diffPolicies(
+        array $sourcePolicies,
+        array $targetPolicies,
+        array $sourceTables,
+        array $targetTables
+    ): array {
+        $source = $this->filterByTable($sourcePolicies, $sourceTables);
+        $target = $this->filterByTable($targetPolicies, $targetTables);
         $diffs  = [];
 
         foreach (array_diff_key($source, $target) as $key => $data) {
@@ -279,9 +275,12 @@ class DBSchema {
      * leaves both flags off — so its flags are compared against off rather than
      * skipped, which is what makes RLS survive on a newly added table.
      */
-    private function diffRowSecurity(array $sourceTables, array $targetTables): array {
-        $source = $this->manager->getRowSecurity('source');
-        $target = $this->manager->getRowSecurity('target');
+    private function diffRowSecurity(
+        array $source,
+        array $target,
+        array $sourceTables,
+        array $targetTables
+    ): array {
         $off    = ['enabled' => false, 'forced' => false];
         $inTarget = array_flip($targetTables);
         $diffs  = [];
