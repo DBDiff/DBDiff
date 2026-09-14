@@ -1,27 +1,12 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
-use DBDiff\SQLGen\SQLGenInterface;
-use DBDiff\SQLGen\Dialect\DialectRegistry;
-use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
+/**
+ * CREATE OR REPLACE VIEW cannot change a column's name, type or order, so the view is replaced.
+ */
+class AlterViewSQL extends AbstractRecreateSQL {
 
-class AlterViewSQL implements SQLGenInterface {
-
-    protected $obj;
-    protected SQLDialectInterface $dialect;
-
-    public function __construct($obj, SQLDialectInterface $dialect = null) {
-        $this->obj     = $obj;
-        $this->dialect = $dialect ?? DialectRegistry::get();
-    }
-
-    public function getUp(): string {
-        $q = $this->dialect->quote($this->obj->name);
-        return "DROP VIEW IF EXISTS $q;\n" . $this->obj->sourceDefinition . ';';
-    }
-
-    public function getDown(): string {
-        $q = $this->dialect->quote($this->obj->name);
-        return "DROP VIEW IF EXISTS $q;\n" . $this->obj->targetDefinition . ';';
+    protected function dropKeyword(): string {
+        return 'VIEW';
     }
 }

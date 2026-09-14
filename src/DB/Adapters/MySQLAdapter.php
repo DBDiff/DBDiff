@@ -8,6 +8,8 @@ use DBDiff\DB\Support\QueryHelper;
 
 class MySQLAdapter implements DBAdapterInterface {
 
+    use UnsupportedObjectKindsTrait;
+
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'    => 'mysql',
@@ -175,35 +177,8 @@ class MySQLAdapter implements DBAdapterInterface {
         return [];
     }
 
-    public function getSequences(Connection $connection): array {
-        // MySQL has no sequence objects; AUTO_INCREMENT is a column attribute.
-        return [];
-    }
-
-    public function getCompositeTypes(Connection $connection): array {
-        // MySQL has no composite types.
-        return [];
-    }
-
-    public function getDomains(Connection $connection): array {
-        // MySQL has no domains.
-        return [];
-    }
-
-    public function getMaterializedViews(Connection $connection): array {
-        // MySQL has no materialised views.
-        return [];
-    }
-
-    public function getPolicies(Connection $connection): array {
-        // MySQL has no row level security policies.
-        return [];
-    }
-
-    public function getRowSecurity(Connection $connection): array {
-        // MySQL has no row level security.
-        return [];
-    }
+    // Composite types, domains, materialised views, policies and standalone
+    // sequences come from UnsupportedObjectKindsTrait: MySQL has none of them.
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {

@@ -6,6 +6,8 @@ use Illuminate\Support\Arr;
 
 class SQLiteAdapter implements DBAdapterInterface {
 
+    use UnsupportedObjectKindsTrait;
+
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'   => 'sqlite',
@@ -128,35 +130,8 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
-    public function getSequences(Connection $connection): array {
-        // SQLite has no sequence objects; AUTOINCREMENT is a column attribute.
-        return [];
-    }
-
-    public function getCompositeTypes(Connection $connection): array {
-        // SQLite has no composite types.
-        return [];
-    }
-
-    public function getDomains(Connection $connection): array {
-        // SQLite has no domains.
-        return [];
-    }
-
-    public function getMaterializedViews(Connection $connection): array {
-        // SQLite has no materialised views.
-        return [];
-    }
-
-    public function getPolicies(Connection $connection): array {
-        // SQLite has no row level security policies.
-        return [];
-    }
-
-    public function getRowSecurity(Connection $connection): array {
-        // SQLite has no row level security.
-        return [];
-    }
+    // Composite types, domains, materialised views, policies and standalone
+    // sequences come from UnsupportedObjectKindsTrait: SQLite has none of them.
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
