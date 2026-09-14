@@ -23,7 +23,7 @@
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
-- Diffs tables, views, triggers, stored procedures/functions, enum types, and data — with deterministic, predictable output
+- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
@@ -80,7 +80,9 @@ fingerprints:
 Nothing is required. `pg_dump` is not bundled — the released binaries are
 static PHP and cannot carry it — so when it is absent, or older than the
 server, DBDiff falls back to its built-in renderer and says why. Partitions
-always use the built-in renderer, which handles them correctly.
+always use the built-in renderer, which reproduces the common range, list and
+hash forms; sub-partitioning and expression partition keys are among the cases
+it does not yet reproduce.
 
 A migration produced this way records it, so two machines emitting different
 SQL is explainable from the file:
@@ -113,6 +115,15 @@ SQLite 3.x is supported (any version supported by the installed `pdo_sqlite` PHP
 ```bash
 ./dbdiff --supabase --server1=user:pass@db.xxx.supabase.co:5432 server1.mydb:server1.mydb
 ```
+
+Row level security is diffed as a first-class object — policies and each table's
+`ENABLE`/`FORCE ROW LEVEL SECURITY` flags — which matters here because RLS is how
+Supabase enforces per-row access. A policy dropped or changed between two
+environments shows up in the migration instead of passing silently.
+
+DBDiff reads the `public` schema, so policies and objects Supabase keeps in
+`auth`, `storage` and its other managed schemas are outside the diff. Those are
+managed by Supabase itself rather than by your migrations.
 
 
 ## Compatible Database Variants
@@ -688,6 +699,42 @@ Comparisons run in this order:
 - Enum diffs are ordered before table diffs (tables may reference enum types)
 - MySQL and SQLite do not have standalone enum types — skipped automatically
 
+### Composite Types and Domains (PostgreSQL)
+- Detects created, dropped, and altered `CREATE TYPE ... AS (...)` and
+  `CREATE DOMAIN` definitions, including a domain's base type, default,
+  nullability and named CHECK constraints
+- ALTER = DROP + CREATE: neither a composite's attributes nor a domain's base
+  type can be changed in place
+- Ordered before table diffs, since a column may be typed by either
+- Every relation also owns a composite type describing its row shape; those
+  belong to the table and are not reported separately
+
+### Materialized Views (PostgreSQL)
+- Detects created, dropped, and altered materialized views
+- A materialized view's indexes are carried with it, so a unique index on one
+  is part of the diff
+- `WITH NO DATA` is preserved — an unpopulated matview is not recreated as a
+  populated one
+- ALTER = DROP + CREATE; PostgreSQL has no `CREATE OR REPLACE` for them
+- Ordered after views, since a matview may select from one
+
+### Sequences (PostgreSQL)
+- Detects created, dropped, and altered standalone sequences, rendering every
+  option explicitly (type, increment, min, max, start, cache, cycle) because
+  the MINVALUE and MAXVALUE defaults follow the sequence's type
+- Altered in place with `ALTER SEQUENCE` rather than recreated, which would
+  reset the counter
+- A sequence owned by a `serial` or identity column belongs to that column and
+  is not reported separately
+
+### Row Level Security (PostgreSQL)
+- Detects policies created, dropped, and altered, with their command, roles,
+  permissiveness, `USING` and `WITH CHECK` expressions
+- The table's `ENABLE`/`FORCE ROW LEVEL SECURITY` flags are diffed separately,
+  because a table carrying policies with the flag left off enforces none of them
+- Policies are keyed per table, so two tables may share a policy name
+- Ordered last, after the tables they apply to exist
+
 ### Data
 - Compares table storage engine, collation, and row count
 - Records changed rows and missing rows per table
@@ -713,8 +760,13 @@ Two severities:
 
 - **Errors** block generation — `DROP TABLE` and `DROP COLUMN`, the changes that
   destroy rows.
-- **Warnings** are reported but never block — dropping a view, trigger, routine
-  or enum type. These lose definitions rather than data.
+- **Warnings** are reported but never block — dropping a view, materialized
+  view, trigger, routine, enum type, composite type, domain, sequence or row
+  level security policy. Most of these lose a definition rather than data, but
+  three are worth reading before you proceed: dropping a materialized view
+  discards the result set it holds until it is refreshed again, dropping a
+  sequence loses its current value so a recreated one restarts, and dropping a
+  policy widens which rows are visible or writable.
 
 A dropped column paired with an added column of the same type on the same table
 is treated as a likely rename: it is downgraded from an error to a
@@ -858,7 +910,18 @@ Test DBDiff locally against any combination of PHP and MySQL:
 ./start.sh all all --parallel
 ```
 
-The CI matrix: **5 PHP × 4 MySQL = 20 jobs**, plus dedicated jobs for SQLite, PostgreSQL, DSN URLs, and Supabase.
+The CI matrix, per push and pull request:
+
+| Suite | Matrix | Jobs |
+|---|---|---|
+| Unit | 5 PHP | 5 |
+| MySQL | 5 PHP × 4 MySQL | 20 |
+| PostgreSQL | 5 PHP × 5 PostgreSQL (14–18) | 25 |
+| SQLite e2e | 5 PHP | 5 |
+| Dolt | 2 PHP | 2 |
+| Supabase Postgres | 2 PHP | 2 |
+| PG conformance | PostgreSQL 16, 17, 18 | 3 |
+| DSN URL | mysql + pgsql | 1 |
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
 
