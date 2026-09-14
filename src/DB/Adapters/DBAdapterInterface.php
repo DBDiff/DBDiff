@@ -113,6 +113,60 @@ interface DBAdapterInterface {
     public function getEnums(Connection $connection): array;
 
     /**
+     * Return a map of standalone sequence names to their CREATE SEQUENCE
+     * statements.
+     *
+     * Sequences owned by a serial or identity column are excluded — they belong
+     * to that column and are created with it.
+     *
+     * Returns [sequenceName => 'CREATE SEQUENCE ...']
+     * MySQL and SQLite return [] (no standalone sequence objects).
+     */
+    public function getSequences(Connection $connection): array;
+
+    /**
+     * Return a map of composite type names to their CREATE TYPE statements.
+     *
+     * Returns [typeName => 'CREATE TYPE ... AS (...)']
+     * MySQL and SQLite return [] (no composite types).
+     */
+    public function getCompositeTypes(Connection $connection): array;
+
+    /**
+     * Return a map of domain names to their CREATE DOMAIN statements.
+     *
+     * Returns [domainName => 'CREATE DOMAIN ...']
+     * MySQL and SQLite return [] (no domains).
+     */
+    public function getDomains(Connection $connection): array;
+
+    /**
+     * Return a map of materialised view names to their CREATE statements.
+     *
+     * Returns [viewName => 'CREATE MATERIALIZED VIEW ...']
+     * MySQL and SQLite return [] (no materialised views).
+     */
+    public function getMaterializedViews(Connection $connection): array;
+
+    /**
+     * Return a map of row level security policies to their metadata.
+     *
+     * Keyed by "table.policy" because policy names are unique per table.
+     *
+     * Returns [key => ['name' => ..., 'table' => ..., 'definition' => 'CREATE POLICY ...']]
+     * MySQL and SQLite return [] (no row level security).
+     */
+    public function getPolicies(Connection $connection): array;
+
+    /**
+     * Return per-table row level security flags.
+     *
+     * Returns [tableName => ['enabled' => bool, 'forced' => bool]]
+     * MySQL and SQLite return [] (no row level security).
+     */
+    public function getRowSecurity(Connection $connection): array;
+
+    /**
      * Return a hash-per-table map for schema pre-scan.
      *
      * Returns [tableName => hashString] covering columns, indexes, constraints,

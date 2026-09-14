@@ -22,6 +22,22 @@ use DBDiff\Diff\AlterRoutine;
 use DBDiff\Diff\CreateEnum;
 use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\AlterEnum;
+use DBDiff\Diff\CreateSequence;
+use DBDiff\Diff\DropSequence;
+use DBDiff\Diff\AlterSequence;
+use DBDiff\Diff\CreateCompositeType;
+use DBDiff\Diff\DropCompositeType;
+use DBDiff\Diff\AlterCompositeType;
+use DBDiff\Diff\CreateDomain;
+use DBDiff\Diff\DropDomain;
+use DBDiff\Diff\AlterDomain;
+use DBDiff\Diff\CreateMatView;
+use DBDiff\Diff\DropMatView;
+use DBDiff\Diff\AlterMatView;
+use DBDiff\Diff\CreatePolicy;
+use DBDiff\Diff\DropPolicy;
+use DBDiff\Diff\AlterPolicy;
+use DBDiff\Diff\AlterRowSecurity;
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 
 
@@ -117,7 +133,190 @@ class DBSchema {
         // Routines (stored procedures and functions)
         $diffs = array_merge($diffs, $this->diffRoutines());
 
+        // Composite types, domains and standalone sequences. Like enums, these
+        // can be referenced by a column — by its type, or by a nextval()
+        // default — so DiffSorter emits them ahead of the tables.
+        $diffs = array_merge($diffs, $this->diffCompositeTypes());
+        $diffs = array_merge($diffs, $this->diffDomains());
+        $diffs = array_merge($diffs, $this->diffSequences());
+
+        // Materialised views. getViews() reads pg_views, which holds only
+        // ordinary views, so these are a separate kind.
+        $diffs = array_merge($diffs, $this->diffMaterializedViews());
+
+        // Row level security: the table flag and the policies are set by
+        // separate statements, and a table with policies but the flag left off
+        // enforces none of them.
+        $diffs = array_merge($diffs, $this->diffRowSecurity($sourceTables, $targetTables));
+        $diffs = array_merge($diffs, $this->diffPolicies($sourceTables, $targetTables));
+
         return $diffs;
+    }
+
+    /**
+     * Diff two [name => 'CREATE ...'] maps into Create/Drop/Alter diffs.
+     *
+     * Sequences, composite types, domains and materialised views are all keyed
+     * by name and compared by their rendered definition, so they share one
+     * implementation rather than four copies of it.
+     *
+     * @param  class-string $createClass
+     * @param  class-string $dropClass
+     * @param  class-string $alterClass
+     */
+    private function diffNamedObjects(
+        array $source,
+        array $target,
+        string $createClass,
+        string $dropClass,
+        string $alterClass
+    ): array {
+        $diffs = [];
+
+        foreach (array_diff_key($source, $target) as $name => $def) {
+            $diffs[] = new $createClass($name, $def);
+        }
+        foreach (array_diff_key($target, $source) as $name => $def) {
+            $diffs[] = new $dropClass($name, $def);
+        }
+        foreach (array_intersect_key($source, $target) as $name => $srcDef) {
+            if ($srcDef !== $target[$name]) {
+                $diffs[] = new $alterClass($name, $srcDef, $target[$name]);
+            }
+        }
+
+        return $diffs;
+    }
+
+    /**
+     * Diff standalone sequences between source and target databases.
+     */
+    private function diffSequences(): array {
+        return $this->diffNamedObjects(
+            $this->manager->getSequences('source'),
+            $this->manager->getSequences('target'),
+            CreateSequence::class,
+            DropSequence::class,
+            AlterSequence::class
+        );
+    }
+
+    /**
+     * Diff composite types between source and target databases.
+     */
+    private function diffCompositeTypes(): array {
+        return $this->diffNamedObjects(
+            $this->manager->getCompositeTypes('source'),
+            $this->manager->getCompositeTypes('target'),
+            CreateCompositeType::class,
+            DropCompositeType::class,
+            AlterCompositeType::class
+        );
+    }
+
+    /**
+     * Diff domains between source and target databases.
+     */
+    private function diffDomains(): array {
+        return $this->diffNamedObjects(
+            $this->manager->getDomains('source'),
+            $this->manager->getDomains('target'),
+            CreateDomain::class,
+            DropDomain::class,
+            AlterDomain::class
+        );
+    }
+
+    /**
+     * Diff materialised views between source and target databases.
+     */
+    private function diffMaterializedViews(): array {
+        return $this->diffNamedObjects(
+            $this->manager->getMaterializedViews('source'),
+            $this->manager->getMaterializedViews('target'),
+            CreateMatView::class,
+            DropMatView::class,
+            AlterMatView::class
+        );
+    }
+
+    /**
+     * Diff row level security policies between source and target databases.
+     *
+     * Policies are keyed "table.policy" by the adapter. Only policies whose
+     * table survived the table filter are considered, so an ignored table does
+     * not reappear through its policies.
+     */
+    private function diffPolicies(array $sourceTables, array $targetTables): array {
+        $source = $this->filterByTable($this->manager->getPolicies('source'), $sourceTables);
+        $target = $this->filterByTable($this->manager->getPolicies('target'), $targetTables);
+        $diffs  = [];
+
+        foreach (array_diff_key($source, $target) as $key => $data) {
+            $diffs[] = new CreatePolicy($data['name'], $data['table'], $data['definition']);
+        }
+        foreach (array_diff_key($target, $source) as $key => $data) {
+            $diffs[] = new DropPolicy($data['name'], $data['table'], $data['definition']);
+        }
+        foreach (array_intersect_key($source, $target) as $key => $srcData) {
+            if ($srcData['definition'] !== $target[$key]['definition']) {
+                $diffs[] = new AlterPolicy(
+                    $srcData['name'],
+                    $srcData['table'],
+                    $srcData['definition'],
+                    $target[$key]['definition']
+                );
+            }
+        }
+
+        return $diffs;
+    }
+
+    /**
+     * Diff per-table row level security flags.
+     *
+     * A table absent from the target side is being created, and CREATE TABLE
+     * leaves both flags off — so its flags are compared against off rather than
+     * skipped, which is what makes RLS survive on a newly added table.
+     */
+    private function diffRowSecurity(array $sourceTables, array $targetTables): array {
+        $source = $this->manager->getRowSecurity('source');
+        $target = $this->manager->getRowSecurity('target');
+        $off    = ['enabled' => false, 'forced' => false];
+        $inTarget = array_flip($targetTables);
+        $diffs  = [];
+
+        foreach ($sourceTables as $table) {
+            if (!isset($source[$table])) {
+                continue;
+            }
+            $src = $source[$table];
+            $tgt = $target[$table] ?? $off;
+            if ($src === $tgt) {
+                continue;
+            }
+            $diffs[] = new AlterRowSecurity(
+                $table,
+                $src['enabled'],
+                $src['forced'],
+                $tgt['enabled'],
+                $tgt['forced'],
+                !isset($inTarget[$table])
+            );
+        }
+
+        return $diffs;
+    }
+
+    /**
+     * Keep only entries whose 'table' is in the given filtered table list.
+     */
+    private function filterByTable(array $items, array $tables): array {
+        $allowed = array_flip($tables);
+        return array_filter(
+            $items,
+            fn(array $item): bool => isset($allowed[$item['table']])
+        );
     }
 
     /**

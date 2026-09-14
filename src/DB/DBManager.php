@@ -145,6 +145,30 @@ class DBManager {
         return $this->adapter->getEnums($this->getDB($connection));
     }
 
+    public function getSequences(string $connection): array {
+        return $this->adapter->getSequences($this->getDB($connection));
+    }
+
+    public function getCompositeTypes(string $connection): array {
+        return $this->adapter->getCompositeTypes($this->getDB($connection));
+    }
+
+    public function getDomains(string $connection): array {
+        return $this->adapter->getDomains($this->getDB($connection));
+    }
+
+    public function getMaterializedViews(string $connection): array {
+        return $this->adapter->getMaterializedViews($this->getDB($connection));
+    }
+
+    public function getPolicies(string $connection): array {
+        return $this->adapter->getPolicies($this->getDB($connection));
+    }
+
+    public function getRowSecurity(string $connection): array {
+        return $this->adapter->getRowSecurity($this->getDB($connection));
+    }
+
     public function getSchemaHashMap(string $connection, array $tables = []): array {
         return $this->adapter->getSchemaHashMap($this->getDB($connection), $tables);
     }

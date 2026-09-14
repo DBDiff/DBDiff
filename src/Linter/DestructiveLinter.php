@@ -7,6 +7,11 @@ use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\DropRoutine;
 use DBDiff\Diff\DropTrigger;
 use DBDiff\Diff\DropView;
+use DBDiff\Diff\DropMatView;
+use DBDiff\Diff\DropSequence;
+use DBDiff\Diff\DropCompositeType;
+use DBDiff\Diff\DropDomain;
+use DBDiff\Diff\DropPolicy;
 
 /**
  * Inspects a diff array and returns a LintResult describing every
@@ -102,7 +107,8 @@ class DestructiveLinter {
 
     /**
      * Warning-level violations for dropping standalone objects (enum, routine,
-     * trigger, view). Returns null when the item isn't one of those.
+     * trigger, view, materialized view, sequence, composite type, domain,
+     * policy). Returns null when the item isn't one of those.
      */
     private function classifyDroppedObject(object $item): ?LintViolation {
         $rules = [
@@ -121,6 +127,32 @@ class DestructiveLinter {
             DropView::class => [
                 'drop-view', "view `{name}`", 'DROP VIEW "{name}"',
                 'Ensure no queries or applications reference this view.',
+            ],
+            DropMatView::class => [
+                'drop-matview', "materialized view `{name}`",
+                'DROP MATERIALIZED VIEW "{name}"',
+                'A materialized view holds data: dropping it discards the '
+                . 'result set, which is rebuilt only by refreshing it again.',
+            ],
+            DropSequence::class => [
+                'drop-sequence', "sequence `{name}`", 'DROP SEQUENCE "{name}"',
+                'A sequence holds its current value: dropping it loses the '
+                . 'counter, and recreating it restarts from the start value.',
+            ],
+            DropCompositeType::class => [
+                'drop-composite-type', "composite type `{name}`", 'DROP TYPE "{name}"',
+                'Ensure no columns or routines use this type before dropping.',
+            ],
+            DropDomain::class => [
+                'drop-domain', "domain `{name}`", 'DROP DOMAIN "{name}"',
+                'Ensure no columns use this domain before dropping; its '
+                . 'constraints stop being enforced.',
+            ],
+            DropPolicy::class => [
+                'drop-policy', "policy `{name}` on `{table}`",
+                'DROP POLICY "{name}" ON "{table}"',
+                'Removing a row level security policy widens what rows are '
+                . 'visible or writable. Confirm that is intended.',
             ],
         ];
 

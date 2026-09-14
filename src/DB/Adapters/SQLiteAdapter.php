@@ -128,6 +128,36 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
+    public function getSequences(Connection $connection): array {
+        // SQLite has no sequence objects; AUTOINCREMENT is a column attribute.
+        return [];
+    }
+
+    public function getCompositeTypes(Connection $connection): array {
+        // SQLite has no composite types.
+        return [];
+    }
+
+    public function getDomains(Connection $connection): array {
+        // SQLite has no domains.
+        return [];
+    }
+
+    public function getMaterializedViews(Connection $connection): array {
+        // SQLite has no materialised views.
+        return [];
+    }
+
+    public function getPolicies(Connection $connection): array {
+        // SQLite has no row level security policies.
+        return [];
+    }
+
+    public function getRowSecurity(Connection $connection): array {
+        // SQLite has no row level security.
+        return [];
+    }
+
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
         // SQLite databases are local files; the latency overhead that motivates
