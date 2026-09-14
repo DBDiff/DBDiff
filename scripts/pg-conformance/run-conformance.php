@@ -261,6 +261,16 @@ foreach ($patterns as $i => $pattern) {
     }
 
     // 2. Run DBDiff
+    //
+    // PgDumpRenderer caches one pg_dump archive per host|port|database for the
+    // life of the process. Every case here rebuilds pgconf_before/after/test
+    // under those same three names, so without this the second case onwards was
+    // rendered from the first case's dump — reporting pg_dump as reproducing 16
+    // of the 90 renderer cases against the built-in renderer's 68, which says
+    // nothing about pg_dump and everything about the cache. reset() exists for
+    // exactly this: "for tests, and for a process that reconnects".
+    \DBDiff\DB\Support\PgDumpRenderer::reset();
+
     $outputFile = tempnam(sys_get_temp_dir(), 'pgconf_');
     $args = [
         '--driver=pgsql',

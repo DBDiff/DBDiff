@@ -74,8 +74,14 @@ fingerprints:
 
 | renderer | reproduces |
 |---|---|
-| built-in | 52 / 90 |
-| with `pg_dump` | **66 / 90** |
+| built-in | 68 / 90 |
+| with `pg_dump` | **82 / 90** |
+
+Measured on PostgreSQL 16. The figures move by a case or two with the server:
+the built-in renderer reproduces 67 on PostgreSQL 18, where `LIKE ... INCLUDING
+ALL` copies the named NOT NULL constraints that release introduced. And
+`pg_dump` only counts when it is at least as new as the server — an older one is
+not used at all, so those runs score as built-in.
 
 Nothing is required. `pg_dump` is not bundled — the released binaries are
 static PHP and cannot carry it — so when it is absent, or older than the
