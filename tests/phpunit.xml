@@ -40,6 +40,7 @@
             <file>./BulkSchemaPostgresTest.php</file>
             <file>./PostgresObjectKindsTest.php</file>
             <file>./PgDumpRendererPostgresTest.php</file>
+            <file>./PartitionedTableRendererPostgresTest.php</file>
             <file>./RoutineOverloadPostgresTest.php</file>
         </testsuite>
         <testsuite name="SQLite">

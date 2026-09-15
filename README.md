@@ -75,7 +75,7 @@ fingerprints:
 | renderer | reproduces |
 |---|---|
 | built-in | 68 / 90 |
-| with `pg_dump` | **82 / 90** |
+| with `pg_dump` | **81 / 90** |
 
 Measured on PostgreSQL 16. The figures move by a case or two with the server:
 the built-in renderer reproduces 67 on PostgreSQL 18, where `LIKE ... INCLUDING
@@ -85,10 +85,18 @@ not used at all, so those runs score as built-in.
 
 Nothing is required. `pg_dump` is not bundled — the released binaries are
 static PHP and cannot carry it — so when it is absent, or older than the
-server, DBDiff falls back to its built-in renderer and says why. Partitions
-always use the built-in renderer, which reproduces the common range, list and
-hash forms; sub-partitioning and expression partition keys are among the cases
-it does not yet reproduce.
+server, DBDiff falls back to its built-in renderer and says why.
+
+Partitioned tables always use the built-in renderer, whatever is installed, and
+that is deliberate rather than a limitation of the integration. `pg_dump` writes
+a partitioned parent's primary key as `ALTER TABLE ONLY parent ADD CONSTRAINT`,
+which reaches the partitions existing at the moment it runs and no others —
+correct in `pg_dump`'s own output order, and silently wrong as soon as anything
+reorders the statements, which a tool applying a migration grouped by object
+kind reasonably does. The built-in renderer puts the key inside `CREATE TABLE`,
+where the partitions inherit it however the statements are ordered. It costs one
+case in the table above — an expression partition key — and buys DDL that does
+not depend on being applied in the order it was written.
 
 A migration produced this way records it, so two machines emitting different
 SQL is explainable from the file:

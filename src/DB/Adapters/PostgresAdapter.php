@@ -64,16 +64,6 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
     }
 
     public function getCreateStatement(Connection $connection, string $table): string {
-        // pg_dump is the reference implementation and reproduces 90 of the 90
-        // cases in the shared conformance corpus; the renderer below manages 52.
-        // It is used whenever it is present and new enough for the server, and
-        // returns null rather than throwing when it is not, so a machine
-        // without it keeps working on the hand-written path.
-        $viaPgDump = PgDumpRenderer::tableDDL($connection, $table);
-        if ($viaPgDump !== null) {
-            return $viaPgDump;
-        }
-
         $partition = PostgresSchemaHelper::partitionMeta($connection, $table);
 
         // A partition is declared against its parent, which supplies the columns,
@@ -82,6 +72,31 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         // partitioning was silently gone.
         if ($partition['is_partition']) {
             return "CREATE TABLE \"$table\" PARTITION OF \"{$partition['parent']}\" {$partition['bound']}";
+        }
+
+        // pg_dump is the reference implementation and reproduces more of the
+        // shared conformance corpus than the renderer below. It is used whenever
+        // it is present and new enough for the server, and returns null rather
+        // than throwing when it is not, so a machine without it keeps working on
+        // the hand-written path.
+        //
+        // A partitioned parent is the exception. pg_dump renders its primary key
+        // as `ALTER TABLE ONLY parent ADD CONSTRAINT ... PRIMARY KEY`, and ONLY
+        // means the index reaches the partitions that exist when it runs and no
+        // others. That is correct in pg_dump's own output order, where the key
+        // precedes every CREATE TABLE ... PARTITION OF, and silently wrong the
+        // moment anything reorders the statements — which a consumer applying a
+        // fix set grouped by object kind legitimately does, creating all the
+        // tables before any constraint. The partitions then never receive the
+        // key, and the migration reports success having lost it.
+        //
+        // The renderer below emits the key inline in CREATE TABLE, where the
+        // partitions inherit it however the statements are ordered.
+        if ($partition['partition_by'] === null) {
+            $viaPgDump = PgDumpRenderer::tableDDL($connection, $table);
+            if ($viaPgDump !== null) {
+                return $viaPgDump;
+            }
         }
 
         $bulk        = $this->getBulkTableSchema($connection, [$table]);
