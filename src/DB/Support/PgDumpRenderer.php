@@ -316,12 +316,30 @@ final class PgDumpRenderer
      *
      * TABLE ATTACH and INDEX ATTACH are excluded for the same reason
      * partitions are skipped entirely — see tableDDL.
+     *
+     * SEQUENCE OWNED BY is included, and leaving it out was a real defect. A
+     * serial column's sequence belongs to that column: PostgreSQL records the
+     * link with a dependency, drops the sequence when the column goes, and a
+     * schema reader can tell from it that the sequence is not a standalone
+     * object. Emitting SEQUENCE and DEFAULT without it reproduced the column's
+     * behaviour but not that link, so the copy held a sequence owned by nothing.
+     * The next diff between the two then found a standalone sequence on one side
+     * only and set about dropping it — which PostgreSQL refuses, because the
+     * column default still depends on it:
+     *
+     *   cannot drop sequence shipments_id_seq because other objects depend on it
+     *
+     * TABLE DATA and SEQUENCE SET stay out: this renders schema, and a schema
+     * diff neither copies rows nor moves a sequence's current value.
      */
     private static function wantsType(string $type): bool
     {
         return in_array(
             $type,
-            ['TABLE', 'SEQUENCE', 'INDEX', 'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT', 'COMMENT'],
+            [
+                'TABLE', 'SEQUENCE', 'SEQUENCE OWNED BY', 'INDEX',
+                'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT', 'COMMENT',
+            ],
             true
         );
     }

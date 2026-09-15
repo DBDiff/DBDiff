@@ -258,4 +258,81 @@ class PgDumpRendererPostgresTest extends TestCase
             @unlink($stub);
         }
     }
+
+    /**
+     * A serial column's sequence has to come back owned by that column.
+     *
+     * PostgreSQL records the link as a dependency, and it is what makes the
+     * sequence part of the column rather than an object in its own right. The
+     * SEQUENCE and DEFAULT entries alone reproduce the column's behaviour but
+     * not the link, which leaves the copy holding a sequence owned by nothing.
+     *
+     * That was invisible until sequences became a modelled object kind. A diff
+     * between the original and the copy then found a standalone sequence on one
+     * side only and generated a DROP for it, which PostgreSQL refuses:
+     *
+     *   cannot drop sequence t_id_seq because other objects depend on it
+     *
+     * So the property asserted here is the round trip, not the text: reproduce
+     * the table, and the sequence must be as invisible to the object-kind reader
+     * on the copy as it is on the original.
+     */
+    public function testAReproducedSerialColumnKeepsItsSequenceOwnership(): void
+    {
+        $this->connection->statement('CREATE TABLE t (id serial PRIMARY KEY, n text)');
+
+        $ddl = $this->adapter->getCreateStatement($this->connection, 't');
+        $this->assertCameFromPgDump($ddl);
+        $this->assertStringContainsString(
+            'OWNED BY',
+            $ddl,
+            'without ALTER SEQUENCE ... OWNED BY the copy holds an unowned sequence'
+        );
+
+        // The original does not report it: it belongs to the column.
+        $this->assertSame(
+            [],
+            \DBDiff\DB\Support\PostgresObjectKinds::sequences($this->connection),
+            'a serial column\'s sequence is not a standalone object'
+        );
+
+        $replayDb = $this->database . '_replay';
+        $host = getenv('DB_HOST_POSTGRES') ?: getenv('DB_HOST');
+        $port = getenv('DB_PORT_POSTGRES') ?: '5432';
+        $user = getenv('DB_USER_POSTGRES') ?: 'dbdiff';
+        $pass = getenv('DB_PASSWORD_POSTGRES') ?: 'rootpass';
+
+        $admin = $this->connect($host, $port, $user, $pass, 'postgres');
+        $admin->statement("DROP DATABASE IF EXISTS $replayDb");
+        $admin->statement("CREATE DATABASE $replayDb");
+        $admin->disconnect();
+
+        $replay = $this->connect($host, $port, $user, $pass, $replayDb);
+        try {
+            foreach (explode(";\n", $ddl) as $stmt) {
+                $stmt = trim(rtrim(trim($stmt), ';'));
+                if ($stmt !== '') {
+                    $replay->statement($stmt);
+                }
+            }
+
+            // And neither does the copy — which is the whole point. A mismatch
+            // here is a DROP SEQUENCE in the next migration.
+            $this->assertSame(
+                [],
+                \DBDiff\DB\Support\PostgresObjectKinds::sequences($replay),
+                'the reproduced sequence is unowned, so it reads as standalone'
+            );
+        } finally {
+            $replay->disconnect();
+            $admin = $this->connect($host, $port, $user, $pass, 'postgres');
+            $admin->statement(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                  WHERE datname = ? AND pid <> pg_backend_pid()",
+                [$replayDb]
+            );
+            $admin->statement("DROP DATABASE IF EXISTS $replayDb");
+            $admin->disconnect();
+        }
+    }
 }
