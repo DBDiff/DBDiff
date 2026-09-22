@@ -60,7 +60,7 @@ if (!is_file($conformancePath)) {
     exit(1);
 }
 require_once $conformancePath;
-use Akalforge\PgConformance\Conformance;
+use Akal\PgConformance\Conformance;
 
 // Two hand-authored corpora from @akalforge/pg-conformance, covering the axes
 // the extractor cannot reach. Every extracted pattern starts from an existing
