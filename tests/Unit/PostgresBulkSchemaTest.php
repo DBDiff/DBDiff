@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Adapters\PostgresAdapter;
+use DBDiff\DB\Support\PostgresColumnType;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -650,11 +651,16 @@ class PostgresBulkSchemaTest extends TestCase
 
     // ── buildColumnType ───────────────────────────────────────────────────
 
-    /** @dataProvider columnTypeProvider */
+    /**
+     * @dataProvider columnTypeProvider
+     *
+     * Calls PostgresColumnType directly — the type spelling moved there out of
+     * the adapter, so this no longer needs reflection to reach a private method.
+     */
     public function testBuildColumnType(array $col, string $expected): void
     {
         $row = self::colRow('t', 'c', $col);
-        $this->assertSame($expected, $this->invoke('buildColumnType', [$row]));
+        $this->assertSame($expected, PostgresColumnType::render($row));
     }
 
     public static function columnTypeProvider(): array
