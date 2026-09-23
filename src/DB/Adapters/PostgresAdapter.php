@@ -590,12 +590,16 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                 $result[$tbl] = [];
             }
 
+            // Merged before the type is built, not after: buildColumnType needs
+            // atttypmod from here to tell a declared precision from an absent
+            // one, which information_schema cannot express (issue #215).
+            $row += $attrByCol[$tbl][$name] ?? [];
+
             $type         = $this->buildColumnType($row);
             $domIsNotNull = $row['domain_name'] && ($domainNotNull[$row['domain_name']] ?? false);
             $notNull      = ($row['is_nullable'] === 'NO' && !$domIsNotNull
                              && !isset($nnColsByTable[$tbl][$name])) ? ' NOT NULL' : '';
 
-            $row += $attrByCol[$tbl][$name] ?? [];
             $result[$tbl][$name] = PostgresSchemaHelper::columnDefinition($row, $type, $notNull);
         }
         return $result;
@@ -715,9 +719,43 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             return $col['domain_name'];
         }
         $dataType  = $col['data_type'];
+
+        // Types whose modifier is a bare precision, and whose absence
+        // information_schema reports as the default rather than as absent.
+        //
+        // `datetime_precision` is 6 both for `timestamptz` and for
+        // `timestamptz(6)`, so deciding on it emitted a precision the column was
+        // never declared with — behaviourally identical, but a different type in
+        // the catalog, so a migration generated from the column did not reproduce
+        // it and any post-apply verification called the column still drifted
+        // (issue #215). It was wrong in the other direction too: the old
+        // `> 0` test dropped a declared `timestamp(0)`, 0 being a legal
+        // precision, and `time`/`timetz` lost theirs entirely by returning from
+        // the alias map before any precision was considered.
+        //
+        // atttypmod answers the question information_schema cannot: -1 is "no
+        // modifier was given", and for these four types anything else *is* the
+        // precision.
+        $precisionAliases = [
+            'timestamp with time zone'    => 'timestamptz',
+            'timestamp without time zone' => 'timestamp',
+            'time with time zone'         => 'timetz',
+            'time without time zone'      => 'time',
+        ];
+        if (isset($precisionAliases[$dataType])) {
+            $base      = $precisionAliases[$dataType];
+            $precision = (int) ($col['atttypmod'] ?? -1);
+            return ($precision >= 0) ? "$base($precision)" : $base;
+        }
+
+        // interval's modifier encodes a field range as well as a precision
+        // (`interval day to second(3)`), which no single number can carry, so the
+        // server's own rendering is used verbatim.
+        if ($dataType === 'interval') {
+            return $col['formatted_type'] ?? 'interval';
+        }
+
         $simpleMap = [
-            'time without time zone' => 'time',
-            'time with time zone'    => 'timetz',
             'double precision'       => 'double precision',
             'ARRAY'                  => $col['udt_name'],
             // information_schema reports every enum, composite and extension
@@ -738,9 +776,6 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
             $p      = $col['numeric_precision'];
             $result = ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;
-        } elseif (str_starts_with($dataType, 'timestamp')) {
-            $base   = ['timestamp with time zone' => 'timestamptz'][$dataType] ?? 'timestamp';
-            $result = ($col['datetime_precision'] > 0) ? "$base({$col['datetime_precision']})" : $base;
         }
         return $result;
     }
