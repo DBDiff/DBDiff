@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Adapters\PostgresAdapter;
+use DBDiff\DB\Support\PostgresColumnType;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -650,11 +651,16 @@ class PostgresBulkSchemaTest extends TestCase
 
     // ── buildColumnType ───────────────────────────────────────────────────
 
-    /** @dataProvider columnTypeProvider */
+    /**
+     * @dataProvider columnTypeProvider
+     *
+     * Calls PostgresColumnType directly — the type spelling moved there out of
+     * the adapter, so this no longer needs reflection to reach a private method.
+     */
     public function testBuildColumnType(array $col, string $expected): void
     {
         $row = self::colRow('t', 'c', $col);
-        $this->assertSame($expected, $this->invoke('buildColumnType', [$row]));
+        $this->assertSame($expected, PostgresColumnType::render($row));
     }
 
     public static function columnTypeProvider(): array
@@ -682,17 +688,58 @@ class PostgresBulkSchemaTest extends TestCase
             'numeric without precision' => [
                 ['data_type' => 'numeric', 'numeric_precision' => null], 'numeric',
             ],
+            // The precision comes from atttypmod, not from
+            // information_schema.datetime_precision, which reports the default
+            // rather than the absence of a modifier: a bare timestamptz and a
+            // timestamptz(6) are both 6 there, so a precision nobody declared was
+            // emitted and the column did not reproduce (issue #215). -1 is the
+            // catalog's way of saying no modifier was given.
             'timestamptz no precision' => [
-                ['data_type' => 'timestamp with time zone', 'datetime_precision' => 0], 'timestamptz',
+                ['data_type' => 'timestamp with time zone', 'atttypmod' => -1], 'timestamptz',
             ],
             'timestamptz with precision' => [
-                ['data_type' => 'timestamp with time zone', 'datetime_precision' => 3], 'timestamptz(3)',
+                ['data_type' => 'timestamp with time zone', 'atttypmod' => 3], 'timestamptz(3)',
+            ],
+            'timestamptz ignores datetime_precision' => [
+                // What the reported bug looked like at this level: the lossy
+                // column says 6, the catalog says no modifier was given.
+                [
+                    'data_type' => 'timestamp with time zone',
+                    'datetime_precision' => 6,
+                    'atttypmod' => -1,
+                ],
+                'timestamptz',
             ],
             'timestamp no precision' => [
-                ['data_type' => 'timestamp without time zone', 'datetime_precision' => 0], 'timestamp',
+                ['data_type' => 'timestamp without time zone', 'atttypmod' => -1], 'timestamp',
             ],
             'timestamp with precision' => [
-                ['data_type' => 'timestamp without time zone', 'datetime_precision' => 6], 'timestamp(6)',
+                ['data_type' => 'timestamp without time zone', 'atttypmod' => 6], 'timestamp(6)',
+            ],
+            'timestamp keeps a precision of zero' => [
+                // The old test was `datetime_precision > 0`, which discarded it.
+                ['data_type' => 'timestamp without time zone', 'atttypmod' => 0], 'timestamp(0)',
+            ],
+            'time with precision' => [
+                // Previously returned from the alias map before any precision was
+                // considered, so a declared one was lost.
+                ['data_type' => 'time without time zone', 'atttypmod' => 3], 'time(3)',
+            ],
+            'timetz with precision' => [
+                ['data_type' => 'time with time zone', 'atttypmod' => 2], 'timetz(2)',
+            ],
+            'interval uses the server rendering' => [
+                // interval's modifier carries a field range as well as a
+                // precision, which no single number can express.
+                [
+                    'data_type' => 'interval',
+                    'formatted_type' => 'interval day to second(3)',
+                    'atttypmod' => 2147418115,
+                ],
+                'interval day to second(3)',
+            ],
+            'interval without a modifier' => [
+                ['data_type' => 'interval', 'formatted_type' => 'interval', 'atttypmod' => -1], 'interval',
             ],
             'passthrough integer' => [['data_type' => 'integer'], 'integer'],
             'passthrough jsonb'   => [['data_type' => 'jsonb'],   'jsonb'],

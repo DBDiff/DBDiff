@@ -177,7 +177,17 @@ class PostgresSchemaHelper {
                          THEN co.collname END AS explicit_collation,
                     a.attstorage::text AS att_storage,
                     t.typstorage::text  AS type_storage,
-                    NULLIF(a.attcompression::text, '') AS att_compression
+                    NULLIF(a.attcompression::text, '') AS att_compression,
+                    -- -1 means the column was declared without a type modifier.
+                    -- information_schema cannot express that: a bare timestamptz
+                    -- and a timestamptz(6) both report datetime_precision = 6,
+                    -- so a precision nobody asked for was emitted (issue #215).
+                    a.atttypmod,
+                    -- What the column was actually declared as, rendered by the
+                    -- server. The only reliable source for the types whose
+                    -- modifier is more than a number, such as
+                    -- `interval day to second(3)`.
+                    format_type(a.atttypid, a.atttypmod) AS formatted_type
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid
