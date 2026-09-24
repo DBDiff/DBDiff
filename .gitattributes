@@ -1,0 +1,41 @@
+# What ships in the Composer distribution.
+#
+# Packagist serves `git archive` output, so everything tracked here reaches
+# anyone who runs `composer require dbdiff/dbdiff` — tests, CI workflows, the
+# Docker development environment and the npm platform packages included. None of
+# that is reachable from the library or the `dbdiff` binary.
+#
+# The conformance harness under scripts/ was the reason for looking: it requires
+# a file out of node_modules, which a Composer install has no reason to have, so
+# a consumer could find a script that cannot run. It now stays behind.
+#
+# Kept deliberately: src/, the dbdiff binary, templates/ (the sample a user
+# points --template at), the .example config files, and the documentation.
+
+/tests/                 export-ignore
+/scripts/               export-ignore
+/.github/               export-ignore
+
+# npm packaging: the platform binaries and their manifests are published to npm,
+# and mean nothing to a Composer consumer.
+/packages/              export-ignore
+/package.json           export-ignore
+/package-lock.json      export-ignore
+
+# The Docker development environment, and the PHAR build configuration.
+/docker/                export-ignore
+/docker-compose.yml     export-ignore
+/docker-compose.override.yml export-ignore
+/docker-compose.phar.yml export-ignore
+/.dockerignore          export-ignore
+/DOCKER.md              export-ignore
+/start.sh               export-ignore
+/stop.sh                export-ignore
+/box.json               export-ignore
+
+# Repository furniture.
+/.gitattributes         export-ignore
+/.gitignore             export-ignore
+/.sonarcloud.properties export-ignore
+/CNAME                  export-ignore
+/images/                export-ignore
