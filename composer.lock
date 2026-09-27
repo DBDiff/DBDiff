@@ -4,69 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b9a55b655ba15615e59cb089e94f74bc",
+    "content-hash": "a9f210369335cefa359e4dd4f215704f",
     "packages": [
-        {
-            "name": "aura/cli",
-            "version": "2.2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/auraphp/Aura.Cli.git",
-                "reference": "d69cfa6d81e94e13d831e38ad9e3d53aa0f08a8b"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/auraphp/Aura.Cli/zipball/d69cfa6d81e94e13d831e38ad9e3d53aa0f08a8b",
-                "reference": "d69cfa6d81e94e13d831e38ad9e3d53aa0f08a8b",
-                "shasum": ""
-            },
-            "require": {
-                "php": ">=5.3.0"
-            },
-            "require-dev": {
-                "aura/di": "~2.0"
-            },
-            "type": "library",
-            "extra": {
-                "aura": {
-                    "type": "library",
-                    "config": {
-                        "common": "Aura\\Cli\\_Config\\Common"
-                    }
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Aura\\Cli\\": "src/",
-                    "Aura\\Cli\\_Config\\": "config/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "BSD-2-Clause"
-            ],
-            "authors": [
-                {
-                    "name": "Aura.Cli Contributors",
-                    "homepage": "https://github.com/auraphp/Aura.Cli/contributors"
-                }
-            ],
-            "description": "Provides the equivalent of request (Context) and response (Stdio) classes for a command line environment, including Getopt support.",
-            "homepage": "https://github.com/auraphp/Aura.Cli",
-            "keywords": [
-                "cli",
-                "command",
-                "command line",
-                "getopt",
-                "options",
-                "stdio"
-            ],
-            "support": {
-                "issues": "https://github.com/auraphp/Aura.Cli/issues",
-                "source": "https://github.com/auraphp/Aura.Cli/tree/2.x"
-            },
-            "time": "2017-02-09T17:14:27+00:00"
-        },
         {
             "name": "brick/math",
             "version": "0.12.3",
@@ -4114,9 +4053,7 @@
     ],
     "aliases": [],
     "minimum-stability": "alpha",
-    "stability-flags": {
-        "aura/cli": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
