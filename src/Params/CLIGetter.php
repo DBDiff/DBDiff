@@ -1,8 +1,6 @@
 <?php namespace DBDiff\Params;
 
 use DBDiff\Exceptions\CLIException;
-use Aura\Cli\CliFactory;
-use Aura\Cli\Status;
 
 
 class CLIGetter implements ParamsGetter {
@@ -10,15 +8,11 @@ class CLIGetter implements ParamsGetter {
     public function getParams() {
         $params = new \StdClass;
 
-        $cliFactory = new CliFactory;
-        $context = $cliFactory->newContext($GLOBALS);
-        $stdio = $cliFactory->newStdio();
-
-        $getopt = $context->getopt([
-            'server1::', 'server2::', 'format::',
-            'template::', 'type::', 'include::',
-            'nocomments::', 'config::', 'output::', 'debug::',
-            'driver::', 'supabase::', 'allow-destructive::'
+        $getopt = ArgvOptions::fromArgv($GLOBALS['argv'] ?? [], [
+            'server1', 'server2', 'format',
+            'template', 'type', 'include',
+            'nocomments', 'config', 'output', 'debug',
+            'driver', 'supabase', 'allow-destructive'
         ]);
     
         $input = $getopt->get(1);
