@@ -22,7 +22,7 @@ use DBDiff\Migration\Command\MigrationBaselineCommand;
 use DBDiff\Migration\Command\UrlEncodeCommand;
 use Symfony\Component\Console\Application;
 
-$app = new Application('DBDiff', \DBDiff\VERSION);
+$app = new Application('DBDiff', \DBDiff\AppVersion::current());
 
 $app->addCommands([
     new DiffCommand,
