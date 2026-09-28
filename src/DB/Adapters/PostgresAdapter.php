@@ -342,11 +342,36 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             COALESCE(identity_cycle,'')                          || '|' ||
                             COALESCE(is_generated,'NEVER')                       || '|' ||
                             COALESCE(generation_expression,'')                   || '|' ||
-                            COALESCE(domain_name,''),
+                            COALESCE(domain_name,'')                             || '|' ||
+                            -- Three things information_schema cannot express, each
+                            -- of which the full comparison does read, so a table
+                            -- the pre-scan skipped could differ in them silently
+                            -- (issue #189):
+                            --
+                            --   format_type  the declared type modifier.
+                            --                datetime_precision is 6 for both a
+                            --                bare timestamptz and a
+                            --                timestamptz(6), which the comparison
+                            --                now distinguishes (issue #215).
+                            --   collation    a column's explicit COLLATE.
+                            --   storage and compression, both emitted by
+                            --                columnDefinition.
+                            format_type(a.atttypid, a.atttypmod)                 || '|' ||
+                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
+                            a.attstorage::text                                   || '|' ||
+                            COALESCE(NULLIF(a.attcompression::text, ''), ''),
                             ';' ORDER BY ordinal_position
                         ) AS col_str
-                 FROM information_schema.columns
-                 WHERE table_schema = 'public'
+                 FROM information_schema.columns isc
+                 JOIN pg_class cls
+                   ON cls.relname = isc.table_name
+                  AND cls.relnamespace = 'public'::regnamespace
+                 JOIN pg_attribute a
+                   ON a.attrelid = cls.oid
+                  AND a.attname = isc.column_name
+                  AND a.attnum > 0 AND NOT a.attisdropped
+                 LEFT JOIN pg_collation co ON co.oid = a.attcollation
+                 WHERE isc.table_schema = 'public'
                  GROUP BY table_name
              ),
              idx_data AS (
@@ -356,19 +381,33 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                  WHERE schemaname = 'public'
                  GROUP BY tablename
              ),
+             -- Read from pg_constraint, not information_schema.table_constraints,
+             -- for two reasons (issue #189).
+             --
+             -- On PostgreSQL 17 and earlier information_schema reports every
+             -- NOT NULL column as a CHECK constraint named
+             -- `<namespace oid>_<table oid>_<column number>_not_null`. Table
+             -- OIDs differ between databases, so two identical tables hashed
+             -- differently and the pre-scan skipped almost nothing when
+             -- comparing two databases — which is every case it exists for. It
+             -- only appeared to work when both sides were the same database.
+             -- Nullability is still covered, by attnotnull in col_data.
+             --
+             -- And pg_get_constraintdef renders a foreign key's target table and
+             -- columns, which the old signature left out: a key repointed at a
+             -- different table hashed the same, so the pre-scan skipped a table
+             -- that had genuinely changed. The rendering also carries the update
+             -- and delete rules, the match option and deferrability, so it
+             -- replaces those columns rather than adding to them.
              con_base AS (
-                 SELECT tc.table_name,
-                        tc.constraint_name || '|' || tc.constraint_type        || '|' ||
-                        COALESCE(tc.is_deferrable,'NO')                        || '|' ||
-                        COALESCE(tc.initially_deferred,'NO')                   || '|' ||
-                        COALESCE(rc.update_rule,'')                            || '|' ||
-                        COALESCE(rc.delete_rule,'')                            || '|' ||
-                        COALESCE(rc.match_option,'')                           AS con_sig
-                 FROM information_schema.table_constraints tc
-                 LEFT JOIN information_schema.referential_constraints rc
-                   ON tc.constraint_name  = rc.constraint_name
-                  AND tc.constraint_schema = rc.constraint_schema
-                 WHERE tc.table_schema = 'public'
+                 SELECT c.relname AS table_name,
+                        con.conname || '|' || con.contype::text || '|' ||
+                        pg_get_constraintdef(con.oid) AS con_sig
+                 FROM pg_constraint con
+                 JOIN pg_class c     ON con.conrelid = c.oid
+                 JOIN pg_namespace n ON c.relnamespace = n.oid
+                 WHERE n.nspname = 'public'
+                   AND con.contype IN ('p', 'u', 'f')
              ),
              pg_ext_data AS (
                  SELECT c.relname AS table_name,
