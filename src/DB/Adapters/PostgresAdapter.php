@@ -20,7 +20,30 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             'charset'  => 'utf8',
             'schema'   => 'public',
             'sslmode'  => $server['sslmode'] ?? 'prefer',
+            'options'  => [self::disablePreparesAttribute() => true],
         ];
+    }
+
+    /**
+     * PDO's attribute for skipping named server-side prepared statements.
+     *
+     * With PDO's defaults every catalog query costs three round trips: PREPARE,
+     * EXECUTE, then DEALLOCATE. Over a link with any latency that dominates a
+     * diff — the queries themselves are cheap and there are dozens of them
+     * (issue #220). Disabling named prepares makes each query one round trip
+     * while keeping parameters bound server-side, which
+     * `PDO::ATTR_EMULATE_PREPARES` would not: that interpolates client-side,
+     * and the data diff sends values through these connections too.
+     *
+     * PHP 8.4 moved the PDO_PGSQL constants onto a `Pdo\Pgsql` class and
+     * deprecated the `PDO::PGSQL_*` spellings, so the right one is chosen at
+     * runtime — the ternary keeps the deprecated form from being evaluated on a
+     * version that would warn about it. Both names carry the same value.
+     */
+    private static function disablePreparesAttribute(): int {
+        return defined('Pdo\Pgsql::ATTR_DISABLE_PREPARES')
+            ? constant('Pdo\Pgsql::ATTR_DISABLE_PREPARES')
+            : \PDO::PGSQL_ATTR_DISABLE_PREPARES;
     }
 
     public function getTables(Connection $connection): array {
