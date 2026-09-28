@@ -25,7 +25,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
     public function getTables(Connection $connection): array {
         $result = $connection->select(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+            "SELECT c.relname AS tablename
+             FROM pg_class c
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public'
+               AND c.relkind IN ('r', 'p')
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
+             ORDER BY c.relname"
         );
         return Arr::pluck($result, 'tablename');
     }
@@ -211,6 +217,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             AND c.relnamespace = n.oid
                             AND c.relkind = 'v'
              WHERE v.schemaname = 'public'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY v.viewname"
         );
         $views = [];
@@ -279,6 +286,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              JOIN pg_namespace n ON p.pronamespace = n.oid
              WHERE n.nspname = 'public'
                AND p.prokind IN ('f', 'p')
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_proc', 'p.oid') . "
              ORDER BY p.oid::regprocedure::text"
         );
         $routines = [];
@@ -296,6 +304,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              JOIN pg_enum e ON t.oid = e.enumtypid
              JOIN pg_namespace n ON t.typnamespace = n.oid
              WHERE n.nspname = 'public'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
              GROUP BY t.typname, t.oid
              ORDER BY t.typname"
         );

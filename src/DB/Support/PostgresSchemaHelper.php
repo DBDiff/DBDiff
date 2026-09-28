@@ -15,6 +15,47 @@ use Illuminate\Database\Connection;
  */
 class PostgresSchemaHelper {
 
+    /**
+     * A SQL predicate excluding objects an extension owns.
+     *
+     * `CREATE EXTENSION pg_trgm` installs 31 functions into whatever schema it
+     * is given, usually `public`. Read as ordinary user objects, they were
+     * diffed individually, so an extension present on one side only produced a
+     * `CREATE OR REPLACE FUNCTION` per member — including the C-language ones,
+     * which a non-superuser cannot create: the apply failed with
+     * `permission denied for language c` and, being one transaction, rolled the
+     * whole migration back. Applied as a superuser it succeeded and left the
+     * members owned by nobody, after which `CREATE EXTENSION` itself failed
+     * with `function "set_limit" already exists` (issue #221).
+     *
+     * An extension's members are the extension's business: they arrive with
+     * `CREATE EXTENSION` and are versioned with it. pg_dump skips them for the
+     * same reason.
+     *
+     * Note what this does not do. DBDiff compares no extensions of its own, so
+     * an extension present on one side only is now reported nowhere by DBDiff
+     * itself — previously it was reported wrongly, as a pile of member objects
+     * that could not be applied. Consumers that track extensions separately,
+     * such as SupaForge's extensions check, still see the difference. Comparing
+     * `pg_extension` here would be the complete answer and is a new object kind
+     * rather than a fix to this one.
+     *
+     * `pg_depend.deptype = 'e'` is the catalog's own record of that ownership.
+     *
+     * @param string $classid  The catalog holding the object — pg_proc, pg_type,
+     *                         pg_class — as it appears in pg_depend.
+     * @param string $oidExpr  SQL expression for the object's oid in the caller's
+     *                         query, e.g. `p.oid`.
+     */
+    public static function notExtensionMember(string $classid, string $oidExpr): string {
+        return "NOT EXISTS (
+                    SELECT 1 FROM pg_depend ext_dep
+                     WHERE ext_dep.classid = '$classid'::regclass
+                       AND ext_dep.objid = $oidExpr
+                       AND ext_dep.deptype = 'e'
+                )";
+    }
+
     /** Integer types that have a serial spelling, keyed by information_schema name. */
     private const SERIAL_TYPES = [
         'smallint' => 'smallserial',

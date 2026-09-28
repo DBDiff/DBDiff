@@ -48,6 +48,7 @@ final class PostgresObjectKinds {
              JOIN pg_class c ON c.oid = sq.seqrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
                AND NOT EXISTS (
                    SELECT 1 FROM pg_depend dep
                    WHERE dep.objid = c.oid
@@ -93,6 +94,7 @@ final class PostgresObjectKinds {
              JOIN pg_namespace n ON n.oid = t.typnamespace
              WHERE n.nspname = 'public'
                AND t.typtype = 'c'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
                AND NOT EXISTS (
                    SELECT 1 FROM pg_class c
                    WHERE c.oid = t.typrelid AND c.relkind <> 'c'
@@ -138,6 +140,7 @@ final class PostgresObjectKinds {
              LEFT JOIN pg_collation co ON co.oid = t.typcollation
                                      AND co.collname <> 'default'
              WHERE n.nspname = 'public' AND t.typtype = 'd'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
              ORDER BY t.typname"
         );
         $domains = [];
@@ -181,6 +184,7 @@ final class PostgresObjectKinds {
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public' AND c.relkind = 'm'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY c.relname"
         );
         $indexes = self::matviewIndexes($connection);
