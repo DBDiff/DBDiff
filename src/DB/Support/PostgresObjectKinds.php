@@ -216,6 +216,94 @@ final class PostgresObjectKinds {
     }
 
     /**
+     * Views and materialised views that read one particular column.
+     *
+     * `ALTER TABLE ... ALTER COLUMN ... TYPE` is refused while any view reads
+     * the column:
+     *
+     *     ERROR:  cannot alter type of a column used by a view or rule
+     *     DETAIL: rule _RETURN on materialized view customer_totals depends on
+     *             column "amount"
+     *
+     * so a type change on such a column produced a migration that could not run
+     * (issue #226). The dependants have to stand aside and go back afterwards,
+     * which means knowing what they are and in what order.
+     *
+     * `depth` is how far a view sits from the column: 1 for one reading the
+     * table directly, 2 for one reading that view, and so on. Drop deepest
+     * first and recreate shallowest first, or a view is dropped while another
+     * still depends on it.
+     *
+     * Keyed on the column rather than the table, so altering `orders.amount`
+     * does not disturb a view that only reads `orders.note`.
+     *
+     * @return array<int, array{name: string, kind: string, depth: int, definition: string, indexes: string[]}>
+     */
+    public static function viewsDependingOnColumn(
+        Connection $connection,
+        string $table,
+        string $column
+    ): array {
+        $rows = $connection->select(
+            "WITH RECURSIVE target_col AS (
+                 SELECT c.oid AS rel_oid, a.attnum
+                 FROM pg_class c
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 JOIN pg_attribute a ON a.attrelid = c.oid
+                 WHERE n.nspname = 'public' AND c.relname = ? AND a.attname = ?
+             ),
+             deps AS (
+                 SELECT DISTINCT dependent.oid AS view_oid, 1 AS depth
+                 FROM pg_depend d
+                 JOIN pg_rewrite r       ON r.oid = d.objid
+                 JOIN pg_class dependent ON dependent.oid = r.ev_class
+                 JOIN target_col tc      ON tc.rel_oid = d.refobjid AND d.refobjsubid = tc.attnum
+                 WHERE d.classid = 'pg_rewrite'::regclass
+                   AND d.refclassid = 'pg_class'::regclass
+                   AND dependent.oid <> tc.rel_oid
+
+                 UNION
+
+                 SELECT DISTINCT dependent.oid, deps.depth + 1
+                 FROM deps
+                 JOIN pg_depend d        ON d.refobjid = deps.view_oid
+                 JOIN pg_rewrite r       ON r.oid = d.objid
+                 JOIN pg_class dependent ON dependent.oid = r.ev_class
+                 WHERE d.classid = 'pg_rewrite'::regclass
+                   AND d.refclassid = 'pg_class'::regclass
+                   AND dependent.oid <> deps.view_oid
+             )
+             SELECT c.relname                   AS name,
+                    c.relkind                   AS kind,
+                    max(deps.depth)             AS depth,
+                    pg_get_viewdef(c.oid, true) AS definition
+             FROM deps
+             JOIN pg_class c ON c.oid = deps.view_oid
+             GROUP BY c.relname, c.relkind, c.oid
+             ORDER BY max(deps.depth), c.relname",
+            [$table, $column]
+        );
+
+        if ($rows === []) {
+            return [];
+        }
+
+        $matviewIndexes = self::matviewIndexes($connection);
+        $dependants = [];
+        foreach ($rows as $row) {
+            $dependants[] = [
+                'name'       => $row['name'],
+                'kind'       => $row['kind'],
+                'depth'      => (int) $row['depth'],
+                'definition' => rtrim(trim($row['definition']), ';'),
+                'indexes'    => $row['kind'] === 'm' ? ($matviewIndexes[$row['name']] ?? []) : [],
+            ];
+        }
+
+        return $dependants;
+    }
+
+    /**
      * Index definitions per materialised view, keyed by the view's name.
      *
      * @return array<string, string[]>

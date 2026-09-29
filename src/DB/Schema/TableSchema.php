@@ -159,6 +159,11 @@ class TableSchema {
                         || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
                         $changeCol->isGenerated = true;
                     }
+                    // Read from the target: that is the database the migration
+                    // runs against, and its views are the ones in the way of a
+                    // column type change (issue #226).
+                    $changeCol->dependentViews =
+                        $this->manager->getColumnDependentViews('target', $table, $column);
                     $diffSequence[] = $changeCol;
                 }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {

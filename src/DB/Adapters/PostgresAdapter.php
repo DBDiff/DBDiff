@@ -6,8 +6,9 @@ use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresObjectKinds;
 
-class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
+class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
         return [
@@ -340,6 +341,14 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $enums[$row['name']] = 'CREATE TYPE "' . $row['name'] . '" AS ENUM (' . implode(', ', $labels) . ')';
         }
         return $enums;
+    }
+
+    /**
+     * Views reading one column, so a type change can drop them and put them
+     * back. See PostgresObjectKinds::viewsDependingOnColumn() (issue #226).
+     */
+    public function getColumnDependentViews(Connection $connection, string $table, string $column): array {
+        return PostgresObjectKinds::viewsDependingOnColumn($connection, $table, $column);
     }
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
