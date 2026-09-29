@@ -5,8 +5,7 @@ DROP TRIGGER IF EXISTS "trg_old_audit" ON "products";
 DROP FUNCTION IF EXISTS "cleanup_products"();
 DROP FUNCTION IF EXISTS "trg_old_audit_fn"();
 CREATE TYPE "order_status" AS ENUM ('pending', 'processing', 'shipped', 'delivered');
-DROP TYPE IF EXISTS "priority";
-CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high', 'critical');
+ALTER TYPE "priority" ADD VALUE IF NOT EXISTS 'critical' AFTER 'high';
 CREATE OR REPLACE FUNCTION public.get_product_count()
  RETURNS integer
  LANGUAGE sql
@@ -63,6 +62,9 @@ CREATE VIEW "expensive_products" AS SELECT id,
   WHERE (price > (50)::numeric);
 DROP VIEW IF EXISTS "product_names";
 CREATE TYPE "old_status" AS ENUM ('draft', 'published', 'archived');
+-- Removing or reordering enum labels needs the type replaced, which
+-- PostgreSQL refuses while any column still uses it. Migrate the
+-- dependent columns to a new type first, or apply this by hand.
 DROP TYPE IF EXISTS "priority";
 CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high');
 DROP TYPE IF EXISTS "order_status";

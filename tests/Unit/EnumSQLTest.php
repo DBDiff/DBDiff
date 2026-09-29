@@ -51,15 +51,18 @@ class EnumSQLTest extends TestCase
 
     // ── AlterEnum ─────────────────────────────────────────────────────────
 
-    public function testAlterEnumUp(): void
+    public function testAlterEnumUpAddsTheLabelRatherThanReplacingTheType(): void
     {
+        // The target is one label behind, so the UP appends. Replacing the
+        // type here produced a migration PostgreSQL refuses whenever a column
+        // uses it, which is the normal case (issue #228).
         $srcDef = 'CREATE TYPE "priority" AS ENUM (\'low\', \'medium\', \'high\', \'critical\')';
         $tgtDef = 'CREATE TYPE "priority" AS ENUM (\'low\', \'medium\', \'high\')';
         $diff   = new AlterEnum('priority', $srcDef, $tgtDef);
         $sql    = new AlterEnumSQL($diff, new PostgresDialect());
         $up     = $sql->getUp();
-        $this->assertStringContainsString('DROP TYPE IF EXISTS "priority";', $up);
-        $this->assertStringContainsString('critical', $up);
+        $this->assertStringContainsString('ADD VALUE IF NOT EXISTS \'critical\' AFTER \'high\';', $up);
+        $this->assertStringNotContainsString('DROP TYPE', $up);
     }
 
     public function testAlterEnumDown(): void
@@ -69,6 +72,8 @@ class EnumSQLTest extends TestCase
         $diff   = new AlterEnum('priority', $srcDef, $tgtDef);
         $sql    = new AlterEnumSQL($diff, new PostgresDialect());
         $down   = $sql->getDown();
+        // Reverting an addition means removing a label, which ADD VALUE cannot
+        // do — so this direction still replaces the type.
         $this->assertStringContainsString('DROP TYPE IF EXISTS "priority";', $down);
         $this->assertStringNotContainsString('critical', $down);
     }
@@ -102,14 +107,15 @@ class EnumSQLTest extends TestCase
         $this->assertSame($def . ';', $sql->getUp());
     }
 
-    public function testAlterEnumUpIsDropThenCreate(): void
+    public function testAReplacementIsDropThenCreate(): void
     {
-        $srcDef = 'CREATE TYPE "status" AS ENUM (\'a\', \'b\', \'c\')';
-        $tgtDef = 'CREATE TYPE "status" AS ENUM (\'a\', \'b\')';
+        // A *removed* label still needs the type replaced — there is no DROP
+        // VALUE — and the two halves must come out in that order.
+        $srcDef = 'CREATE TYPE "status" AS ENUM (\'a\', \'b\')';
+        $tgtDef = 'CREATE TYPE "status" AS ENUM (\'a\', \'b\', \'c\')';
         $diff   = new AlterEnum('status', $srcDef, $tgtDef);
         $sql    = new AlterEnumSQL($diff, new PostgresDialect());
         $up     = $sql->getUp();
-        // Must drop first, then create — in that order
         $dropPos   = strpos($up, 'DROP TYPE IF EXISTS "status"');
         $createPos = strpos($up, 'CREATE TYPE "status" AS ENUM');
         $this->assertNotFalse($dropPos);
