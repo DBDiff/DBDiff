@@ -222,14 +222,36 @@ SQL);
         $this->assertSame(1, substr_count($domains['o_code'], 'NOT NULL'));
     }
 
-    public function testMaterializedViewRendersPopulationState(): void
+    public function testMaterializedViewIgnoresPopulationState(): void
     {
+        // Whether a matview holds its rows yet is not part of its schema: a
+        // REFRESH changes it and no DDL does, and pg_dump restores every
+        // matview unpopulated. Rendering it made the same view compare unequal
+        // across any pg_dump-based copy — reported as an extra view to DROP and
+        // a missing one to create, with its existing index reported missing
+        // too (issue #227).
         $matviews = PostgresObjectKinds::materializedViews($this->connection);
 
         $this->assertStringStartsWith('CREATE MATERIALIZED VIEW "o_mv" AS', $matviews['o_mv']);
         $this->assertStringNotContainsString('WITH NO DATA', $matviews['o_mv']);
-        // Without this a CREATE would run the query and populate the matview.
-        $this->assertStringEndsWith('WITH NO DATA', $matviews['o_mv_empty']);
+        $this->assertStringNotContainsString('WITH NO DATA', $matviews['o_mv_empty']);
+    }
+
+    public function testAPopulatedAndAnUnpopulatedMatviewRenderIdentically(): void
+    {
+        // The property the fix is for, stated directly: o_mv is populated and
+        // o_mv_empty is not, so their definitions must differ only in the name
+        // and the query, never in population state.
+        $matviews = PostgresObjectKinds::materializedViews($this->connection);
+
+        $populated = $matviews['o_mv'];
+        $empty     = $matviews['o_mv_empty'];
+
+        $this->assertSame(
+            str_replace('"o_mv"', '"X"', preg_replace('/ AS .*/s', '', $populated)),
+            str_replace('"o_mv_empty"', '"X"', preg_replace('/ AS .*/s', '', $empty)),
+            'the clause before AS must not depend on whether the view is populated'
+        );
     }
 
     public function testPoliciesAreKeyedByTableAndName(): void

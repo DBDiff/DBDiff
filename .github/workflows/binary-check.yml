@@ -313,6 +313,14 @@ jobs:
     name: Windows x64 binary
     needs: build-phar
     runs-on: windows-2022
+    # Opt-out for a PR that is iterating on something this job cannot tell it
+    # about. It builds PHP from source and is the slowest job here by a wide
+    # margin, so waiting on it through a dozen pushes costs a lot and proves
+    # nothing about, say, a Postgres comparison change. Label the PR
+    # `skip-windows-binary` to skip it; it still runs by default on every other
+    # PR and on every push to master, and the label should come off before
+    # merge if the change touches the binary or its packaging.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-windows-binary') }}
 
     steps:
       - uses: actions/checkout@v4
