@@ -45,6 +45,8 @@ class DiffSorter {
         "DropCompositeType",
 
         "AlterTableEngine",
+        "AlterTablePersistence",
+        "AlterTableOptions",
         "AlterTableCollation",
 
         "AlterTableAddColumn",
@@ -125,6 +127,8 @@ class DiffSorter {
         "DropTable",
 
         "AlterTableEngine",
+        "AlterTablePersistence",
+        "AlterTableOptions",
         "AlterTableCollation",
 
         "AlterTableAddColumn",

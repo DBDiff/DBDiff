@@ -4,6 +4,8 @@ use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
 
 use DBDiff\Diff\AlterTableEngine;
+use DBDiff\Diff\AlterTablePersistence;
+use DBDiff\Diff\AlterTableOptions;
 use DBDiff\Diff\AlterTableCollation;
 
 use DBDiff\Diff\AlterTableAddColumn;
@@ -62,6 +64,26 @@ class TableSchema {
             $targetCollation = $targetSchema['collation'];
             if ($sourceCollation != $targetCollation) {
                 $diffSequence[] = new AlterTableCollation($table, $sourceCollation, $targetCollation);
+            }
+        }
+
+        // Durability and storage parameters — PostgreSQL only.
+        //
+        // Both were read for rendering a new table and never compared for one
+        // that exists on both sides, so switching a table between LOGGED and
+        // UNLOGGED, or changing its fillfactor, was reported as no difference
+        // at all (issue #229).
+        if ($driver === 'pgsql') {
+            $sourceUnlogged = (bool) ($sourceSchema['unlogged'] ?? false);
+            $targetUnlogged = (bool) ($targetSchema['unlogged'] ?? false);
+            if ($sourceUnlogged !== $targetUnlogged) {
+                $diffSequence[] = new AlterTablePersistence($table, $sourceUnlogged, $targetUnlogged);
+            }
+
+            $sourceOptions = $sourceSchema['reloptions'] ?? null;
+            $targetOptions = $targetSchema['reloptions'] ?? null;
+            if ($sourceOptions !== $targetOptions) {
+                $diffSequence[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
             }
         }
 
