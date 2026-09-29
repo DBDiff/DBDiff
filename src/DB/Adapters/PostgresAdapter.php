@@ -789,9 +789,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         foreach ($groups as $c) {
             $name         = $c['constraint_name'];
             $c['columns'] = array_keys($c['columns']);
-            // buildConstraintDef returns null for constraint types it does
+            // constraintDefinition returns null for constraint types it does
             // not render; those are dropped rather than diffed as nulls.
-            $def = $this->buildConstraintDef($name, $c);
+            $def = PostgresSchemaHelper::constraintDefinition($name, $c);
             if ($def !== null) {
                 $result[$c['table_name']][$name] = $def;
             }
@@ -810,38 +810,4 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
         return $result;
     }
-
-    private function buildConstraintDef(string $name, array $c): ?string {
-        $defer = '';
-        if (($c['is_deferrable'] ?? 'NO') === 'YES') {
-            $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
-                ? ' DEFERRABLE INITIALLY DEFERRED'
-                : ' DEFERRABLE INITIALLY IMMEDIATE';
-        }
-
-        $notValid = '';
-        if (isset($c['convalidated']) && !$c['convalidated']) {
-            $notValid = ' NOT VALID';
-        }
-
-        $cols = implode('", "', $c['columns']);
-        $type = $c['constraint_type'];
-
-        if ($type === 'FOREIGN KEY') {
-            $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
-            $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
-            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                $match .
-                " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
-                $defer . $notValid;
-        }
-
-        if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
-            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
-        }
-
-        return null;
-    }
-
 }

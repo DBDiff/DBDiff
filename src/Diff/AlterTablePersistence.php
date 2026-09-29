@@ -21,7 +21,7 @@ class AlterTablePersistence {
     /** True when the target table is UNLOGGED. */
     public bool $prevUnlogged;
 
-    function __construct($table, bool $unlogged, bool $prevUnlogged) {
+    public function __construct($table, bool $unlogged, bool $prevUnlogged) {
         $this->table        = $table;
         $this->unlogged     = $unlogged;
         $this->prevUnlogged = $prevUnlogged;

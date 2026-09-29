@@ -385,4 +385,49 @@ class PostgresSchemaHelper {
             ? (self::SERIAL_TYPES[$row['data_type']] ?? null)
             : null;
     }
+
+    /**
+     * A table constraint rendered as `CONSTRAINT "name" ...`.
+     *
+     * Moved off PostgresAdapter, which had grown past the 20-method ceiling the
+     * project enforces. It reads nothing and holds no state — it turns one
+     * constraint row into one string — so it belongs with the other renderers
+     * here rather than on the adapter.
+     *
+     * Returns null for a constraint type rendered elsewhere: CHECK, EXCLUDE and
+     * NOT NULL come from pg_get_constraintdef.
+     */
+    public static function constraintDefinition(string $name, array $c): ?string {
+        $defer = '';
+        if (($c['is_deferrable'] ?? 'NO') === 'YES') {
+            $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
+                ? ' DEFERRABLE INITIALLY DEFERRED'
+                : ' DEFERRABLE INITIALLY IMMEDIATE';
+        }
+
+        $notValid = '';
+        if (isset($c['convalidated']) && !$c['convalidated']) {
+            $notValid = ' NOT VALID';
+        }
+
+        $cols = implode('", "', $c['columns']);
+        $type = $c['constraint_type'];
+
+        if ($type === 'FOREIGN KEY') {
+            $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
+            $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
+            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
+                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
+                $match .
+                " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
+                $defer . $notValid;
+        }
+
+        if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
+            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
+        }
+
+        return null;
+    }
+
 }

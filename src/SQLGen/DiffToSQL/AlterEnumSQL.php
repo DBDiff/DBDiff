@@ -47,33 +47,46 @@ class AlterEnumSQL extends AbstractRecreateSQL {
      * relative order; otherwise the type is replaced, as before.
      */
     private function transition(string $from, string $to): string {
+        $additions = self::plannedAdditions($from, $to);
+
+        if ($additions === []) {
+            return $this->replace($to);
+        }
+
+        return implode("\n", array_map(
+            fn(array $addition) => $this->addValueStatement($addition),
+            $additions
+        ));
+    }
+
+    /**
+     * The labels to add, or none when this is not an addition.
+     *
+     * Empty covers all three reasons to fall back: a definition that could not
+     * be parsed, a label removed or reordered, and labels that already match —
+     * whatever differs then is not something ADD VALUE can express.
+     *
+     * @return array<int, array{0: string, 1: ?string, 2: ?string}>
+     */
+    private static function plannedAdditions(string $from, string $to): array {
         $fromLabels = self::labelsOf($from);
         $toLabels   = self::labelsOf($to);
 
         if ($fromLabels === null || $toLabels === null) {
-            return $this->replace($to);
+            return [];
         }
 
-        $additions = self::additions($fromLabels, $toLabels);
-        if ($additions === null) {
-            return $this->replace($to);
-        }
-        if ($additions === []) {
-            // The labels match; whatever differs is not something ADD VALUE can
-            // express, so fall back rather than emit nothing.
-            return $this->replace($to);
-        }
+        return self::additions($fromLabels, $toLabels) ?? [];
+    }
 
-        $quoted = $this->dialect->quote($this->obj->name);
-        $lines  = [];
-        foreach ($additions as $addition) {
-            [$label, $position, $neighbour] = $addition;
-            $lines[] = "ALTER TYPE $quoted ADD VALUE IF NOT EXISTS " . self::quoteLabel($label)
-                . ($position === null ? '' : " $position " . self::quoteLabel($neighbour))
-                . ';';
-        }
+    /** One `ALTER TYPE ... ADD VALUE`, positioned if it has a neighbour. */
+    private function addValueStatement(array $addition): string {
+        [$label, $position, $neighbour] = $addition;
 
-        return implode("\n", $lines);
+        $at = $position === null ? '' : " $position " . self::quoteLabel($neighbour);
+
+        return 'ALTER TYPE ' . $this->dialect->quote($this->obj->name)
+            . ' ADD VALUE IF NOT EXISTS ' . self::quoteLabel($label) . $at . ';';
     }
 
     /** Drop and recreate, with a note about why it may not apply. */
@@ -105,36 +118,48 @@ class AlterEnumSQL extends AbstractRecreateSQL {
         $length = strlen($body);
 
         while ($i < $length) {
-            $char = $body[$i];
-            if ($char === "'") {
-                $i++;
-                $label = '';
-                while ($i < $length) {
-                    if ($body[$i] === "'") {
-                        // A doubled quote is an escaped one, not the end.
-                        if (($body[$i + 1] ?? '') === "'") {
-                            $label .= "'";
-                            $i += 2;
-                            continue;
-                        }
-                        $i++;
-                        break;
-                    }
-                    $label .= $body[$i];
-                    $i++;
-                }
+            if ($body[$i] === "'") {
+                [$label, $i] = self::readQuotedLabel($body, $i + 1);
                 $labels[] = $label;
                 continue;
             }
             // Only separators and whitespace belong between labels; anything
             // else means this is not a plain label list.
-            if ($char !== ',' && trim($char) !== '') {
+            if ($body[$i] !== ',' && trim($body[$i]) !== '') {
                 return null;
             }
             $i++;
         }
 
         return $labels === [] ? null : $labels;
+    }
+
+    /**
+     * One quoted label, starting just past its opening quote.
+     *
+     * @return array{0: string, 1: int} the label, and where the scan resumes
+     */
+    private static function readQuotedLabel(string $body, int $i): array {
+        $length = strlen($body);
+        $label  = '';
+
+        while ($i < $length) {
+            if ($body[$i] !== "'") {
+                $label .= $body[$i];
+                $i++;
+                continue;
+            }
+            // A doubled quote is an escaped one, not the end.
+            if (($body[$i + 1] ?? '') === "'") {
+                $label .= "'";
+                $i += 2;
+                continue;
+            }
+            $i++;
+            break;
+        }
+
+        return [$label, $i];
     }
 
     /**
@@ -165,37 +190,63 @@ class AlterEnumSQL extends AbstractRecreateSQL {
                 continue;
             }
 
-            // Anchor to a neighbour that already exists, preferring the one
-            // before it so the labels land in `to`'s order.
-            $position = null;
-            $neighbour = null;
-            for ($i = $index - 1; $i >= 0; $i--) {
-                if (in_array($to[$i], $current, true)) {
-                    $position = 'AFTER';
-                    $neighbour = $to[$i];
-                    break;
-                }
-            }
-            if ($position === null) {
-                for ($i = $index + 1; $i < count($to); $i++) {
-                    if (in_array($to[$i], $current, true)) {
-                        $position = 'BEFORE';
-                        $neighbour = $to[$i];
-                        break;
-                    }
-                }
-            }
-
+            [$position, $neighbour] = self::anchorFor($to, $index, $current);
             $additions[] = [$label, $position, $neighbour];
 
             // Insert it where it now sits, so the next label anchors correctly.
-            $at = $neighbour === null
-                ? count($current)
-                : array_search($neighbour, $current, true) + ($position === 'AFTER' ? 1 : 0);
-            array_splice($current, $at, 0, [$label]);
+            array_splice($current, self::insertionPoint($current, $position, $neighbour), 0, [$label]);
         }
 
         return $additions;
+    }
+
+    /**
+     * Where a new label goes, relative to one that already exists.
+     *
+     * The label before it is preferred, so labels land in `$to`'s order; the
+     * one after it is the fallback for a label added at the front. Neither
+     * exists only when nothing does, and then the label is simply appended.
+     *
+     * @param string[] $to
+     * @param string[] $current
+     * @return array{0: ?string, 1: ?string}
+     */
+    private static function anchorFor(array $to, int $index, array $current): array {
+        for ($i = $index - 1; $i >= 0; $i--) {
+            if (in_array($to[$i], $current, true)) {
+                return ['AFTER', $to[$i]];
+            }
+        }
+
+        $count = count($to);
+        for ($i = $index + 1; $i < $count; $i++) {
+            if (in_array($to[$i], $current, true)) {
+                return ['BEFORE', $to[$i]];
+            }
+        }
+
+        return [null, null];
+    }
+
+    /**
+     * The index to splice a label into, given its anchor.
+     *
+     * `array_search` returning false is treated as "not found" rather than
+     * being used in arithmetic, where it would silently mean position zero.
+     *
+     * @param string[] $current
+     */
+    private static function insertionPoint(array $current, ?string $position, ?string $neighbour): int {
+        if ($neighbour === null) {
+            return count($current);
+        }
+
+        $at = array_search($neighbour, $current, true);
+        if ($at === false) {
+            return count($current);
+        }
+
+        return $position === 'AFTER' ? $at + 1 : $at;
     }
 
     private static function quoteLabel(string $label): string {

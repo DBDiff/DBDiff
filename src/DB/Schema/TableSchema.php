@@ -67,24 +67,11 @@ class TableSchema {
             }
         }
 
-        // Durability and storage parameters — PostgreSQL only.
-        //
-        // Both were read for rendering a new table and never compared for one
-        // that exists on both sides, so switching a table between LOGGED and
-        // UNLOGGED, or changing its fillfactor, was reported as no difference
-        // at all (issue #229).
         if ($driver === 'pgsql') {
-            $sourceUnlogged = (bool) ($sourceSchema['unlogged'] ?? false);
-            $targetUnlogged = (bool) ($targetSchema['unlogged'] ?? false);
-            if ($sourceUnlogged !== $targetUnlogged) {
-                $diffSequence[] = new AlterTablePersistence($table, $sourceUnlogged, $targetUnlogged);
-            }
-
-            $sourceOptions = $sourceSchema['reloptions'] ?? null;
-            $targetOptions = $targetSchema['reloptions'] ?? null;
-            if ($sourceOptions !== $targetOptions) {
-                $diffSequence[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
-            }
+            $diffSequence = array_merge(
+                $diffSequence,
+                self::tablePropertyDiffs($table, $sourceSchema, $targetSchema)
+            );
         }
 
         // Columns
@@ -232,4 +219,34 @@ class TableSchema {
         return $diffSequence;
     }
 
+
+    /**
+     * Durability and storage parameters — PostgreSQL only.
+     *
+     * Both were read for rendering a new table and never compared for one that
+     * exists on both sides, so switching a table between LOGGED and UNLOGGED,
+     * or changing its fillfactor, was reported as no difference at all
+     * (issue #229). UNLOGGED is not decoration: an unlogged table is not
+     * crash-safe and is emptied on recovery.
+     *
+     * @return array<int, object>
+     */
+    private static function tablePropertyDiffs(string $table, array $sourceSchema, array $targetSchema): array
+    {
+        $diffs = [];
+
+        $sourceUnlogged = (bool) ($sourceSchema['unlogged'] ?? false);
+        $targetUnlogged = (bool) ($targetSchema['unlogged'] ?? false);
+        if ($sourceUnlogged !== $targetUnlogged) {
+            $diffs[] = new AlterTablePersistence($table, $sourceUnlogged, $targetUnlogged);
+        }
+
+        $sourceOptions = $sourceSchema['reloptions'] ?? null;
+        $targetOptions = $targetSchema['reloptions'] ?? null;
+        if ($sourceOptions !== $targetOptions) {
+            $diffs[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
+        }
+
+        return $diffs;
+    }
 }

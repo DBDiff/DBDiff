@@ -21,7 +21,7 @@ class AlterTableOptions {
     /** The target's, or null. */
     public ?string $prevOptions;
 
-    function __construct($table, ?string $options, ?string $prevOptions) {
+    public function __construct($table, ?string $options, ?string $prevOptions) {
         $this->table       = $table;
         $this->options     = $options;
         $this->prevOptions = $prevOptions;
