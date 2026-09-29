@@ -345,15 +345,13 @@ class DBSchema {
         }
 
         $skipped = count($commonTables) - count($needingDiff);
-        if ($skipped > 0) {
-            Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
-        }
+        Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
 
         return $needingDiff;
     }
 
     /**
-     * Batch-fetch the full schema of every changed table in 7 queries per side
+     * Batch-fetch the full schema of every changed table in 9 queries per side
      * instead of 8 queries per table per side — O(1) round-trips instead of
      * O(N). Adapters without bulk support return empty maps, and TableSchema
      * then falls back to querying each table individually.
@@ -372,10 +370,13 @@ class DBSchema {
         }
 
         $source = $adapter->getBulkTableSchema($this->manager->getDB('source'), $tables);
+        $sourceQueryCount = $adapter->getLastBulkSchemaQueryCount();
         $target = $adapter->getBulkTableSchema($this->manager->getDB('target'), $tables);
+        $targetQueryCount = $adapter->getLastBulkSchemaQueryCount();
 
         $n = count($tables);
-        Logger::info("Batch schema fetch: loaded $n changed table(s) in 14 queries");
+        Logger::info("Batch schema fetch: loaded $n changed table(s) in "
+            . ($sourceQueryCount + $targetQueryCount) . ' queries');
 
         return [$source, $target];
     }

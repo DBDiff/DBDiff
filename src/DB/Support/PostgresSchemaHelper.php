@@ -181,7 +181,10 @@ class PostgresSchemaHelper {
      *
      * @return array<string, bool>
      */
-    public static function domainNotNullMap(Connection $connection): array {
+    public static function domainNotNullMap(Connection $connection, ?int &$queryCount = null): array {
+        if ($queryCount !== null) {
+            $queryCount++;
+        }
         $rows = $connection->select(
             "SELECT t.typname, t.typnotnull
              FROM pg_type t
@@ -207,11 +210,14 @@ class PostgresSchemaHelper {
      * @param  list<string> $tables
      * @return array<string, array<string, array<string, mixed>>> keyed table → column
      */
-    public static function attributeMeta(Connection $connection, array $tables): array {
+    public static function attributeMeta(Connection $connection, array $tables, ?int &$queryCount = null): array {
         if ($tables === []) {
             return [];
         }
 
+        if ($queryCount !== null) {
+            $queryCount++;
+        }
         $rows = $connection->select(
             "SELECT c.relname AS table_name, a.attname AS column_name,
                     CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
@@ -244,6 +250,50 @@ class PostgresSchemaHelper {
             $out[$row['table_name']][$row['column_name']] = $row;
         }
         return $out;
+    }
+
+    /**
+     * Table persistence and storage parameters used both by the schema diff
+     * and its pre-scan hash. `pg_options_to_table` keeps values separate from
+     * option names so callers can emit SET and RESET clauses independently.
+     *
+     * @param list<string> $tables
+     * @return array<string, array{unlogged: bool, reloptions: array<string, string>}>
+     */
+    public static function tableMeta(Connection $connection, array $tables, ?int &$queryCount = null): array {
+        if ($tables === []) {
+            return [];
+        }
+
+        if ($queryCount !== null) {
+            $queryCount++;
+        }
+        $rows = $connection->select(
+            "SELECT c.relname AS table_name, c.relpersistence,
+                    options.option_name, options.option_value
+               FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+               LEFT JOIN LATERAL pg_options_to_table(c.reloptions) options ON TRUE
+              WHERE n.nspname = 'public'
+                AND c.relkind IN ('r', 'p')
+                AND c.relname IN (" . QueryHelper::placeholders($tables) . ")
+                AND " . self::notExtensionMember('pg_class', 'c.oid') . "
+              ORDER BY c.relname, options.option_name",
+            $tables
+        );
+
+        $meta = [];
+        foreach ($tables as $table) {
+            $meta[$table] = ['unlogged' => false, 'reloptions' => []];
+        }
+        foreach ($rows as $row) {
+            $table = $row['table_name'];
+            $meta[$table]['unlogged'] = $row['relpersistence'] === 'u';
+            if ($row['option_name'] !== null) {
+                $meta[$table]['reloptions'][$row['option_name']] = $row['option_value'];
+            }
+        }
+        return $meta;
     }
 
     /** `COMPRESSION <method>`, or empty when the column uses the default. */

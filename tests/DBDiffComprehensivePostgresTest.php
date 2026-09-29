@@ -142,6 +142,56 @@ class DBDiffComprehensivePostgresTest extends AbstractComprehensiveTest
     }
 
     /**
+     * Existing table durability and storage options must be diffed in both
+     * directions; otherwise the pre-scan reports identical schemas and skips
+     * the table entirely.
+     */
+    public function testUnloggedAndStorageParameterChangesAreDiffed(): void
+    {
+        $this->connectTo($this->db1)->exec(
+            'CREATE UNLOGGED TABLE set_options (id integer) WITH (fillfactor = 70);
+             CREATE TABLE reset_options (id integer);'
+        );
+        $this->connectTo($this->db2)->exec(
+            'CREATE TABLE set_options (id integer) WITH (fillfactor = 90);
+             CREATE UNLOGGED TABLE reset_options (id integer) WITH (fillfactor = 80);'
+        );
+
+        $output = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=up', '--nocomments', $this->dbInputArg()]
+        ));
+
+        $this->assertStringContainsString('ALTER TABLE "set_options" SET UNLOGGED', $output);
+        $this->assertStringContainsString('ALTER TABLE "set_options" SET (fillfactor = 70)', $output);
+        $this->assertStringContainsString('ALTER TABLE "reset_options" SET LOGGED', $output);
+        $this->assertStringContainsString('ALTER TABLE "reset_options" RESET (fillfactor)', $output);
+
+        $down = $this->runDBDiff(array_merge(
+            $this->driverArgs(),
+            ['--type=schema', '--include=down', '--nocomments', $this->dbInputArg()]
+        ));
+        $this->assertStringContainsString('ALTER TABLE "set_options" SET LOGGED', $down);
+        $this->assertStringContainsString('ALTER TABLE "set_options" SET (fillfactor = 90)', $down);
+        $this->assertStringContainsString('ALTER TABLE "reset_options" SET UNLOGGED', $down);
+        $this->assertStringContainsString('ALTER TABLE "reset_options" SET (fillfactor = 80)', $down);
+
+        $this->connectTo($this->db2)->exec($this->stripMigrationMarkers($output));
+
+        $state = $this->connectTo($this->db2)->query(
+            "SELECT c.relname, c.relpersistence, c.reloptions
+               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname IN ('set_options', 'reset_options')
+              ORDER BY c.relname"
+        )->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_NUM);
+
+        $this->assertSame('u', $state['set_options'][0]);
+        $this->assertSame('{fillfactor=70}', $state['set_options'][1]);
+        $this->assertSame('p', $state['reset_options'][0]);
+        $this->assertNull($state['reset_options'][1]);
+    }
+
+    /**
      * A generated migration has to be valid SQL, not merely the expected text.
      *
      * Every other test here compares output against tests/expected/*.txt, so a

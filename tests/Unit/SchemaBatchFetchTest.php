@@ -153,7 +153,33 @@ class SchemaBatchFetchTest extends TestCase
             ->method('getTableSchema')
             ->willReturn(self::emptySchema());
 
+        ob_start();
         (new DBSchema($manager))->getDiff();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Pre-scan: skipped 0 / 2 unchanged tables', $output);
+    }
+
+    public function testBatchFetchLogUsesTheReportedQueryCount(): void
+    {
+        $adapter = $this->createMock(PostgresAdapter::class);
+        $adapter->expects($this->exactly(2))
+            ->method('getBulkTableSchema')
+            ->willReturn(['users' => self::emptySchema()]);
+        $adapter->expects($this->exactly(2))
+            ->method('getLastBulkSchemaQueryCount')
+            ->willReturnOnConsecutiveCalls(4, 5);
+
+        $manager = $this->mockManager(['users' => 'source'], ['users' => 'target'], $adapter);
+
+        ob_start();
+        try {
+            (new DBSchema($manager))->getDiff();
+        } finally {
+            $output = ob_get_clean();
+        }
+
+        $this->assertStringContainsString('Batch schema fetch: loaded 1 changed table(s) in 9 queries', $output);
     }
 
     // ── Fallback for adapters without bulk support ────────────────────────

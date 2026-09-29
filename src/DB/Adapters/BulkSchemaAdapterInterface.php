@@ -14,6 +14,8 @@ interface BulkSchemaAdapterInterface {
      *   [ tableName => [
      *       'engine'      => null,
      *       'collation'   => null,
+     *       'unlogged'    => false,
+     *       'reloptions'  => [ optionName => optionValue, ... ],
      *       'columns'     => [ colName => ddl_fragment, ... ],
      *       'keys'        => [ keyName => ddl_fragment, ... ],
      *       'constraints' => [ constraintName => ddl_fragment, ... ],
@@ -26,4 +28,7 @@ interface BulkSchemaAdapterInterface {
      * An empty $tables list returns an empty array without issuing any query.
      */
     public function getBulkTableSchema(Connection $connection, array $tables): array;
+
+    /** Number of queries executed by the most recent getBulkTableSchema call. */
+    public function getLastBulkSchemaQueryCount(): int;
 }

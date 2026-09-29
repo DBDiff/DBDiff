@@ -9,6 +9,8 @@ use DBDiff\DB\Support\PostgresSchemaHelper;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
 
+    private int $lastBulkSchemaQueryCount = 0;
+
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'   => 'pgsql',
@@ -89,6 +91,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
             'engine' => null, 'collation' => null,
+            'unlogged' => false, 'reloptions' => [],
             'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
@@ -451,18 +454,34 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                  SELECT table_name,
                         string_agg(ext_sig, ';' ORDER BY ext_sig) AS ext_str
                  FROM pg_ext_data GROUP BY table_name
+             ),
+             relation_data AS (
+                 SELECT c.relname AS table_name,
+                        c.relpersistence::text AS persistence,
+                        string_agg(options.option_name || '=' || options.option_value,
+                                   ';' ORDER BY options.option_name) AS reloptions
+                 FROM pg_class c
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 LEFT JOIN LATERAL pg_options_to_table(c.reloptions) options ON TRUE
+                 WHERE n.nspname = 'public'
+                   AND c.relkind IN ('r', 'p')
+                   AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
+                 GROUP BY c.oid, c.relname, c.relpersistence
              )
              SELECT c.table_name,
                     md5(
                         COALESCE(c.col_str, '') || '###' ||
                         COALESCE(i.idx_str, '') || '###' ||
                         COALESCE(co.con_str,'') || '###' ||
-                        COALESCE(e.ext_str, '')
+                        COALESCE(e.ext_str, '') || '###' ||
+                        COALESCE(r.persistence, '') || '###' ||
+                        COALESCE(r.reloptions, '')
                     ) AS schema_hash
              FROM col_data c
              LEFT JOIN idx_data i  ON i.table_name  = c.table_name
              LEFT JOIN con_data co ON co.table_name = c.table_name
-             LEFT JOIN ext_data e  ON e.table_name  = c.table_name"
+             LEFT JOIN ext_data e  ON e.table_name  = c.table_name
+             LEFT JOIN relation_data r ON r.table_name = c.table_name"
         );
 
         $hashMap = [];
@@ -473,27 +492,32 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
     }
 
     /**
-     * Fetch full schema detail for all $tables in 7 fixed queries (regardless
+     * Fetch full schema detail for all $tables in 9 fixed queries (regardless
      * of table count), then assemble per-table schema maps identical to those
      * returned by getTableSchema().
      *
      * Query budget per call:
      *   1. information_schema.columns      (all tables, one query)
-     *   2. pg_type domains                 (schema-global, one query)
-     *   3. pg_constraint NOT NULL (PG18+)  (all tables, one query)
-     *   4. pg_constraint constraint-index names to skip
-     *   5. pg_indexes                      (all tables, one query)
-     *   6. information_schema FK/UNIQUE/PK (all tables, one query)
-     *   7. pg_constraint CHECK/EXCLUDE     (all tables, one query)
+     *   2. pg_attribute column metadata    (all tables, one query)
+     *   3. pg_type domains                 (schema-global, one query)
+     *   4. pg_class table metadata         (all tables, one query)
+     *   5. pg_constraint NOT NULL (PG18+)  (all tables, one query)
+     *   6. pg_constraint constraint-index names to skip
+     *   7. pg_indexes                      (all tables, one query)
+     *   8. information_schema FK/UNIQUE/PK (all tables, one query)
+     *   9. pg_constraint CHECK/EXCLUDE     (all tables, one query)
      */
     public function getBulkTableSchema(Connection $connection, array $tables): array
     {
+        $queryCount = 0;
+        $this->lastBulkSchemaQueryCount = 0;
         if (empty($tables)) {
             return [];
         }
 
         $ph = QueryHelper::placeholders($tables);
 
+        $queryCount++;
         $colRows = $connection->select(
             "SELECT table_name, column_name, data_type, character_maximum_length, is_nullable,
                     column_default, numeric_precision, numeric_scale, udt_name, udt_schema,
@@ -514,15 +538,17 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
-        $attrByCol = PostgresSchemaHelper::attributeMeta($connection, $tables);
+        $attrByCol = PostgresSchemaHelper::attributeMeta($connection, $tables, $queryCount);
 
-        $domainNotNull = PostgresSchemaHelper::domainNotNullMap($connection);
+        $domainNotNull = PostgresSchemaHelper::domainNotNullMap($connection, $queryCount);
+        $tableMeta = PostgresSchemaHelper::tableMeta($connection, $tables, $queryCount);
 
         // Named NOT NULL constraints (PG18+ contype='n'). Collected as a flat
         // list for the constraint DDL, plus $nnColsByTable for suppressing the
         // matching inline column NOT NULL. This single query replaces the
         // duplicate per-table queries that fetchColumns() and fetchConstraints()
         // previously issued separately.
+        $queryCount++;
         $nnRows = $connection->select(
             "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name
              FROM pg_constraint con
@@ -542,6 +568,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             }
         }
 
+        $queryCount++;
         $skipRows = $connection->select(
             "SELECT rel.relname AS table_name, con.conname
              FROM pg_constraint con
@@ -556,6 +583,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $skipByTable[$r['table_name']][$r['conname']] = true;
         }
 
+        $queryCount++;
         $idxRows = $connection->select(
             "SELECT tablename AS table_name, indexname, indexdef
              FROM pg_indexes
@@ -577,6 +605,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         // The CASE arms reproduce exactly what the information_schema views
         // emit, so the assembled DDL is unchanged. Note Postgres maps simple
         // match ('s') to 'NONE', not 'SIMPLE'.
+        $queryCount++;
         $conRows = $connection->select(
             "SELECT rel.relname AS table_name,
                     con.conname AS constraint_name,
@@ -615,6 +644,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $tables
         );
 
+        $queryCount++;
         $checkRows = $connection->select(
             "SELECT rel.relname AS table_name, con.conname AS constraint_name,
                     pg_get_constraintdef(con.oid) AS definition
@@ -636,12 +666,20 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             $result[$t] = [
                 'engine'      => null,
                 'collation'   => null,
+                'unlogged'    => $tableMeta[$t]['unlogged'] ?? false,
+                'reloptions'  => $tableMeta[$t]['reloptions'] ?? [],
                 'columns'     => $columns[$t]     ?? [],
                 'keys'        => $keys[$t]        ?? [],
                 'constraints' => $constraints[$t] ?? [],
             ];
         }
+        $this->lastBulkSchemaQueryCount = $queryCount;
         return $result;
+    }
+
+    public function getLastBulkSchemaQueryCount(): int
+    {
+        return $this->lastBulkSchemaQueryCount;
     }
 
     // -------------------------------------------------------------------------

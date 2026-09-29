@@ -46,6 +46,7 @@ class DiffSorter {
 
         "AlterTableEngine",
         "AlterTableCollation",
+        "AlterTableProperties",
 
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
@@ -126,6 +127,7 @@ class DiffSorter {
 
         "AlterTableEngine",
         "AlterTableCollation",
+        "AlterTableProperties",
 
         "AlterTableAddColumn",
         "AlterTableChangeColumn",

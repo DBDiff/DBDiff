@@ -5,6 +5,7 @@ use Diff\Differ\ListDiffer;
 
 use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTableCollation;
+use DBDiff\Diff\AlterTableProperties;
 
 use DBDiff\Diff\AlterTableAddColumn;
 use DBDiff\Diff\AlterTableChangeColumn;
@@ -62,6 +63,23 @@ class TableSchema {
             $targetCollation = $targetSchema['collation'];
             if ($sourceCollation != $targetCollation) {
                 $diffSequence[] = new AlterTableCollation($table, $sourceCollation, $targetCollation);
+            }
+        }
+
+        // PostgreSQL stores durability and relation storage parameters outside
+        // information_schema.columns. They must be compared for existing tables
+        // as well as included in the pre-scan hash.
+        if ($driver === 'pgsql') {
+            $sourceProperties = [
+                'unlogged' => $sourceSchema['unlogged'] ?? false,
+                'reloptions' => $sourceSchema['reloptions'] ?? [],
+            ];
+            $targetProperties = [
+                'unlogged' => $targetSchema['unlogged'] ?? false,
+                'reloptions' => $targetSchema['reloptions'] ?? [],
+            ];
+            if ($sourceProperties !== $targetProperties) {
+                $diffSequence[] = new AlterTableProperties($table, $sourceProperties, $targetProperties);
             }
         }
 

@@ -167,6 +167,14 @@ class SchemaHashPostgresTest extends TestCase
     public static function detectableChangeProvider(): array
     {
         return [
+            'unlogged persistence' => [
+                'CREATE TABLE t (c integer);',
+                'CREATE UNLOGGED TABLE t (c integer);',
+            ],
+            'table storage parameters' => [
+                'CREATE TABLE t (c integer);',
+                'CREATE TABLE t (c integer) WITH (fillfactor = 70);',
+            ],
             // The two named in the issue.
             'column collation' => [
                 'CREATE TABLE t (c text);',
