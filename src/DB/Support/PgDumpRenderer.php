@@ -189,16 +189,7 @@ final class PgDumpRenderer
         }
 
         $archive = tempnam(sys_get_temp_dir(), 'dbdiff_dump_');
-        $result = self::run([
-            // Only the schema being diffed. pg_dump issues a query per
-            // function, so dumping the whole database charged a round trip for
-            // every function in every schema DBDiff never looks at — on a
-            // Supabase project that means auth, storage, realtime and the rest.
-            // This dump exists to render tables in `public`, which is the only
-            // schema the adapter reads (issue #220).
-            self::binary('pg_dump'), '--schema-only', '--format=custom', '--schema=public',
-            '--file=' . $archive, '--dbname=' . self::dsn($connection),
-        ], self::environment($connection));
+        $result = self::run(self::dumpCommand($connection, $archive), self::environment($connection));
 
         if ($result['status'] !== 0 || !is_file($archive) || filesize($archive) === 0) {
             @unlink($archive);
@@ -207,6 +198,36 @@ final class PgDumpRenderer
         }
 
         return self::$archives[$key] = $archive;
+    }
+
+    /**
+     * The pg_dump invocation, as a command array.
+     *
+     * Only the schema being diffed is dumped. pg_dump issues a query per
+     * function, so dumping the whole database charged a round trip for every
+     * function in every schema DBDiff never looks at — on a Supabase project
+     * that means auth, storage, realtime and the rest. This dump exists to
+     * render tables in the schema the adapter reads (issue #220).
+     *
+     * Split out from archiveFor() so the flags can be asserted on directly.
+     * Narrowing the dump leaves the rendered SQL byte-identical — the TOC is
+     * filtered by schema when it is read either way — so no output test would
+     * notice the flag being dropped, and the cost would reappear silently.
+     *
+     * @return list<string>
+     */
+    private static function dumpCommand(Connection $connection, string $archive): array
+    {
+        $schema = (string) ($connection->getConfig('schema') ?: 'public');
+
+        return [
+            self::binary('pg_dump'),
+            '--schema-only',
+            '--format=custom',
+            '--schema=' . $schema,
+            '--file=' . $archive,
+            '--dbname=' . self::dsn($connection),
+        ];
     }
 
     /**
