@@ -20,12 +20,41 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
             'charset'  => 'utf8',
             'schema'   => 'public',
             'sslmode'  => $server['sslmode'] ?? 'prefer',
+            'options'  => [self::disablePreparesAttribute() => true],
         ];
+    }
+
+    /**
+     * PDO's attribute for skipping named server-side prepared statements.
+     *
+     * With PDO's defaults every catalog query costs three round trips: PREPARE,
+     * EXECUTE, then DEALLOCATE. Over a link with any latency that dominates a
+     * diff — the queries themselves are cheap and there are dozens of them
+     * (issue #220). Disabling named prepares makes each query one round trip
+     * while keeping parameters bound server-side, which
+     * `PDO::ATTR_EMULATE_PREPARES` would not: that interpolates client-side,
+     * and the data diff sends values through these connections too.
+     *
+     * PHP 8.4 moved the PDO_PGSQL constants onto a `Pdo\Pgsql` class and
+     * deprecated the `PDO::PGSQL_*` spellings, so the right one is chosen at
+     * runtime — the ternary keeps the deprecated form from being evaluated on a
+     * version that would warn about it. Both names carry the same value.
+     */
+    private static function disablePreparesAttribute(): int {
+        return defined('Pdo\Pgsql::ATTR_DISABLE_PREPARES')
+            ? constant('Pdo\Pgsql::ATTR_DISABLE_PREPARES')
+            : \PDO::PGSQL_ATTR_DISABLE_PREPARES;
     }
 
     public function getTables(Connection $connection): array {
         $result = $connection->select(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+            "SELECT c.relname AS tablename
+             FROM pg_class c
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public'
+               AND c.relkind IN ('r', 'p')
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
+             ORDER BY c.relname"
         );
         return Arr::pluck($result, 'tablename');
     }
@@ -211,6 +240,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             AND c.relnamespace = n.oid
                             AND c.relkind = 'v'
              WHERE v.schemaname = 'public'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY v.viewname"
         );
         $views = [];
@@ -279,6 +309,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              JOIN pg_namespace n ON p.pronamespace = n.oid
              WHERE n.nspname = 'public'
                AND p.prokind IN ('f', 'p')
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_proc', 'p.oid') . "
              ORDER BY p.oid::regprocedure::text"
         );
         $routines = [];
@@ -296,6 +327,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
              JOIN pg_enum e ON t.oid = e.enumtypid
              JOIN pg_namespace n ON t.typnamespace = n.oid
              WHERE n.nspname = 'public'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
              GROUP BY t.typname, t.oid
              ORDER BY t.typname"
         );
@@ -333,11 +365,36 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             COALESCE(identity_cycle,'')                          || '|' ||
                             COALESCE(is_generated,'NEVER')                       || '|' ||
                             COALESCE(generation_expression,'')                   || '|' ||
-                            COALESCE(domain_name,''),
+                            COALESCE(domain_name,'')                             || '|' ||
+                            -- Three things information_schema cannot express, each
+                            -- of which the full comparison does read, so a table
+                            -- the pre-scan skipped could differ in them silently
+                            -- (issue #189):
+                            --
+                            --   format_type  the declared type modifier.
+                            --                datetime_precision is 6 for both a
+                            --                bare timestamptz and a
+                            --                timestamptz(6), which the comparison
+                            --                now distinguishes (issue #215).
+                            --   collation    a column's explicit COLLATE.
+                            --   storage and compression, both emitted by
+                            --                columnDefinition.
+                            format_type(a.atttypid, a.atttypmod)                 || '|' ||
+                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
+                            a.attstorage::text                                   || '|' ||
+                            COALESCE(NULLIF(a.attcompression::text, ''), ''),
                             ';' ORDER BY ordinal_position
                         ) AS col_str
-                 FROM information_schema.columns
-                 WHERE table_schema = 'public'
+                 FROM information_schema.columns isc
+                 JOIN pg_class cls
+                   ON cls.relname = isc.table_name
+                  AND cls.relnamespace = 'public'::regnamespace
+                 JOIN pg_attribute a
+                   ON a.attrelid = cls.oid
+                  AND a.attname = isc.column_name
+                  AND a.attnum > 0 AND NOT a.attisdropped
+                 LEFT JOIN pg_collation co ON co.oid = a.attcollation
+                 WHERE isc.table_schema = 'public'
                  GROUP BY table_name
              ),
              idx_data AS (
@@ -347,19 +404,33 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                  WHERE schemaname = 'public'
                  GROUP BY tablename
              ),
+             -- Read from pg_constraint, not information_schema.table_constraints,
+             -- for two reasons (issue #189).
+             --
+             -- On PostgreSQL 17 and earlier information_schema reports every
+             -- NOT NULL column as a CHECK constraint named
+             -- `<namespace oid>_<table oid>_<column number>_not_null`. Table
+             -- OIDs differ between databases, so two identical tables hashed
+             -- differently and the pre-scan skipped almost nothing when
+             -- comparing two databases — which is every case it exists for. It
+             -- only appeared to work when both sides were the same database.
+             -- Nullability is still covered, by attnotnull in col_data.
+             --
+             -- And pg_get_constraintdef renders a foreign key's target table and
+             -- columns, which the old signature left out: a key repointed at a
+             -- different table hashed the same, so the pre-scan skipped a table
+             -- that had genuinely changed. The rendering also carries the update
+             -- and delete rules, the match option and deferrability, so it
+             -- replaces those columns rather than adding to them.
              con_base AS (
-                 SELECT tc.table_name,
-                        tc.constraint_name || '|' || tc.constraint_type        || '|' ||
-                        COALESCE(tc.is_deferrable,'NO')                        || '|' ||
-                        COALESCE(tc.initially_deferred,'NO')                   || '|' ||
-                        COALESCE(rc.update_rule,'')                            || '|' ||
-                        COALESCE(rc.delete_rule,'')                            || '|' ||
-                        COALESCE(rc.match_option,'')                           AS con_sig
-                 FROM information_schema.table_constraints tc
-                 LEFT JOIN information_schema.referential_constraints rc
-                   ON tc.constraint_name  = rc.constraint_name
-                  AND tc.constraint_schema = rc.constraint_schema
-                 WHERE tc.table_schema = 'public'
+                 SELECT c.relname AS table_name,
+                        con.conname || '|' || con.contype::text || '|' ||
+                        pg_get_constraintdef(con.oid) AS con_sig
+                 FROM pg_constraint con
+                 JOIN pg_class c     ON con.conrelid = c.oid
+                 JOIN pg_namespace n ON c.relnamespace = n.oid
+                 WHERE n.nspname = 'public'
+                   AND con.contype IN ('p', 'u', 'f')
              ),
              pg_ext_data AS (
                  SELECT c.relname AS table_name,

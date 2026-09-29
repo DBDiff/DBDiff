@@ -35,13 +35,14 @@
             <file>./End2EndTest.php</file>
         </testsuite>
         <testsuite name="Postgres">
-            <file>./End2EndPostgresTest.php</file>
-            <file>./DBDiffComprehensivePostgresTest.php</file>
-            <file>./BulkSchemaPostgresTest.php</file>
+            <!-- Every *PostgresTest.php in this directory, rather than a list.
+                 A list silently omitted ColumnTypePrecisionPostgresTest, added
+                 with the fix for issue #215, so that regression test never ran
+                 in CI: it passed when invoked by path, and the Postgres job
+                 skipped it. A new Postgres test is now picked up by existing. -->
+            <directory suffix="PostgresTest.php">.</directory>
+            <!-- Named for the thing it tests rather than the suffix. -->
             <file>./PostgresObjectKindsTest.php</file>
-            <file>./PgDumpRendererPostgresTest.php</file>
-            <file>./PartitionedTableRendererPostgresTest.php</file>
-            <file>./RoutineOverloadPostgresTest.php</file>
         </testsuite>
         <testsuite name="SQLite">
             <file>./End2EndSQLiteTest.php</file>

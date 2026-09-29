@@ -190,7 +190,13 @@ final class PgDumpRenderer
 
         $archive = tempnam(sys_get_temp_dir(), 'dbdiff_dump_');
         $result = self::run([
-            self::binary('pg_dump'), '--schema-only', '--format=custom',
+            // Only the schema being diffed. pg_dump issues a query per
+            // function, so dumping the whole database charged a round trip for
+            // every function in every schema DBDiff never looks at — on a
+            // Supabase project that means auth, storage, realtime and the rest.
+            // This dump exists to render tables in `public`, which is the only
+            // schema the adapter reads (issue #220).
+            self::binary('pg_dump'), '--schema-only', '--format=custom', '--schema=public',
             '--file=' . $archive, '--dbname=' . self::dsn($connection),
         ], self::environment($connection));
 
