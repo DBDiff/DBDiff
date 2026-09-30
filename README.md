@@ -112,6 +112,58 @@ Set `DBDIFF_PG_DUMP_RENDERER=off` to pin a run to the built-in renderer — usef
 when you need byte-identical output across machines regardless of what is
 installed. `DBDIFF_PG_DUMP` and `DBDIFF_PG_RESTORE` override the binary paths.
 
+#### Migrations that run, not just SQL that parses
+
+Every PostgreSQL migration DBDiff generates is meant to apply as written and
+leave the target identical to the source — and to revert cleanly with the
+DOWN. The cases where that takes more than one statement:
+
+- **Changing a column's type.** PostgreSQL refuses `ALTER COLUMN ... TYPE`
+  while a view, materialized view, policy, trigger condition or stored
+  generated column reads the column. Those are dropped and put back around the
+  change — views in any schema, and through any partition — with their options
+  (`security_invoker` included), grants, comments, `INSTEAD OF` triggers and
+  indexes. Grants come back exactly: where default privileges would widen a
+  recreated view, they are revoked first. A generated column is recomputed from
+  its expression, so no data is lost. A change that is not a type change — a
+  default, nullability — leaves them alone.
+- **String to non-string types** (`text` → `uuid`, `varchar` → `integer`) get
+  `USING column::type`, which parses each value and fails loudly on one it
+  cannot read. Never towards a string type, where an explicit cast would
+  truncate silently.
+- **Partitions and inheritance.** A column a table inherits takes its type from
+  the parent, so its type changes once, on the parent.
+- **Generated columns** whose expression changes are dropped and re-added with
+  the new expression, together with their indexes, constraints, comments and
+  grants.
+- **Enums.** Adding a label is `ALTER TYPE ... ADD VALUE ... BEFORE/AFTER`,
+  positioned where the source has it. A label added this way cannot be *used*
+  in the same transaction until it commits (`unsafe use of new value`), so a
+  runner that applies a whole migration in one transaction should apply label
+  additions first.
+- **Storage.** `UNLOGGED` / `LOGGED` is compared and ordered by foreign keys,
+  and storage parameters (`fillfactor`, `autovacuum_*`) are compared regardless
+  of the order they were set in or how a boolean was spelled.
+
+What is deliberately **not** reported as a difference:
+
+- A materialized view's population state — `REFRESH` changes it, no DDL does,
+  and every dump-based copy starts unpopulated.
+- The same expression rendered two ways. `status IN ('draft', 'active')` on a
+  `varchar` column renders differently once recreated from its own rendering, as
+  a dump or a migration does. CHECK constraints, partial indexes, policies,
+  views and trigger conditions are compared by what PostgreSQL makes of them,
+  not by their text.
+
+Known limitations:
+
+- Removing or reordering enum labels replaces the type, which PostgreSQL
+  refuses while a column uses it; the migration says so in a comment.
+- Changing an identity column's identity drops and re-adds it, which restarts
+  its sequence.
+- Column `STORAGE` and `COMPRESSION` are not yet compared for a table that
+  exists on both sides (#225).
+
 ### SQLite
 
 Use `--driver=sqlite`. The file path is passed as the database name:
