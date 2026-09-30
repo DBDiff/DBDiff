@@ -228,7 +228,11 @@ class PostgresSchemaHelper {
                     -- server. The only reliable source for the types whose
                     -- modifier is more than a number, such as
                     -- `interval day to second(3)`.
-                    format_type(a.atttypid, a.atttypmod) AS formatted_type
+                    format_type(a.atttypid, a.atttypmod) AS formatted_type,
+                    -- Inherited from a parent: a partition's columns, or a
+                    -- child's under INHERITS. Its type follows the parent's and
+                    -- cannot be changed on its own (issue #232).
+                    a.attinhcount > 0 AS inherited
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid

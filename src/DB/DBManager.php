@@ -154,11 +154,11 @@ class DBManager {
      * reads the column, so only PostgreSQL needs them dropped and recreated
      * around it (issue #226).
      */
-    public function getColumnDependants(string $connection, string $table, string $column): ?array {
+    public function getColumnDependants(string $connection, string $table, string $column, bool $regenerate = false): ?array {
         if (!$this->adapter instanceof ColumnDependencyAdapterInterface) {
             return null;
         }
-        return $this->adapter->getColumnDependants($this->getDB($connection), $table, $column);
+        return $this->adapter->getColumnDependants($this->getDB($connection), $table, $column, $regenerate);
     }
 
     public function getSchemaHashMap(string $connection, array $tables = []): array {

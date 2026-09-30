@@ -8,6 +8,7 @@ use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
 use DBDiff\Diff\AlterTableCollation;
 use DBDiff\SQLGen\Dialect\PostgresDialect;
+use DBDiff\DB\Schema\GeneratedColumnPlan;
 
 use DBDiff\Diff\AlterTableAddColumn;
 use DBDiff\Diff\AlterTableChangeColumn;
@@ -117,68 +118,57 @@ class TableSchema {
         // Build ordinal map from source column order (for correct ADD COLUMN ordering)
         $sourceOrdinal = array_flip(array_keys($sourceColumns));
 
-        // Detect generated columns that reference other changing columns (Postgres only).
-        // These must be split into DROP + ADD to avoid dependency conflicts.
-        $splitToDropAdd = [];
-        if ($driver === 'pgsql') {
-            $changingCols = [];
-            foreach ($diffs as $column => $diff) {
-                if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                    $changingCols[$column] = true;
-                }
-            }
-            foreach ($diffs as $column => $diff) {
-                if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) {
-                    continue;
-                }
-                $oldDef = $diff->getOldValue();
-                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+STORED/i', $oldDef, $m)) {
-                    $expr = $m[1];
-                    foreach ($changingCols as $otherCol => $_) {
-                        if ($otherCol !== $column
-                            && preg_match('/\b' . preg_quote($otherCol, '/') . '\b/', $expr)) {
-                            $splitToDropAdd[$column] = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        // Stored generated columns are dropped and re-added rather than
+        // altered — see GeneratedColumnPlan (issue #233).
+        $generatedPlan = $driver === 'pgsql'
+            ? GeneratedColumnPlan::plan($diffs)
+            : ['attach' => [], 'regenerate' => [], 'dropFirst' => []];
+        /** @var array<string, AlterTableChangeColumn> $changes */
+        $changes = [];
 
         foreach ($diffs as $column => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
                 if (!isset($cascadedColumns[$column])) {
-                    $diffSequence[] = new AlterTableDropColumn($table, $column, $diff);
+                    $dropCol = new AlterTableDropColumn($table, $column, $diff);
+                    // Ahead of the change to a column it reads, which PostgreSQL
+                    // refuses while it is there (issue #233).
+                    $dropCol->isGeneratedDep = isset($generatedPlan['dropFirst'][$column]);
+                    $diffSequence[] = $dropCol;
                 }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                if (isset($splitToDropAdd[$column])) {
-                    // Split into DROP (using old def) + ADD (using new def)
-                    $dropDiff = new \Diff\DiffOp\DiffOpRemove($diff->getOldValue());
-                    $dropCol = new AlterTableDropColumn($table, $column, $dropDiff);
-                    $dropCol->isGeneratedDep = true;
-                    $diffSequence[] = $dropCol;
-                    $addDiff = new \Diff\DiffOp\DiffOpAdd($diff->getNewValue());
-                    $addCol = new AlterTableAddColumn($table, $column, $addDiff);
-                    $addCol->ordinal = $sourceOrdinal[$column] ?? PHP_INT_MAX;
-                    $addCol->isGenerated = true;
-                    $diffSequence[] = $addCol;
-                } else {
-                    $changeCol = new AlterTableChangeColumn($table, $column, $diff);
-                    $oldDef = $diff->getOldValue();
-                    if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef)
-                        || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
-                        $changeCol->isGenerated = true;
-                    }
-                    // Read from the target: that is the database the migration
-                    // runs against, and its views, policies and triggers are the
-                    // ones in the way of a column type change (issue #226). Asked
-                    // only when the type does change — nothing else is blocked.
-                    if ($driver === 'pgsql' && PostgresDialect::changesColumnType($oldDef, $diff->getNewValue())) {
-                        $changeCol->dependants =
-                            $this->manager->getColumnDependants('target', $table, $column);
-                    }
-                    $diffSequence[] = $changeCol;
+                if (isset($generatedPlan['attach'][$column])) {
+                    // Regenerated inside the change of the column it reads;
+                    // attached below, once that change exists.
+                    continue;
                 }
+                $changeCol = new AlterTableChangeColumn($table, $column, $diff);
+                $oldDef = $diff->getOldValue();
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef)
+                    || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
+                    $changeCol->isGenerated = true;
+                }
+                // Read from the target: that is the database the migration
+                // runs against, and its views, policies and triggers are the
+                // ones in the way of a column type change (issue #226). Asked
+                // only when the type does change — nothing else is blocked.
+                //
+                // A column the table inherits — a partition's, or a child's
+                // under INHERITS — takes its type from the parent, whose own
+                // change carries it here and whose dependants include this
+                // table's (issue #232).
+                $inherited = in_array($column, $targetSchema['inheritedColumns'] ?? [], true);
+                $changeCol->typeInherited = $inherited;
+                $regenerate = isset($generatedPlan['regenerate'][$column]);
+                if ($driver === 'pgsql' && !$inherited
+                    && ($regenerate || PostgresDialect::changesColumnType($oldDef, $diff->getNewValue()))) {
+                    $changeCol->regenerated = $regenerate;
+                    $changeCol->dependants = self::withUpDefinition(
+                        $this->manager->getColumnDependants('target', $table, $column, $regenerate),
+                        $regenerate ? [$column => $diff->getNewValue()] : []
+                    );
+                }
+                $changes[$column] = $changeCol;
+                $diffSequence[] = $changeCol;
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
                 $addCol = new AlterTableAddColumn($table, $column, $diff);
                 $addCol->ordinal = $sourceOrdinal[$column] ?? null;
@@ -189,6 +179,8 @@ class TableSchema {
                 $diffSequence[] = $addCol;
             }
         }
+
+        $this->attachGeneratedColumns($table, $diffs, $generatedPlan, $changes, $diffSequence);
 
         // Keys
         $sourceKeys = $sourceSchema['keys'];
@@ -223,6 +215,77 @@ class TableSchema {
         return $diffSequence;
     }
 
+
+    /**
+     * Settle the generated columns each column change drops and re-adds.
+     *
+     * A retyped column's dependant lookup finds, from the target's catalog,
+     * the generated columns reading it. Of those, one the diff also changes is
+     * re-added from the source's definition on the way up (the plan's
+     * `attach`); one the diff removes or regenerates on its own is left to its
+     * own statements. An `attach` column the lookup did not find — it reads
+     * the retyped column only in the source — is regenerated on its own
+     * instead.
+     *
+     * @param array<string, object>                $diffs
+     * @param array<string, AlterTableChangeColumn> $changes
+     */
+    private function attachGeneratedColumns(
+        string $table,
+        array $diffs,
+        array $plan,
+        array $changes,
+        array &$diffSequence
+    ): void {
+        $attached = [];
+        foreach ($changes as $column => $change) {
+            if (empty($change->dependants['generated']) || $change->regenerated) {
+                continue;
+            }
+            $kept = [];
+            foreach ($change->dependants['generated'] as $generated) {
+                $name = $generated['name'];
+                if (($plan['attach'][$name] ?? null) === $column) {
+                    $generated['upDefinition'] = $diffs[$name]->getNewValue();
+                    $attached[$name] = true;
+                } elseif (isset($diffs[$name])) {
+                    continue;
+                }
+                $kept[] = $generated;
+            }
+            $change->dependants['generated'] = $kept;
+        }
+
+        foreach ($plan['attach'] as $name => $_) {
+            if (isset($attached[$name])) {
+                continue;
+            }
+            $change = new AlterTableChangeColumn($table, $name, $diffs[$name]);
+            $change->isGenerated = true;
+            $change->regenerated = true;
+            $change->dependants = self::withUpDefinition(
+                $this->manager->getColumnDependants('target', $table, $name, true),
+                [$name => $diffs[$name]->getNewValue()]
+            );
+            $diffSequence[] = $change;
+        }
+    }
+
+    /**
+     * Mark the generated columns re-added from the source's definition on the
+     * way up: `$definitions` maps a column name to that definition.
+     */
+    private static function withUpDefinition(?array $dependants, array $definitions): ?array {
+        if ($dependants === null || $definitions === []) {
+            return $dependants;
+        }
+        foreach ($dependants['generated'] ?? [] as $i => $generated) {
+            if (isset($definitions[$generated['name']])) {
+                $dependants['generated'][$i]['upDefinition'] = $definitions[$generated['name']];
+            }
+        }
+        return $dependants;
+    }
 
     /**
      * Durability and storage parameters — PostgreSQL only.

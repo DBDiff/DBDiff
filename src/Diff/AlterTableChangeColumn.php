@@ -25,6 +25,23 @@ class AlterTableChangeColumn {
     public ?array $dependants = null;
 
     /**
+     * The column is inherited — a partition's, or a child's under INHERITS.
+     *
+     * Its type follows the parent's: the parent's `ALTER COLUMN ... TYPE`
+     * reaches it, and one of its own is refused ("cannot alter inherited
+     * column"), so none is emitted for it (issue #232). Anything else about
+     * the column — a partition-local default — still is.
+     */
+    public bool $typeInherited = false;
+
+    /**
+     * A stored generated column whose own definition changes, applied by
+     * dropping and re-adding it inside its dependants' bracket rather than
+     * by any ALTER — see GeneratedColumnPlan (issue #233).
+     */
+    public bool $regenerated = false;
+
+    /**
      * Dependants the UP leaves alone, keyed by `schema.name` (policies and
      * triggers: `schema.table.name`): those another diff in the migration
      * drops or changes, which that diff then handles itself. Recreating them

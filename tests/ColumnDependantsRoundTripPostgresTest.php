@@ -117,7 +117,7 @@ class ColumnDependantsRoundTripPostgresTest extends TestCase
     {
         $out = tempnam(sys_get_temp_dir(), 'dbdiff_rt_') . '.sql';
         $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/dbdiff.php')
-            . ' diff --type=schema --nocomments --include=both'
+            . ' diff --type=schema --nocomments --include=both --allow-destructive'
             . ' --server1-url=' . escapeshellarg($this->url($source))
             . ' --server2-url=' . escapeshellarg($this->url($target))
             . ' --output=' . escapeshellarg($out) . ' 2>&1';
@@ -349,6 +349,131 @@ class ColumnDependantsRoundTripPostgresTest extends TestCase
                AS \$\$ SELECT \$1 * 2 \$\$;
              CREATE VIEW v AS SELECT id, doubled(a) AS a2 FROM t;",
             self::T_NEW . 'CREATE VIEW v AS SELECT id, a FROM t;'
+        );
+    }
+
+    // ── Issue #232: partitions and inheritance ───────────────────────────────
+
+    private const PARTITIONS = 'PARTITION BY RANGE (id);
+        CREATE TABLE p1 PARTITION OF p FOR VALUES FROM (0) TO (100);
+        CREATE TABLE p2 PARTITION OF p FOR VALUES FROM (100) TO (200);';
+
+    public function testAPartitionedColumnIsRetypedOnceThroughItsParent(): void
+    {
+        $up = $this->assertRoundTrip(
+            'part',
+            'CREATE TABLE p (id int, a numeric(12,2)) ' . self::PARTITIONS,
+            'CREATE TABLE p (id int, a numeric(10,2)) ' . self::PARTITIONS
+        );
+
+        // Once, on the parent: a partition's own is refused.
+        $this->assertSame(1, substr_count($up, 'TYPE numeric(12,2)'));
+    }
+
+    public function testAViewOnAPartitionStandsAsideForTheParentsChange(): void
+    {
+        $views = 'CREATE VIEW pv AS SELECT a FROM p; CREATE VIEW p1v AS SELECT a FROM p1;';
+        $this->assertRoundTrip(
+            'partview',
+            'CREATE TABLE p (id int, a numeric(12,2)) ' . self::PARTITIONS . $views,
+            'CREATE TABLE p (id int, a numeric(10,2)) ' . self::PARTITIONS . $views
+        );
+    }
+
+    public function testAnInheritedColumnFollowsItsParent(): void
+    {
+        $this->assertRoundTrip(
+            'inherit',
+            'CREATE TABLE b (id int, a numeric(12,2)); CREATE TABLE c (x int) INHERITS (b);',
+            'CREATE TABLE b (id int, a numeric(10,2)); CREATE TABLE c (x int) INHERITS (b);'
+        );
+    }
+
+    public function testAPartitionLocalDefaultIsStillApplied(): void
+    {
+        $this->assertRoundTrip(
+            'partdefault',
+            'CREATE TABLE p (id int, a numeric(12,2) DEFAULT 1) ' . self::PARTITIONS
+                . 'ALTER TABLE p1 ALTER COLUMN a SET DEFAULT 5;',
+            'CREATE TABLE p (id int, a numeric(10,2) DEFAULT 1) ' . self::PARTITIONS
+        );
+    }
+
+    // ── Issue #233: stored generated columns ─────────────────────────────────
+
+    private const GENERATED_EXTRAS = "CREATE INDEX t_g ON t (g);
+        ALTER TABLE t ADD CONSTRAINT g_nonneg CHECK (g >= 0);
+        COMMENT ON COLUMN t.g IS 'doubled';
+        GRANT SELECT (g) ON t TO dbdiff_rt_reader;
+        CREATE VIEW gv AS SELECT id, g FROM t;";
+
+    public function testRetypingAColumnAGeneratedColumnReads(): void
+    {
+        $up = $this->assertRoundTrip(
+            'gen',
+            'CREATE TABLE t (id int, a numeric(12,2), g numeric GENERATED ALWAYS AS (a * 2) STORED NOT NULL);'
+                . self::GENERATED_EXTRAS,
+            'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 2) STORED NOT NULL);
+             INSERT INTO t (id, a) VALUES (1, 3.5);' . self::GENERATED_EXTRAS
+        );
+
+        $this->assertStringContainsString('DROP COLUMN "g"', $up);
+        $this->assertStringNotContainsString('CASCADE', $up, 'nothing may disappear silently');
+    }
+
+    public function testTheIndexesCommentAndGrantsOfAGeneratedColumnComeBack(): void
+    {
+        $source = $this->db('genmeta_s', 'CREATE TABLE t (id int, a numeric(12,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);'
+            . self::GENERATED_EXTRAS);
+        $target = $this->db('genmeta_t', 'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);'
+            . self::GENERATED_EXTRAS);
+
+        $this->connect($target)->exec($this->diff($source, $target)[0]);
+
+        $meta = $this->connect($target)->query(
+            "SELECT (SELECT count(*) FROM pg_indexes WHERE indexname = 't_g') AS idx,
+                    (SELECT count(*) FROM pg_constraint WHERE conname = 'g_nonneg') AS con,
+                    col_description('t'::regclass, (SELECT attnum FROM pg_attribute WHERE attrelid = 't'::regclass AND attname = 'g')) AS comment,
+                    has_column_privilege('dbdiff_rt_reader', 't', 'g', 'SELECT') AS grant_kept"
+        )->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertSame(['idx' => 1, 'con' => 1, 'comment' => 'doubled', 'grant_kept' => true], $meta);
+    }
+
+    public function testAGeneratedColumnsOwnExpressionChangeIsApplied(): void
+    {
+        // Before, only a stray DROP NOT NULL was emitted and the new
+        // expression never reached the target.
+        $this->assertRoundTrip(
+            'genexpr',
+            'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 3) STORED);'
+                . self::GENERATED_EXTRAS,
+            'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);
+             INSERT INTO t (id, a) VALUES (1, 2);' . self::GENERATED_EXTRAS
+        );
+    }
+
+    public function testAGeneratedColumnChangingWithTheColumnItReads(): void
+    {
+        // Before, its ADD was emitted ahead of its DROP.
+        $this->assertRoundTrip(
+            'genboth',
+            'CREATE TABLE t (id int, a numeric(12,2), g numeric GENERATED ALWAYS AS (a * 3) STORED);',
+            'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);'
+        );
+    }
+
+    public function testAGeneratedColumnTheSourceRemovesOrAdds(): void
+    {
+        $this->assertRoundTrip(
+            'genremoved',
+            'CREATE TABLE t (id int, a numeric(12,2));',
+            'CREATE TABLE t (id int, a numeric(10,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);'
+        );
+        $this->assertRoundTrip(
+            'genadded',
+            'CREATE TABLE t (id int, a numeric(12,2), g numeric GENERATED ALWAYS AS (a * 2) STORED);',
+            'CREATE TABLE t (id int, a numeric(10,2));'
         );
     }
 }

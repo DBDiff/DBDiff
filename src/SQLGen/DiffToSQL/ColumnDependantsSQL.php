@@ -21,10 +21,13 @@ final class ColumnDependantsSQL {
     /**
      * @param array<string, mixed> $dependants  see PostgresColumnDependants::find()
      * @param array<string, true> $skip
+     * @param 'up'|'down'          $direction  which definition a regenerated
+     *                                         generated column comes back with
      */
     public function __construct(
         private array $dependants,
-        private array $skip = []
+        private array $skip = [],
+        private string $direction = 'up'
     ) {}
 
     /**
@@ -49,6 +52,13 @@ final class ColumnDependantsSQL {
             $lines[] = 'DROP ' . self::keyword($view['kind']) . ' IF EXISTS '
                 . PostgresSchemaHelper::qualifiedName($view['schema'], $view['name']) . ';';
         }
+        // Last, once nothing reads them. Without CASCADE: whatever depends on
+        // a generated column and is not handled here should stop the
+        // migration, not disappear with it (issue #233).
+        foreach ($this->dependants['generated'] ?? [] as $generated) {
+            $lines[] = 'ALTER TABLE ' . PostgresSchemaHelper::qualifiedName($generated['schema'], $generated['table'])
+                . ' DROP COLUMN ' . self::ident($generated['name']) . ';';
+        }
 
         return $lines;
     }
@@ -60,6 +70,11 @@ final class ColumnDependantsSQL {
      */
     public function recreates(): array {
         $lines = [];
+
+        // Generated columns first: views and policies may read them.
+        foreach ($this->dependants['generated'] ?? [] as $generated) {
+            array_push($lines, ...$this->recreateGenerated($generated));
+        }
 
         foreach (array_reverse($this->viewsDeepestFirst()) as $view) {
             $key = $view['schema'] . '.' . $view['name'];
@@ -79,6 +94,50 @@ final class ColumnDependantsSQL {
             }
         }
 
+        return $lines;
+    }
+
+    /**
+     * A generated column re-added, recomputed from its expression, with the
+     * indexes, constraints, comment and column grants dropping it took away.
+     *
+     * @return string[]
+     */
+    private function recreateGenerated(array $generated): array {
+        $table = PostgresSchemaHelper::qualifiedName($generated['schema'], $generated['table']);
+        $name  = self::ident($generated['name']);
+        // On the way up a generated column whose own definition changes comes
+        // back as the source defines it; otherwise, and always on the way
+        // down, as the target has it.
+        $lines = [
+            $this->direction === 'up' && isset($generated['upDefinition'])
+                ? "ALTER TABLE $table ADD COLUMN " . rtrim(trim($generated['upDefinition']), ';') . ';'
+                : "ALTER TABLE $table ADD COLUMN $name {$generated['type']}"
+                    . ($generated['collation'] ? " COLLATE {$generated['collation']}" : '')
+                    . " GENERATED ALWAYS AS ({$generated['expression']}) STORED"
+                    . ($generated['notNull'] ? ' NOT NULL' : '') . ';',
+        ];
+        foreach ($generated['constraints'] ?? [] as $constraint) {
+            $lines[] = self::statement($constraint);
+        }
+        foreach ($generated['indexes'] ?? [] as $index) {
+            $lines[] = self::statement($index);
+        }
+        if (($generated['comment'] ?? null) !== null) {
+            $lines[] = "COMMENT ON COLUMN $table.$name IS {$generated['comment']};";
+        }
+        $grouped = [];
+        foreach ($generated['grants'] ?? [] as $g) {
+            $grouped[$g['grantee']][$g['grantable'] ? 1 : 0][] = $g['privilege'];
+        }
+        foreach ($grouped as $grantee => $byOption) {
+            foreach ([0, 1] as $withOption) {
+                if (!empty($byOption[$withOption])) {
+                    $lines[] = 'GRANT ' . implode(', ', $byOption[$withOption]) . " ($name) ON $table TO $grantee"
+                        . ($withOption ? ' WITH GRANT OPTION' : '') . ';';
+                }
+            }
+        }
         return $lines;
     }
 

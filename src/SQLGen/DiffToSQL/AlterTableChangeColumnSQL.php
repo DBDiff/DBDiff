@@ -20,8 +20,9 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
         $newDef = $this->obj->diff->getNewValue();
         $oldDef = $this->obj->diff->getOldValue();
         return $this->aroundDependants(
-            $this->dialect->changeColumn($this->obj->table, $this->obj->column, $newDef, $oldDef),
-            $this->obj->upSkip ?? []
+            $this->statements($newDef, $oldDef),
+            $this->obj->upSkip ?? [],
+            'up'
         );
     }
 
@@ -29,9 +30,21 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
         $oldDef = $this->obj->diff->getOldValue();
         $newDef = $this->obj->diff->getNewValue();
         return $this->aroundDependants(
-            $this->dialect->changeColumn($this->obj->table, $this->obj->column, $oldDef, $newDef),
-            []
+            $this->statements($oldDef, $newDef),
+            [],
+            'down'
         );
+    }
+
+    /**
+     * The change itself. None for a regenerated generated column: dropping
+     * and re-adding it is the change, and ColumnDependantsSQL does both.
+     */
+    private function statements(string $toDef, string $fromDef): string {
+        if (!empty($this->obj->regenerated)) {
+            return '';
+        }
+        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
     }
 
     /**
@@ -50,21 +63,42 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
      * are allowed with views in place, and dropping a view to run one would
      * be destructive for no reason.
      */
-    private function aroundDependants(string $statements, array $skip): string {
+    private function aroundDependants(string $statements, array $skip, string $direction): string {
+        if (!empty($this->obj->typeInherited)) {
+            return self::withoutTypeChange($statements);
+        }
         $dependants = $this->obj->dependants ?? null;
+        $regenerated = !empty($this->obj->regenerated);
         if ($dependants === null
             || PostgresColumnDependants::isEmpty($dependants)
-            || !self::changesType($statements)) {
+            || (!$regenerated && !self::changesType($statements))) {
             return $statements;
         }
 
-        $sql = new ColumnDependantsSQL($dependants, $skip);
+        $sql = new ColumnDependantsSQL($dependants, $skip, $direction);
 
-        return implode("\n", array_merge($sql->drops(), [$statements], $sql->recreates()));
+        return implode("\n", array_filter(
+            array_merge($sql->drops(), [$statements], $sql->recreates()),
+            fn(string $line) => $line !== ''
+        ));
     }
+
+    /**
+     * The statements with any `ALTER COLUMN ... TYPE` removed — for an
+     * inherited column, whose type the parent's statement changes.
+     */
+    private static function withoutTypeChange(string $statements): string {
+        $kept = array_filter(
+            explode("\n", $statements),
+            fn(string $line) => !preg_match(self::TYPE_CHANGE, $line)
+        );
+        return implode("\n", $kept);
+    }
+
+    private const TYPE_CHANGE = '/\bALTER\s+COLUMN\s+(?:"(?:[^"]|"")*"|\S+)\s+TYPE\b/i';
 
     /** Whether any of these statements retypes a column. */
     private static function changesType(string $statements): bool {
-        return (bool) preg_match('/\bALTER\s+COLUMN\s+(?:"(?:[^"]|"")*"|\S+)\s+TYPE\b/i', $statements);
+        return (bool) preg_match(self::TYPE_CHANGE, $statements);
     }
 }
