@@ -12,6 +12,7 @@ use DBDiff\Diff\AddTable;
 use DBDiff\Diff\AlterTable;
 use DBDiff\Diff\CreateView;
 use DBDiff\Diff\DropView;
+use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterView;
 use DBDiff\Diff\CreateTrigger;
 use DBDiff\Diff\DropTrigger;
@@ -116,6 +117,8 @@ class DBSchema {
             $diffs = array_merge($diffs, $tableDiff);
         }
 
+        $this->orderPersistenceChanges($diffs);
+
         foreach ($deletedTables as $i => $table) {
             $diff = new DropTable($table, $this->manager, 'target');
             $diff->sortOrder = $i;
@@ -138,6 +141,7 @@ class DBSchema {
         // way collation and charset above are asked for only of MySQL.
         if ($driver === 'pgsql') {
             $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+            ColumnDependantPlan::apply($diffs);
         }
 
         return $diffs;
@@ -344,10 +348,12 @@ class DBSchema {
             }
         }
 
+        // Printed even when nothing was skipped. `skipped 0 / 100` is the
+        // signature of a hash that never matches, and suppressing it is why
+        // that went unnoticed for as long as it did (issue #189, noted again
+        // in #229).
         $skipped = count($commonTables) - count($needingDiff);
-        if ($skipped > 0) {
-            Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
-        }
+        Logger::info("Pre-scan: skipped $skipped / " . count($commonTables) . " unchanged tables");
 
         return $needingDiff;
     }
@@ -371,11 +377,33 @@ class DBSchema {
             return [[], []];
         }
 
-        $source = $adapter->getBulkTableSchema($this->manager->getDB('source'), $tables);
-        $target = $adapter->getBulkTableSchema($this->manager->getDB('target'), $tables);
+        $sourceDb = $this->manager->getDB('source');
+        $targetDb = $this->manager->getDB('target');
+
+        // Counted rather than stated. The line said "14 queries" from a
+        // literal, which had already drifted from what the fetch actually runs
+        // (issue #229) — and a number nobody can trust is worse than none.
+        // The log is enabled only around this call and flushed after, so it
+        // holds the fetch's own queries and nothing else.
+        self::startCountingQueries($sourceDb);
+        self::startCountingQueries($targetDb);
+
+        try {
+            $source = $adapter->getBulkTableSchema($sourceDb, $tables);
+            $target = $adapter->getBulkTableSchema($targetDb, $tables);
+            $queries = self::countedQueries($sourceDb) + self::countedQueries($targetDb);
+        } finally {
+            self::stopCountingQueries($sourceDb);
+            self::stopCountingQueries($targetDb);
+        }
 
         $n = count($tables);
-        Logger::info("Batch schema fetch: loaded $n changed table(s) in 14 queries");
+        // No count when the connection cannot report one — a stub in a test, or
+        // anything that is not an Illuminate connection. Better to say nothing
+        // than to state a zero.
+        Logger::info($queries > 0
+            ? "Batch schema fetch: loaded $n changed table(s) in $queries queries"
+            : "Batch schema fetch: loaded $n changed table(s)");
 
         return [$source, $target];
     }
@@ -484,6 +512,36 @@ class DBSchema {
     }
 
     /**
+     * Give LOGGED/UNLOGGED changes a foreign-key order.
+     *
+     * A logged table cannot reference an unlogged one, so of two unlogged
+     * tables joined by a foreign key the referenced one has to become logged
+     * first, and the other way round going back:
+     *
+     *     ERROR:  could not change table "c" to logged because it references
+     *             unlogged table "p"
+     *
+     * DiffSorter orders same-kind diffs by name otherwise, which put "c" before
+     * "p". The rank here is parents-first; DiffSorter reads it ascending for
+     * SET LOGGED and descending for SET UNLOGGED.
+     *
+     * @param array<int, object> $diffs
+     */
+    private function orderPersistenceChanges(array $diffs): void
+    {
+        $changes = array_filter($diffs, fn($d) => $d instanceof AlterTablePersistence);
+        if (count($changes) < 2) {
+            return;
+        }
+
+        $tables = array_values(array_unique(array_map(fn($d) => $d->table, $changes)));
+        $rank   = array_flip($this->topologicalSort($tables, $this->manager->getForeignKeyMap('target')));
+        foreach ($changes as $diff) {
+            $diff->sortOrder = $rank[$diff->table] ?? null;
+        }
+    }
+
+    /**
      * Topological sort using Kahn's algorithm.
      *
      * Returns tables ordered so that parent tables (referenced by FKs)
@@ -544,6 +602,55 @@ class DBSchema {
             }
         }
         return [$deps, $children];
+    }
+
+    /**
+     * Query counting around the bulk fetch.
+     *
+     * The log is enabled only for this call and flushed after, so it holds the
+     * fetch's own queries and nothing else. Every step is guarded: a connection
+     * that cannot log — a test double, or anything that is not an Illuminate
+     * connection — simply reports nothing rather than failing the diff.
+     */
+    private static function startCountingQueries($db): void
+    {
+        try {
+            if (method_exists($db, 'flushQueryLog')) {
+                $db->flushQueryLog();
+            }
+            if (method_exists($db, 'enableQueryLog')) {
+                $db->enableQueryLog();
+            }
+        } catch (\Throwable $e) {
+            // Counting is a log line, never a reason to fail.
+        }
+    }
+
+    private static function countedQueries($db): int
+    {
+        try {
+            if (!method_exists($db, 'getQueryLog')) {
+                return 0;
+            }
+            $log = $db->getQueryLog();
+            return is_array($log) ? count($log) : 0;
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+
+    private static function stopCountingQueries($db): void
+    {
+        try {
+            if (method_exists($db, 'disableQueryLog')) {
+                $db->disableQueryLog();
+            }
+            if (method_exists($db, 'flushQueryLog')) {
+                $db->flushQueryLog();
+            }
+        } catch (\Throwable $e) {
+            // As above.
+        }
     }
 }
 

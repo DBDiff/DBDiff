@@ -45,6 +45,8 @@ class DiffSorter {
         "DropCompositeType",
 
         "AlterTableEngine",
+        "AlterTablePersistence",
+        "AlterTableOptions",
         "AlterTableCollation",
 
         "AlterTableAddColumn",
@@ -88,7 +90,6 @@ class DiffSorter {
 
         "DropRoutine",
         "AlterRoutine",
-        "CreateRoutine",
         // Policies and the RLS flags come off before the tables they sit on.
         "DropPolicy",
         "AlterPolicy",
@@ -103,6 +104,13 @@ class DiffSorter {
         "DropView",
         "AlterView",
         "CreateView",
+        // A routine the UP created is dropped only once the policies,
+        // triggers and views that call it have been reverted: dropping it
+        // first failed with "cannot drop function ... because other objects
+        // depend on it" — the DOWN of every new trigger with its own new
+        // trigger function. Still ahead of the types, which a routine's
+        // signature can use.
+        "CreateRoutine",
         "DropEnum",
         "AlterEnum",
         "CreateEnum",
@@ -125,6 +133,8 @@ class DiffSorter {
         "DropTable",
 
         "AlterTableEngine",
+        "AlterTablePersistence",
+        "AlterTableOptions",
         "AlterTableCollation",
 
         "AlterTableAddColumn",
@@ -194,13 +204,34 @@ class DiffSorter {
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {
         $sortA = $a->sortOrder ?? null;
         $sortB = $b->sortOrder ?? null;
-        if ($sortA !== null && $sortB !== null && $sortA !== $sortB) {
-            // CREATE: ascending (parents first); DROP: descending (children first)
-            $isCreate = ($direction === 'up'   && $sqlGenClassA === 'AddTable')
-                     || ($direction === 'down'  && $sqlGenClassA === 'DropTable');
-            return $isCreate ? ($sortA <=> $sortB) : ($sortB <=> $sortA);
+        if ($sortA === null || $sortB === null || $sortA === $sortB) {
+            return $this->compareByName($a, $b);
         }
-        return $this->compareByName($a, $b);
+        if ($sqlGenClassA === 'AlterTablePersistence') {
+            return self::comparePersistenceRank($a, $b, $direction);
+        }
+        // CREATE: ascending (parents first); DROP: descending (children first)
+        $isCreate = ($direction === 'up'   && $sqlGenClassA === 'AddTable')
+                 || ($direction === 'down'  && $sqlGenClassA === 'DropTable');
+        return $isCreate ? ($sortA <=> $sortB) : ($sortB <=> $sortA);
+    }
+
+    /**
+     * LOGGED/UNLOGGED changes by foreign-key rank, which is parents-first.
+     *
+     * Becoming LOGGED goes parents-first (a logged table cannot reference an
+     * unlogged one); becoming UNLOGGED goes children-first, for the same
+     * reason. A change of each kind is independent of the other, so any fixed
+     * order between them will do.
+     */
+    private static function comparePersistenceRank($a, $b, string $direction): int {
+        $becomesLogged = fn($d) => !($direction === 'up' ? $d->unlogged : $d->prevUnlogged);
+        if ($becomesLogged($a) !== $becomesLogged($b)) {
+            return $becomesLogged($a) ? -1 : 1;
+        }
+        return $becomesLogged($a)
+            ? ($a->sortOrder <=> $b->sortOrder)
+            : ($b->sortOrder <=> $a->sortOrder);
     }
 
     private function compareByName($a, $b): int {

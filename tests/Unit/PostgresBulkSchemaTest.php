@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Adapters\PostgresAdapter;
+use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Support\PostgresColumnType;
 use PHPUnit\Framework\TestCase;
 
@@ -538,7 +539,7 @@ class PostgresBulkSchemaTest extends TestCase
 
     public function testAssembleConstraintsDropsUnrenderableTypes(): void
     {
-        // buildConstraintDef returns null for types it does not render; a null
+        // constraintDefinition returns null for types it does not render; a null
         // must never reach the diff map, where it would be compared as a value.
         $rows = [self::conRow('t', 'weird', ['constraint_type' => 'SOMETHING ELSE', 'column_name' => 'a'])];
 
@@ -546,7 +547,7 @@ class PostgresBulkSchemaTest extends TestCase
         $this->assertArrayNotHasKey('weird', $result['t'] ?? []);
     }
 
-    // ── buildConstraintDef ────────────────────────────────────────────────
+    // ── PostgresSchemaHelper::constraintDefinition ────────────────────────
 
     public function testBuildConstraintDefForeignKey(): void
     {
@@ -562,7 +563,7 @@ class PostgresBulkSchemaTest extends TestCase
         $this->assertSame(
             'CONSTRAINT "fk" FOREIGN KEY ("parent_id") REFERENCES "parent" ("id")'
             . ' ON UPDATE NO ACTION ON DELETE CASCADE',
-            $this->invoke('buildConstraintDef', ['fk', $c])
+            PostgresSchemaHelper::constraintDefinition('fk', $c)
         );
     }
 
@@ -579,7 +580,7 @@ class PostgresBulkSchemaTest extends TestCase
         ]);
         $c['columns'] = ['parent_id'];
 
-        $def = $this->invoke('buildConstraintDef', ['fk', $c]);
+        $def = PostgresSchemaHelper::constraintDefinition('fk', $c);
         $this->assertStringContainsString($expected, $def);
     }
 
@@ -600,7 +601,7 @@ class PostgresBulkSchemaTest extends TestCase
 
         $this->assertSame(
             'CONSTRAINT "uq" UNIQUE ("a") DEFERRABLE INITIALLY DEFERRED',
-            $this->invoke('buildConstraintDef', ['uq', $c])
+            PostgresSchemaHelper::constraintDefinition('uq', $c)
         );
     }
 
@@ -611,7 +612,7 @@ class PostgresBulkSchemaTest extends TestCase
 
         $this->assertSame(
             'CONSTRAINT "uq" UNIQUE ("a") DEFERRABLE INITIALLY IMMEDIATE',
-            $this->invoke('buildConstraintDef', ['uq', $c])
+            PostgresSchemaHelper::constraintDefinition('uq', $c)
         );
     }
 
@@ -627,7 +628,7 @@ class PostgresBulkSchemaTest extends TestCase
         ]);
         $c['columns'] = ['parent_id'];
 
-        $this->assertStringEndsWith(' NOT VALID', $this->invoke('buildConstraintDef', ['fk', $c]));
+        $this->assertStringEndsWith(' NOT VALID', PostgresSchemaHelper::constraintDefinition('fk', $c));
     }
 
     public function testBuildConstraintDefPrimaryKey(): void
@@ -637,7 +638,7 @@ class PostgresBulkSchemaTest extends TestCase
 
         $this->assertSame(
             'CONSTRAINT "pk" PRIMARY KEY ("a", "b")',
-            $this->invoke('buildConstraintDef', ['pk', $c])
+            PostgresSchemaHelper::constraintDefinition('pk', $c)
         );
     }
 
@@ -646,7 +647,7 @@ class PostgresBulkSchemaTest extends TestCase
         $c = self::conRow('t', 'x', ['constraint_type' => 'CHECK']);
         $c['columns'] = ['a'];
 
-        $this->assertNull($this->invoke('buildConstraintDef', ['x', $c]));
+        $this->assertNull(PostgresSchemaHelper::constraintDefinition('x', $c));
     }
 
     // ── buildColumnType ───────────────────────────────────────────────────

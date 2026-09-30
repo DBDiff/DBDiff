@@ -6,8 +6,9 @@ use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresColumnDependants;
 
-class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface {
+class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
         return [
@@ -89,6 +90,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
             'engine' => null, 'collation' => null,
+            'unlogged' => false, 'reloptions' => null,
             'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
@@ -342,6 +344,14 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         return $enums;
     }
 
+    /**
+     * What reads one column, so a type change can drop it and put it back.
+     * See PostgresColumnDependants (issue #226).
+     */
+    public function getColumnDependants(Connection $connection, string $table, string $column): array {
+        return PostgresColumnDependants::find($connection, $table, $column);
+    }
+
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
     {
         $rows = $connection->select(
@@ -377,12 +387,20 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                             --                timestamptz(6), which the comparison
                             --                now distinguishes (issue #215).
                             --   collation    a column's explicit COLLATE.
-                            --   storage and compression, both emitted by
-                            --                columnDefinition.
+                            --
+                            -- Storage and compression are deliberately absent.
+                            -- They are rendered for a *new* table and never
+                            -- compared for one that exists on both sides, so
+                            -- hashing them only defeated the skip for such a
+                            -- table and then produced nothing — the diff went
+                            -- on to report the two databases identical, which
+                            -- they are as far as the comparison is concerned
+                            -- (issue #225). The hash covers what the
+                            -- comparison can detect; anything more is work for
+                            -- no answer. Comparing them is a separate change,
+                            -- of the shape #229 took for UNLOGGED.
                             format_type(a.atttypid, a.atttypmod)                 || '|' ||
-                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
-                            a.attstorage::text                                   || '|' ||
-                            COALESCE(NULLIF(a.attcompression::text, ''), ''),
+                            COALESCE(NULLIF(co.collname, 'default'), ''),
                             ';' ORDER BY ordinal_position
                         ) AS col_str
                  FROM information_schema.columns isc
@@ -451,18 +469,31 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
                  SELECT table_name,
                         string_agg(ext_sig, ';' ORDER BY ext_sig) AS ext_str
                  FROM pg_ext_data GROUP BY table_name
+             ),
+             -- Durability and storage parameters. Now compared for a table
+             -- that exists on both sides, so the pre-scan must not skip a
+             -- table whose only difference is one of them (issue #229).
+             rel_data AS (
+                 SELECT c.relname AS table_name,
+                        c.relpersistence::text || '|' ||
+                        COALESCE(" . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ',') . ", '') AS rel_sig
+                 FROM pg_class c
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
              )
              SELECT c.table_name,
                     md5(
                         COALESCE(c.col_str, '') || '###' ||
                         COALESCE(i.idx_str, '') || '###' ||
                         COALESCE(co.con_str,'') || '###' ||
-                        COALESCE(e.ext_str, '')
+                        COALESCE(e.ext_str, '') || '###' ||
+                        COALESCE(r.rel_sig, '')
                     ) AS schema_hash
              FROM col_data c
              LEFT JOIN idx_data i  ON i.table_name  = c.table_name
              LEFT JOIN con_data co ON co.table_name = c.table_name
-             LEFT JOIN ext_data e  ON e.table_name  = c.table_name"
+             LEFT JOIN ext_data e  ON e.table_name  = c.table_name
+             LEFT JOIN rel_data r  ON r.table_name  = c.table_name"
         );
 
         $hashMap = [];
@@ -631,11 +662,38 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         $keys        = $this->assembleIndexes($idxRows, $skipByTable);
         $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
 
+        // Durability and storage parameters, per table.
+        //
+        // Both were already read for rendering a *new* table and never
+        // compared for one that exists on both sides, so switching a table
+        // between LOGGED and UNLOGGED, or changing its fillfactor, was reported
+        // as "Databases are identical" (issue #229). UNLOGGED is not
+        // decoration: an unlogged table is not crash-safe and is emptied on
+        // recovery.
+        $relRows = $connection->select(
+            "SELECT c.relname AS table_name,
+                    c.relpersistence,
+                    " . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
+               FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname IN ($ph)",
+            $tables
+        );
+        $relMeta = [];
+        foreach ($relRows as $row) {
+            $relMeta[$row['table_name']] = [
+                'unlogged'   => ($row['relpersistence'] ?? 'p') === 'u',
+                'reloptions' => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+            ];
+        }
+
         $result = [];
         foreach ($tables as $t) {
             $result[$t] = [
                 'engine'      => null,
                 'collation'   => null,
+                'unlogged'    => $relMeta[$t]['unlogged']   ?? false,
+                'reloptions'  => $relMeta[$t]['reloptions'] ?? null,
                 'columns'     => $columns[$t]     ?? [],
                 'keys'        => $keys[$t]        ?? [],
                 'constraints' => $constraints[$t] ?? [],
@@ -731,9 +789,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
         foreach ($groups as $c) {
             $name         = $c['constraint_name'];
             $c['columns'] = array_keys($c['columns']);
-            // buildConstraintDef returns null for constraint types it does
+            // constraintDefinition returns null for constraint types it does
             // not render; those are dropped rather than diffed as nulls.
-            $def = $this->buildConstraintDef($name, $c);
+            $def = PostgresSchemaHelper::constraintDefinition($name, $c);
             if ($def !== null) {
                 $result[$c['table_name']][$name] = $def;
             }
@@ -752,38 +810,4 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface 
 
         return $result;
     }
-
-    private function buildConstraintDef(string $name, array $c): ?string {
-        $defer = '';
-        if (($c['is_deferrable'] ?? 'NO') === 'YES') {
-            $defer = ($c['initially_deferred'] ?? 'NO') === 'YES'
-                ? ' DEFERRABLE INITIALLY DEFERRED'
-                : ' DEFERRABLE INITIALLY IMMEDIATE';
-        }
-
-        $notValid = '';
-        if (isset($c['convalidated']) && !$c['convalidated']) {
-            $notValid = ' NOT VALID';
-        }
-
-        $cols = implode('", "', $c['columns']);
-        $type = $c['constraint_type'];
-
-        if ($type === 'FOREIGN KEY') {
-            $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
-            $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
-            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
-                $match .
-                " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
-                $defer . $notValid;
-        }
-
-        if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
-            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
-        }
-
-        return null;
-    }
-
 }

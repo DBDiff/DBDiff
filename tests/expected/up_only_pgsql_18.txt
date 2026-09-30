@@ -1,7 +1,6 @@
 #---------- UP ----------
 DELETE FROM "posts" WHERE "id" = '4';
 DELETE FROM "users" WHERE "id" = '4';
-ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;

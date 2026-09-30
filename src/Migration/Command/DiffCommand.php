@@ -69,7 +69,11 @@ class DiffCommand extends Command
             ->addOption('include',     null, InputOption::VALUE_REQUIRED, 'Include: up (default), down, both', 'up')
             ->addOption('nocomments',  null, InputOption::VALUE_NONE,     'Suppress auto-generated comment headers')
             ->addOption('config',      null, InputOption::VALUE_REQUIRED, 'Path to a .dbdiff config file (YAML)')
-            ->addOption('output',      null, InputOption::VALUE_REQUIRED, 'Output file path (default: migration.<ext> in cwd)')
+            ->addOption('output',      null, InputOption::VALUE_REQUIRED,
+                'Output file path (default: migration.<ext> in cwd). '
+                . 'For --format=flyway and --format=laravel this is the destination '
+                . 'DIRECTORY instead: those formats name their own files by convention '
+                . '(V<timestamp>__migration.sql, YYYY_MM_DD_HHMMSS_migration.php)')
             ->addOption('debug',       null, InputOption::VALUE_NONE,     'Enable verbose error output')
             ->addOption('memory-limit', null, InputOption::VALUE_REQUIRED,
                 'PHP memory limit for this run (e.g. 512M, 1G, 2G, -1 for unlimited). '
@@ -240,11 +244,19 @@ class DiffCommand extends Command
         OutputInterface $output
     ): void {
         if (is_array($rendered)) {
-            $dir = $outputOpt ? rtrim($outputOpt, '/') : getcwd();
+            // These formats name their own files — Flyway's V<version>__ and
+            // Laravel's timestamped migration — so --output is the destination
+            // directory. Passing a file path used to reach file_put_contents as
+            // "custom.sql/V…__migration.sql", which failed with a raw PHP
+            // warning naming a phar:// path and a source line (issue #224).
+            $dir = self::resolveOutputDirectory($outputOpt, array_key_first($rendered));
+
             foreach ($rendered as $fileName => $content) {
                 $path = "{$dir}/{$fileName}";
-                if (file_put_contents($path, $content) === false) {
-                    throw new FSException("Failed to write output file: {$path}");
+                if (@file_put_contents($path, $content) === false) {
+                    throw new FSException(
+                        "Failed to write output file: {$path} — " . self::lastErrorMessage()
+                    );
                 }
                 $output->writeln("<info>Written:</info> {$path}");
             }
@@ -254,8 +266,10 @@ class DiffCommand extends Command
         $ext  = $formatter->getExtension();
         $slug = $description ? preg_replace('/[^a-z0-9_]/i', '_', $description) : 'migration';
         $path = $outputOpt ?: (getcwd() . "/{$slug}.{$ext}");
-        if (file_put_contents($path, $rendered) === false) {
-            throw new FSException("Failed to write output file: {$path}");
+        if (@file_put_contents($path, $rendered) === false) {
+            throw new FSException(
+                "Failed to write output file: {$path} — " . self::lastErrorMessage()
+            );
         }
         $output->writeln("<info>Written:</info> {$path}");
     }
@@ -402,5 +416,70 @@ class DiffCommand extends Command
                 }
             }
         }
+    }
+
+    /**
+     * Where a multi-file format writes, given `--output`.
+     *
+     * Flyway and Laravel name their own files, so `--output` is the
+     * destination directory for them. It used to be joined to the generated
+     * filename regardless, so a file path became
+     * `custom.sql/V…__migration.sql` and failed with a PHP warning quoting a
+     * phar:// path — an error about DBDiff's internals rather than about what
+     * the user typed (issue #224).
+     *
+     * A directory that does not exist is created, since the filename is
+     * generated anyway and there is nothing to be careful about. A path that
+     * exists and is *not* a directory is refused by name.
+     */
+    private static function resolveOutputDirectory(?string $outputOpt, ?string $exampleFile): string
+    {
+        if ($outputOpt === null || $outputOpt === '') {
+            return getcwd();
+        }
+
+        $dir = rtrim($outputOpt, '/');
+
+        // A path that is already a file, or that names one of the files this
+        // format writes, is the mistake this is guarding against. Creating a
+        // directory called `custom.sql` because the user asked for a file of
+        // that name is not better than the original failure, only quieter.
+        // Judged by migration-file extensions rather than by any dot, so a
+        // directory such as `releases/2.0` is still accepted.
+        $fileExtensions = array_filter(['sql', 'php', strtolower(pathinfo((string) $exampleFile, PATHINFO_EXTENSION))]);
+        $looksLikeAFile = in_array(strtolower(pathinfo($dir, PATHINFO_EXTENSION)), $fileExtensions, true);
+        if ((file_exists($dir) && !is_dir($dir)) || (!file_exists($dir) && $looksLikeAFile)) {
+            throw new FSException(
+                "--output must be a directory for this format, and \"{$dir}\" names a file. "
+                . 'Flyway and Laravel name their own files by convention'
+                . ($exampleFile !== null ? " (this run would write \"{$exampleFile}\")" : '')
+                . '; pass the directory to write them into.'
+            );
+        }
+
+        if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+            throw new FSException(
+                "Could not create the output directory \"{$dir}\": " . self::lastErrorMessage()
+            );
+        }
+
+        return $dir;
+    }
+
+    /** The reason the last filesystem call failed, without the PHP furniture. */
+    private static function lastErrorMessage(): string
+    {
+        $error = error_get_last();
+        if ($error === null || !isset($error['message'])) {
+            return 'unknown error';
+        }
+
+        // "file_put_contents(x): Failed to open stream: No such file or
+        // directory" → "No such file or directory".
+        $message = $error['message'];
+        if (preg_match('/:\s*([^:]+)$/', $message, $m)) {
+            return trim($m[1]);
+        }
+        return $message;
     }
 }

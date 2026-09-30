@@ -58,7 +58,7 @@ class PostgresDialect extends AbstractAnsiDialect {
         $newIsGenerated = (bool) preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef);
 
         if ($oldIsIdentity && $newIsIdentity) {
-            return $this->changeIdentityColumn($t, $c, $newDef);
+            return $this->changeIdentityColumn($t, $c, $newDef, $oldDef);
         }
 
         if ($oldIsGenerated && $newIsGenerated) {
@@ -68,13 +68,15 @@ class PostgresDialect extends AbstractAnsiDialect {
         return $this->changeRegularColumn($t, $c, $newDef, $oldDef, $oldIsIdentity, $oldIsGenerated);
     }
 
-    private function changeIdentityColumn(string $t, string $c, string $newDef): string {
+    private function changeIdentityColumn(string $t, string $c, string $newDef, string $oldDef): string {
         $newParts = self::parseColumnDef($newDef);
         preg_match('/GENERATED\s+(.*?)\s+AS\s+IDENTITY/i', $newDef, $m);
         $gen = $m[1] ?? 'BY DEFAULT';
         $stmts = [];
         $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP IDENTITY;";
-        $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
+        if (self::typeChanges($oldDef, $newParts['type'])) {
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
+        }
         $stmts[] = "ALTER TABLE $t ALTER COLUMN $c ADD GENERATED $gen AS IDENTITY;";
         return implode("\n", $stmts);
     }
@@ -115,7 +117,20 @@ class PostgresDialect extends AbstractAnsiDialect {
             $stmts[] = "ALTER TABLE $t ALTER COLUMN $c DROP EXPRESSION;";
         }
 
-        $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']};";
+        // Only when the type actually changes. A column's definition differs
+        // for many reasons — a default, nullability — and PostgreSQL refuses
+        // `ALTER COLUMN ... TYPE` while a view or policy reads the column even
+        // when the type named is the one it already has:
+        //
+        //     ERROR:  cannot alter type of a column used by a view or rule
+        //
+        // So a same-type TYPE made a default change on such a column fail, and
+        // made AlterTableChangeColumnSQL drop and recreate the views around a
+        // statement that changed no type at all.
+        if (self::typeChanges($oldDef, $newParts['type'])) {
+            $stmts[] = "ALTER TABLE $t ALTER COLUMN $c TYPE {$newParts['type']}"
+                . self::usingClause($c, $oldDef, $newParts['type']) . ';';
+        }
 
         if ($oldParts === null || $oldParts['not_null'] !== $newParts['not_null']) {
             $stmts[] = $newParts['not_null']
@@ -130,6 +145,60 @@ class PostgresDialect extends AbstractAnsiDialect {
         }
 
         return implode("\n", $stmts);
+    }
+
+    /**
+     * `USING "col"::type` where PostgreSQL will not convert on its own.
+     *
+     * Without it, `ALTER COLUMN ... TYPE` converts only where an assignment
+     * cast exists, and there is none from text to uuid, an integer, boolean,
+     * json or a date — so the commonest retype of all, `user_id text` to
+     * `uuid`, failed with "cannot be cast automatically".
+     *
+     * Only from a string type, and never to one. Casting *from* text parses
+     * the value and fails loudly on anything it cannot read. An explicit cast
+     * *to* `varchar(n)` would instead truncate silently where the assignment
+     * cast refuses, and between other types an explicit cast can succeed
+     * where the implicit one rightly would not — so those are left alone.
+     */
+    private static function usingClause(string $quotedColumn, string $oldDef, string $newType): string {
+        if ($oldDef === '') {
+            return '';
+        }
+        $isString = fn(string $type) => (bool) preg_match(
+            '/^(text|character varying|varchar|character|char|bpchar|citext)\b/i', $type
+        );
+        $oldType = self::parseColumnDef($oldDef)['type'];
+        if (!$isString($oldType) || $isString($newType)) {
+            return '';
+        }
+        // The cast names the type without its collation.
+        $castType = trim(preg_replace('/\s+COLLATE\s+.*$/i', '', $newType));
+        return " USING $quotedColumn::$castType";
+    }
+
+    /**
+     * Whether a column definition change includes a change of type.
+     *
+     * What decides whether the views, policies and triggers reading the column
+     * have to be dropped around it (issue #226): only `ALTER COLUMN ... TYPE`
+     * is refused with them in place.
+     */
+    public static function changesColumnType(string $oldDef, string $newDef): bool {
+        return self::typeChanges($oldDef, self::parseColumnDef($newDef)['type']);
+    }
+
+    /**
+     * Whether moving from `$oldDef` to a column of `$newType` changes its type.
+     *
+     * True when the old definition is unknown, so nothing is lost when there
+     * is no previous definition to compare against.
+     */
+    private static function typeChanges(string $oldDef, string $newType): bool {
+        if ($oldDef === '') {
+            return true;
+        }
+        return self::parseColumnDef($oldDef)['type'] !== $newType;
     }
 
     /**

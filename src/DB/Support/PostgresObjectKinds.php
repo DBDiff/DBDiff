@@ -179,8 +179,7 @@ final class PostgresObjectKinds {
         $result = $connection->select(
             "SELECT c.relname AS name,
                     pg_get_viewdef(c.oid, true) AS definition,
-                    array_to_string(c.reloptions, ', ') AS options,
-                    c.relispopulated AS populated
+                    array_to_string(c.reloptions, ', ') AS options
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public' AND c.relkind = 'm'
@@ -190,14 +189,24 @@ final class PostgresObjectKinds {
         $indexes = self::matviewIndexes($connection);
         $matviews = [];
         foreach ($result as $row) {
+            // Deliberately no `WITH NO DATA`, and `relispopulated` is not read.
+            //
+            // Whether a matview holds its rows yet is not part of its schema:
+            // a REFRESH changes it and no DDL does, and pg_dump restores every
+            // matview unpopulated. Rendering it made the same view on two sides
+            // compare unequal whenever one had been refreshed and the other had
+            // not, so any pg_dump-based copy — a schema-only clone, a snapshot
+            // restore, a proof clone — reported drift against the database it
+            // was copied from, with a DROP MATERIALIZED VIEW offered as the fix
+            // for something that was not extra, and its own index reported
+            // missing when it was already there (issue #227).
+            //
+            // The cost is that recreating a matview populates it, which is a
+            // query the migration runs. That is the right way round: the
+            // alternative reported destructive drift on every diff.
             $sql = 'CREATE MATERIALIZED VIEW "' . $row['name'] . '"'
                 . PostgresSchemaHelper::withOptions($row['options'])
                 . ' AS ' . rtrim(trim($row['definition']), ';');
-            // An unpopulated matview cannot be reproduced by a plain CREATE:
-            // that would run the query and populate it.
-            if (!$row['populated']) {
-                $sql .= ' WITH NO DATA';
-            }
             foreach ($indexes[$row['name']] ?? [] as $indexDef) {
                 $sql .= ";\n" . $indexDef;
             }
@@ -255,22 +264,7 @@ final class PostgresObjectKinds {
         );
         $policies = [];
         foreach ($result as $row) {
-            $sql = 'CREATE POLICY "' . $row['name'] . '" ON "' . $row['table_name'] . '"';
-            if (!$row['permissive']) {
-                $sql .= ' AS RESTRICTIVE';
-            }
-            $sql .= ' FOR ' . $row['command'];
-            // polroles of {0} means PUBLIC, which no pg_roles row matches; the
-            // clause is then omitted and PostgreSQL applies its PUBLIC default.
-            if (!empty($row['roles'])) {
-                $sql .= ' TO ' . $row['roles'];
-            }
-            if ($row['using_expr'] !== null && $row['using_expr'] !== '') {
-                $sql .= ' USING (' . $row['using_expr'] . ')';
-            }
-            if ($row['check_expr'] !== null && $row['check_expr'] !== '') {
-                $sql .= ' WITH CHECK (' . $row['check_expr'] . ')';
-            }
+            $sql = PostgresSchemaHelper::policyDefinition($row, '"' . $row['table_name'] . '"');
             $policies[$row['table_name'] . '.' . $row['name']] = [
                 'name'       => $row['name'],
                 'table'      => $row['table_name'],

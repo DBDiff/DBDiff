@@ -4,7 +4,10 @@ use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
 
 use DBDiff\Diff\AlterTableEngine;
+use DBDiff\Diff\AlterTablePersistence;
+use DBDiff\Diff\AlterTableOptions;
 use DBDiff\Diff\AlterTableCollation;
+use DBDiff\SQLGen\Dialect\PostgresDialect;
 
 use DBDiff\Diff\AlterTableAddColumn;
 use DBDiff\Diff\AlterTableChangeColumn;
@@ -63,6 +66,13 @@ class TableSchema {
             if ($sourceCollation != $targetCollation) {
                 $diffSequence[] = new AlterTableCollation($table, $sourceCollation, $targetCollation);
             }
+        }
+
+        if ($driver === 'pgsql') {
+            $diffSequence = array_merge(
+                $diffSequence,
+                self::tablePropertyDiffs($table, $sourceSchema, $targetSchema)
+            );
         }
 
         // Columns
@@ -159,6 +169,14 @@ class TableSchema {
                         || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
                         $changeCol->isGenerated = true;
                     }
+                    // Read from the target: that is the database the migration
+                    // runs against, and its views, policies and triggers are the
+                    // ones in the way of a column type change (issue #226). Asked
+                    // only when the type does change — nothing else is blocked.
+                    if ($driver === 'pgsql' && PostgresDialect::changesColumnType($oldDef, $diff->getNewValue())) {
+                        $changeCol->dependants =
+                            $this->manager->getColumnDependants('target', $table, $column);
+                    }
                     $diffSequence[] = $changeCol;
                 }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
@@ -205,4 +223,34 @@ class TableSchema {
         return $diffSequence;
     }
 
+
+    /**
+     * Durability and storage parameters — PostgreSQL only.
+     *
+     * Both were read for rendering a new table and never compared for one that
+     * exists on both sides, so switching a table between LOGGED and UNLOGGED,
+     * or changing its fillfactor, was reported as no difference at all
+     * (issue #229). UNLOGGED is not decoration: an unlogged table is not
+     * crash-safe and is emptied on recovery.
+     *
+     * @return array<int, object>
+     */
+    private static function tablePropertyDiffs(string $table, array $sourceSchema, array $targetSchema): array
+    {
+        $diffs = [];
+
+        $sourceUnlogged = (bool) ($sourceSchema['unlogged'] ?? false);
+        $targetUnlogged = (bool) ($targetSchema['unlogged'] ?? false);
+        if ($sourceUnlogged !== $targetUnlogged) {
+            $diffs[] = new AlterTablePersistence($table, $sourceUnlogged, $targetUnlogged);
+        }
+
+        $sourceOptions = $sourceSchema['reloptions'] ?? null;
+        $targetOptions = $targetSchema['reloptions'] ?? null;
+        if ($sourceOptions !== $targetOptions) {
+            $diffs[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
+        }
+
+        return $diffs;
+    }
 }

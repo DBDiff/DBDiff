@@ -5,6 +5,7 @@ use Illuminate\Database\Events\StatementPrepared;
 use Illuminate\Events\Dispatcher;
 use DBDiff\DB\Adapters\AdapterFactory;
 use DBDiff\DB\Adapters\DBAdapterInterface;
+use DBDiff\DB\Adapters\ColumnDependencyAdapterInterface;
 use DBDiff\Exceptions\DBException;
 
 class DBManager {
@@ -144,6 +145,21 @@ class DBManager {
         return $this->adapter->getEnums($this->getDB($connection));
     }
 
+
+    /**
+     * What reads one column on the named connection.
+     *
+     * Null for an adapter that does not implement the capability: only
+     * PostgreSQL refuses a column type change while a view, policy or trigger
+     * reads the column, so only PostgreSQL needs them dropped and recreated
+     * around it (issue #226).
+     */
+    public function getColumnDependants(string $connection, string $table, string $column): ?array {
+        if (!$this->adapter instanceof ColumnDependencyAdapterInterface) {
+            return null;
+        }
+        return $this->adapter->getColumnDependants($this->getDB($connection), $table, $column);
+    }
 
     public function getSchemaHashMap(string $connection, array $tables = []): array {
         return $this->adapter->getSchemaHashMap($this->getDB($connection), $tables);

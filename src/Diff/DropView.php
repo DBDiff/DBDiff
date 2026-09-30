@@ -10,6 +10,11 @@ class DropView {
     public $source = null;
     public $target = null;
     public ?int $sortOrder = null;
+    /**
+     * Set when a column type change's DOWN recreates this object instead —
+     * see ColumnDependantPlan. Its own DOWN is then left out.
+     */
+    public bool $downHandledElsewhere = false;
 
     public $definition;
 

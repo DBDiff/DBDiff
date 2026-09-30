@@ -365,7 +365,7 @@ _Flags always override settings in `.dbdiff`._
 | `--include=up\|down\|both` | Directions to include. Defaults to `up`. (`all` is accepted as an alias for `both`.) |
 | `--nocomments` | Strip comment headers from output. |
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
-| `--output=<path>` | Output file path. Defaults to `migration.sql`. |
+| `--output=<path>` | Where to write. A **file path** for `native`, `liquibase-xml` and `liquibase-yaml`; a **directory** for `flyway` and `laravel`, which name their own files. Defaults to `migration.sql` in the current directory. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
 | `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*` |
 | `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
@@ -693,6 +693,14 @@ Comparisons run in this order:
 ### Schema
 - Detects differences in column count, name, type, collation or attributes
 - New columns in the source are added to the target
+- A table's **durability** (`LOGGED` / `UNLOGGED`) and its **storage
+  parameters** (`fillfactor`, autovacuum settings and the rest of `reloptions`)
+  are compared and altered in place — `ALTER TABLE ... SET UNLOGGED`,
+  `ALTER TABLE ... SET (...)` / `RESET (...)`
+- A column whose type changes takes the views reading it with it: PostgreSQL
+  refuses `ALTER COLUMN ... TYPE` while a view selects the column, so the
+  dependent views are dropped in dependency order, the column altered, and each
+  view recreated from its stored definition — with its own indexes
 
 ### Views
 - Detects created, dropped, and altered views across source and target
@@ -709,7 +717,12 @@ Comparisons run in this order:
 
 ### Enum Types (PostgreSQL)
 - Detects created, dropped, and altered `CREATE TYPE ... AS ENUM` definitions
-- ALTER = DROP TYPE IF EXISTS + CREATE TYPE with the new labels
+- Adding labels uses `ALTER TYPE ... ADD VALUE`, positioned with `BEFORE` /
+  `AFTER` so the new label lands where the source has it. Replacing the type
+  instead could not be applied at all: `DROP TYPE` fails while any column is
+  typed by it, which is every reason the type exists
+- Removing or reordering a label falls back to DROP + CREATE, since `ADD VALUE`
+  cannot express either
 - Enum diffs are ordered before table diffs (tables may reference enum types)
 - MySQL and SQLite do not have standalone enum types — skipped automatically
 
@@ -727,8 +740,13 @@ Comparisons run in this order:
 - Detects created, dropped, and altered materialized views
 - A materialized view's indexes are carried with it, so a unique index on one
   is part of the diff
-- `WITH NO DATA` is preserved — an unpopulated matview is not recreated as a
-  populated one
+- Population state is **not** compared. Whether a matview holds its rows yet is
+  a fact about the data — a `REFRESH` changes it and no DDL does — and `pg_dump`
+  restores every matview unpopulated. Comparing it made the same view on two
+  sides differ whenever one had been refreshed and the other had not, so every
+  `pg_dump`-based copy reported drift against the database it was copied from,
+  offering `DROP MATERIALIZED VIEW` as the fix. `WITH NO DATA` is no longer
+  emitted either: run `REFRESH MATERIALIZED VIEW` when you want the rows
 - ALTER = DROP + CREATE; PostgreSQL has no `CREATE OR REPLACE` for them
 - Ordered after views, since a matview may select from one
 

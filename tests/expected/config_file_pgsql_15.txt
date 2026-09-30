@@ -1,7 +1,6 @@
 #---------- UP ----------
 DELETE FROM "posts" WHERE "id" = '4';
 DELETE FROM "users" WHERE "id" = '4';
-ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
@@ -17,7 +16,6 @@ UPDATE "users" SET "status" = 'active', "created_at" = '2024-01-01 00:00:00' WHE
 #---------- DOWN ----------
 DELETE FROM "posts" WHERE "id" = '3';
 DELETE FROM "users" WHERE "id" = '3';
-ALTER TABLE "users" ALTER COLUMN "status" TYPE varchar(20);
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp;
 ALTER TABLE "users" ADD COLUMN "phone" varchar(20) DEFAULT NULL::character varying;
