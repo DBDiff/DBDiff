@@ -12,6 +12,7 @@ use DBDiff\Diff\AddTable;
 use DBDiff\Diff\AlterTable;
 use DBDiff\Diff\CreateView;
 use DBDiff\Diff\DropView;
+use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterView;
 use DBDiff\Diff\CreateTrigger;
 use DBDiff\Diff\DropTrigger;
@@ -116,6 +117,8 @@ class DBSchema {
             $diffs = array_merge($diffs, $tableDiff);
         }
 
+        $this->orderPersistenceChanges($diffs);
+
         foreach ($deletedTables as $i => $table) {
             $diff = new DropTable($table, $this->manager, 'target');
             $diff->sortOrder = $i;
@@ -138,6 +141,7 @@ class DBSchema {
         // way collation and charset above are asked for only of MySQL.
         if ($driver === 'pgsql') {
             $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+            ColumnDependantPlan::apply($diffs);
         }
 
         return $diffs;
@@ -505,6 +509,36 @@ class DBSchema {
             }
         }
         return $diffs;
+    }
+
+    /**
+     * Give LOGGED/UNLOGGED changes a foreign-key order.
+     *
+     * A logged table cannot reference an unlogged one, so of two unlogged
+     * tables joined by a foreign key the referenced one has to become logged
+     * first, and the other way round going back:
+     *
+     *     ERROR:  could not change table "c" to logged because it references
+     *             unlogged table "p"
+     *
+     * DiffSorter orders same-kind diffs by name otherwise, which put "c" before
+     * "p". The rank here is parents-first; DiffSorter reads it ascending for
+     * SET LOGGED and descending for SET UNLOGGED.
+     *
+     * @param array<int, object> $diffs
+     */
+    private function orderPersistenceChanges(array $diffs): void
+    {
+        $changes = array_filter($diffs, fn($d) => $d instanceof AlterTablePersistence);
+        if (count($changes) < 2) {
+            return;
+        }
+
+        $tables = array_values(array_unique(array_map(fn($d) => $d->table, $changes)));
+        $rank   = array_flip($this->topologicalSort($tables, $this->manager->getForeignKeyMap('target')));
+        foreach ($changes as $diff) {
+            $diff->sortOrder = $rank[$diff->table] ?? null;
+        }
     }
 
     /**

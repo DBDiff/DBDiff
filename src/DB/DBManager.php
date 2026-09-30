@@ -147,18 +147,18 @@ class DBManager {
 
 
     /**
-     * Views reading one column on the named connection.
+     * What reads one column on the named connection.
      *
-     * Empty for an adapter that does not implement the capability: only
-     * PostgreSQL refuses a column type change while a view reads it, so only
-     * PostgreSQL needs the dependants dropped and recreated around it
-     * (issue #226).
+     * Null for an adapter that does not implement the capability: only
+     * PostgreSQL refuses a column type change while a view, policy or trigger
+     * reads the column, so only PostgreSQL needs them dropped and recreated
+     * around it (issue #226).
      */
-    public function getColumnDependentViews(string $connection, string $table, string $column): array {
+    public function getColumnDependants(string $connection, string $table, string $column): ?array {
         if (!$this->adapter instanceof ColumnDependencyAdapterInterface) {
-            return [];
+            return null;
         }
-        return $this->adapter->getColumnDependentViews($this->getDB($connection), $table, $column);
+        return $this->adapter->getColumnDependants($this->getDB($connection), $table, $column);
     }
 
     public function getSchemaHashMap(string $connection, array $tables = []): array {

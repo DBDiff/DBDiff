@@ -440,11 +440,14 @@ class DiffCommand extends Command
 
         $dir = rtrim($outputOpt, '/');
 
-        // A path that is already a file, or that merely looks like one, is the
-        // mistake this is guarding against. Creating a directory called
-        // `custom.php` because the user asked for a file of that name is not
-        // better than the original failure, only quieter.
-        $looksLikeAFile = str_contains(basename($dir), '.');
+        // A path that is already a file, or that names one of the files this
+        // format writes, is the mistake this is guarding against. Creating a
+        // directory called `custom.sql` because the user asked for a file of
+        // that name is not better than the original failure, only quieter.
+        // Judged by migration-file extensions rather than by any dot, so a
+        // directory such as `releases/2.0` is still accepted.
+        $fileExtensions = array_filter(['sql', 'php', strtolower(pathinfo((string) $exampleFile, PATHINFO_EXTENSION))]);
+        $looksLikeAFile = in_array(strtolower(pathinfo($dir, PATHINFO_EXTENSION)), $fileExtensions, true);
         if ((file_exists($dir) && !is_dir($dir)) || (!file_exists($dir) && $looksLikeAFile)) {
             throw new FSException(
                 "--output must be a directory for this format, and \"{$dir}\" names a file. "

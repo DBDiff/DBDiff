@@ -6,7 +6,7 @@ use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
-use DBDiff\DB\Support\PostgresObjectKinds;
+use DBDiff\DB\Support\PostgresColumnDependants;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
@@ -345,11 +345,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
     }
 
     /**
-     * Views reading one column, so a type change can drop them and put them
-     * back. See PostgresObjectKinds::viewsDependingOnColumn() (issue #226).
+     * What reads one column, so a type change can drop it and put it back.
+     * See PostgresColumnDependants (issue #226).
      */
-    public function getColumnDependentViews(Connection $connection, string $table, string $column): array {
-        return PostgresObjectKinds::viewsDependingOnColumn($connection, $table, $column);
+    public function getColumnDependants(Connection $connection, string $table, string $column): array {
+        return PostgresColumnDependants::find($connection, $table, $column);
     }
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
@@ -476,7 +476,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              rel_data AS (
                  SELECT c.relname AS table_name,
                         c.relpersistence::text || '|' ||
-                        COALESCE(array_to_string(c.reloptions, ','), '') AS rel_sig
+                        COALESCE(" . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ',') . ", '') AS rel_sig
                  FROM pg_class c
                  JOIN pg_namespace n ON n.oid = c.relnamespace
                  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
@@ -673,7 +673,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $relRows = $connection->select(
             "SELECT c.relname AS table_name,
                     c.relpersistence,
-                    array_to_string(c.reloptions, ', ') AS reloptions
+                    " . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
               WHERE n.nspname = 'public' AND c.relname IN ($ph)",

@@ -7,6 +7,7 @@ use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
 use DBDiff\Diff\AlterTableCollation;
+use DBDiff\SQLGen\Dialect\PostgresDialect;
 
 use DBDiff\Diff\AlterTableAddColumn;
 use DBDiff\Diff\AlterTableChangeColumn;
@@ -169,10 +170,13 @@ class TableSchema {
                         $changeCol->isGenerated = true;
                     }
                     // Read from the target: that is the database the migration
-                    // runs against, and its views are the ones in the way of a
-                    // column type change (issue #226).
-                    $changeCol->dependentViews =
-                        $this->manager->getColumnDependentViews('target', $table, $column);
+                    // runs against, and its views, policies and triggers are the
+                    // ones in the way of a column type change (issue #226). Asked
+                    // only when the type does change — nothing else is blocked.
+                    if ($driver === 'pgsql' && PostgresDialect::changesColumnType($oldDef, $diff->getNewValue())) {
+                        $changeCol->dependants =
+                            $this->manager->getColumnDependants('target', $table, $column);
+                    }
                     $diffSequence[] = $changeCol;
                 }
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {

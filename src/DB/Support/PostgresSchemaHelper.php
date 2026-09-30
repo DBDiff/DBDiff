@@ -430,4 +430,62 @@ class PostgresSchemaHelper {
         return null;
     }
 
+    /**
+     * A policy row rendered as `CREATE POLICY ...` on `$relation`.
+     *
+     * `$relation` arrives quoted, and qualified where it needs to be: the
+     * policies the diff compares are all in `public` and rendered bare, while
+     * one recreated around a column type change can sit on a table in any
+     * schema. The row carries name, permissive, command, roles, using_expr and
+     * check_expr.
+     */
+    public static function policyDefinition(array $row, string $relation): string {
+        $sql = 'CREATE POLICY "' . $row['name'] . '" ON ' . $relation;
+        if (!$row['permissive']) {
+            $sql .= ' AS RESTRICTIVE';
+        }
+        $sql .= ' FOR ' . $row['command'];
+        // polroles of {0} means PUBLIC, which no pg_roles row matches; the
+        // clause is then omitted and PostgreSQL applies its PUBLIC default.
+        if (!empty($row['roles'])) {
+            $sql .= ' TO ' . $row['roles'];
+        }
+        if ($row['using_expr'] !== null && $row['using_expr'] !== '') {
+            $sql .= ' USING (' . $row['using_expr'] . ')';
+        }
+        if ($row['check_expr'] !== null && $row['check_expr'] !== '') {
+            $sql .= ' WITH CHECK (' . $row['check_expr'] . ')';
+        }
+        return $sql;
+    }
+
+    /**
+     * `"name"` in `public`, `"schema"."name"` anywhere else.
+     *
+     * Bare for `public` because that is how every other statement DBDiff emits
+     * names its objects, so a recreated view reads like the rest of the file.
+     */
+    public static function qualifiedName(string $schema, string $name): string {
+        $quote = fn(string $id) => '"' . str_replace('"', '""', $id) . '"';
+        return $schema === 'public' ? $quote($name) : $quote($schema) . '.' . $quote($name);
+    }
+
+    /**
+     * SQL rendering a `reloptions` array in a canonical form, joined by `$separator`.
+     *
+     * The catalog keeps options in the order they were set — `SET (a=1)` then
+     * `SET (b=2)` stores `{a=1,b=2}`, the other way round `{b=2,a=1}` — and
+     * keeps a boolean's value as it was spelled. So two tables with the same
+     * storage parameters compared unequal, with nothing to migrate, and the
+     * pre-scan never skipped them. Sorted, with the boolean spellings
+     * PostgreSQL accepts folded to `true` and `false`.
+     */
+    public static function canonicalReloptions(string $column, string $separator): string {
+        return "array_to_string(ARRAY(
+                    SELECT regexp_replace(regexp_replace(o,
+                               '=(on|true|yes)$', '=true', 'i'),
+                               '=(off|false|no)$', '=false', 'i')
+                    FROM unnest($column) AS o
+                    ORDER BY 1), '$separator')";
+    }
 }

@@ -16,6 +16,8 @@ class AlterTablePersistence {
     public $diff;
     public $source;
     public $target;
+    /** Foreign-key rank, parents first — see DBSchema::orderPersistenceChanges(). */
+    public ?int $sortOrder = null;
     /** True when the source table is UNLOGGED. */
     public bool $unlogged;
     /** True when the target table is UNLOGGED. */

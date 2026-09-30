@@ -198,6 +198,18 @@ class DiffSorter {
     private function compareSamePriority($a, $b, string $direction, string $sqlGenClassA): int {
         $sortA = $a->sortOrder ?? null;
         $sortB = $b->sortOrder ?? null;
+        if ($sortA !== null && $sortB !== null && $sortA !== $sortB
+            && $sqlGenClassA === 'AlterTablePersistence') {
+            // Ranked parents-first. Becoming LOGGED goes parents-first (a
+            // logged table cannot reference an unlogged one); becoming
+            // UNLOGGED goes children-first, for the same reason.
+            $becomesLogged = fn($d) => !($direction === 'up' ? $d->unlogged : $d->prevUnlogged);
+            if ($becomesLogged($a) !== $becomesLogged($b)) {
+                // Independent of each other; any fixed order will do.
+                return $becomesLogged($a) ? -1 : 1;
+            }
+            return $becomesLogged($a) ? ($sortA <=> $sortB) : ($sortB <=> $sortA);
+        }
         if ($sortA !== null && $sortB !== null && $sortA !== $sortB) {
             // CREATE: ascending (parents first); DROP: descending (children first)
             $isCreate = ($direction === 'up'   && $sqlGenClassA === 'AddTable')
