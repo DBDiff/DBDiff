@@ -190,6 +190,18 @@ class ColumnDependantsRoundTripPostgresTest extends TestCase
         return $up;
     }
 
+    /** Generate and apply the UP only, then diff again: nothing may remain. */
+    private function assertUpConverges(string $case, string $sourceSql, string $targetSql): void
+    {
+        $source = $this->db("{$case}_s", $sourceSql);
+        $target = $this->db("{$case}_t", $targetSql);
+
+        $migration = $this->diff($source, $target);
+        $this->assertNotNull($migration, "$case: expected a difference");
+        $this->connect($target)->exec($migration[0]);
+        $this->assertNull($this->diff($source, $target), "$case: UP left a difference behind:\n{$migration[0]}");
+    }
+
     private const T_OLD = 'CREATE TABLE t (id int PRIMARY KEY, a numeric(10,2));';
     private const T_NEW = 'CREATE TABLE t (id int PRIMARY KEY, a numeric(12,2));';
 
@@ -305,6 +317,38 @@ class ColumnDependantsRoundTripPostgresTest extends TestCase
             'opts',
             'CREATE TABLE t (id int) WITH (fillfactor = 70, autovacuum_enabled = off);',
             'CREATE TABLE t (id int) WITH (fillfactor = 90);'
+        );
+    }
+
+    public function testAChangedPolicyCallingANewFunctionIsCreatedAfterIt(): void
+    {
+        // Routines are created after column changes in the UP, so the new
+        // policy cannot go back at the column change — its own diff does it.
+        $this->assertRoundTrip(
+            'policyfn',
+            "CREATE TABLE o (id int PRIMARY KEY, owner uuid);
+             CREATE FUNCTION current_owner() RETURNS uuid LANGUAGE sql STABLE
+               AS \$\$ SELECT '6f1c4b8e-7d1c-4b4a-9a55-6c1f3c1d2e3f'::uuid \$\$;
+             ALTER TABLE o ENABLE ROW LEVEL SECURITY;
+             CREATE POLICY own ON o USING (owner = current_owner());",
+            "CREATE TABLE o (id int PRIMARY KEY, owner text);
+             ALTER TABLE o ENABLE ROW LEVEL SECURITY;
+             CREATE POLICY own ON o USING (owner = current_user);"
+        );
+    }
+
+    public function testAChangedViewCallingANewFunctionIsCreatedAfterIt(): void
+    {
+        // UP only. Its DOWN is a known limitation: the column change reverts
+        // the view after the DOWN has tried to drop the routine the source's
+        // view still calls, and dropping the view any earlier is not safe
+        // while other objects may depend on it.
+        $this->assertUpConverges(
+            'viewfn',
+            self::T_OLD . "CREATE FUNCTION doubled(numeric) RETURNS numeric LANGUAGE sql IMMUTABLE
+               AS \$\$ SELECT \$1 * 2 \$\$;
+             CREATE VIEW v AS SELECT id, doubled(a) AS a2 FROM t;",
+            self::T_NEW . 'CREATE VIEW v AS SELECT id, a FROM t;'
         );
     }
 }

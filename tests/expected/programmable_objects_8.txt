@@ -13,10 +13,10 @@ CREATE TRIGGER `trg_products_updated` BEFORE UPDATE ON `products` FOR EACH ROW S
 #---------- DOWN ----------
 CREATE PROCEDURE `cleanup_products`()
 DELETE FROM `products` WHERE `price` = 0;
-DROP FUNCTION IF EXISTS `get_product_count`;
 CREATE TRIGGER `trg_old_audit` AFTER DELETE ON `products` FOR EACH ROW SET @dummy = 1;
 DROP TRIGGER IF EXISTS `trg_products_updated`;
 CREATE VIEW `old_report` AS select `products`.`id` AS `id`,`products`.`name` AS `name` from `products` where (`products`.`price` < 5);
 DROP VIEW IF EXISTS `expensive_products`;
 CREATE VIEW `expensive_products` AS select `products`.`id` AS `id`,`products`.`name` AS `name` from `products` where (`products`.`price` > 50);
 DROP VIEW IF EXISTS `product_names`;
+DROP FUNCTION IF EXISTS `get_product_count`;

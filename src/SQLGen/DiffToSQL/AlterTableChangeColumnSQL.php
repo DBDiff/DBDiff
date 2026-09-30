@@ -21,7 +21,7 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
         $oldDef = $this->obj->diff->getOldValue();
         return $this->aroundDependants(
             $this->dialect->changeColumn($this->obj->table, $this->obj->column, $newDef, $oldDef),
-            $this->obj->upPlan ?? []
+            $this->obj->upSkip ?? []
         );
     }
 
@@ -50,7 +50,7 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
      * are allowed with views in place, and dropping a view to run one would
      * be destructive for no reason.
      */
-    private function aroundDependants(string $statements, array $plan): string {
+    private function aroundDependants(string $statements, array $skip): string {
         $dependants = $this->obj->dependants ?? null;
         if ($dependants === null
             || PostgresColumnDependants::isEmpty($dependants)
@@ -58,7 +58,7 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
             return $statements;
         }
 
-        $sql = new ColumnDependantsSQL($dependants, $plan);
+        $sql = new ColumnDependantsSQL($dependants, $skip);
 
         return implode("\n", array_merge($sql->drops(), [$statements], $sql->recreates()));
     }

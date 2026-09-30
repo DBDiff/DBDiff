@@ -26,6 +26,9 @@ class AlterPolicySQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
+        if (!empty($this->obj->downDropOnly)) {
+            return $this->drop();
+        }
         return $this->drop() . "\n" . $this->obj->targetDefinition . ';';
     }
 

@@ -22,6 +22,9 @@ class AlterTriggerSQL implements SQLGenInterface {
 
     public function getDown(): string {
         $drop = $this->dialect->dropTrigger($this->obj->name, $this->obj->table);
+        if (!empty($this->obj->downDropOnly)) {
+            return $drop;
+        }
         return $drop . "\n" . $this->obj->targetDefinition . ';';
     }
 }

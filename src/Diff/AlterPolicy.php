@@ -15,6 +15,11 @@ class AlterPolicy {
      * see ColumnDependantPlan. Its own DOWN is then left out.
      */
     public bool $downHandledElsewhere = false;
+    /**
+     * Set when a column type change recreates this object's target version
+     * in its DOWN — see ColumnDependantPlan. Its own DOWN then only drops it.
+     */
+    public bool $downDropOnly = false;
 
     public $sourceDefinition;
     public $targetDefinition;

@@ -60,16 +60,15 @@ class ColumnDependantPlanTest extends TestCase
         $change = $this->columnChange([$this->view('mine')]);
         ColumnDependantPlan::apply([$change, new DropView('mine', 'CREATE VIEW "mine" AS SELECT 1')]);
 
-        $this->assertArrayHasKey('public.mine', $change->upPlan['skip']);
+        $this->assertArrayHasKey('public.mine', $change->upSkip);
     }
 
-    public function testAnAlteredPolicyIsReplacedBySourceDefinition(): void
+    public function testAnAlteredPolicyIsLeftToItsOwnDiffInTheUp(): void
     {
-        $source = 'CREATE POLICY "own" ON "orders" FOR ALL USING ((user_id = auth.uid()))';
         $change = $this->columnChange([], [$this->policy('own')]);
-        ColumnDependantPlan::apply([$change, new AlterPolicy('own', 'orders', $source, $this->policy('own')['definition'])]);
+        ColumnDependantPlan::apply([$change, new AlterPolicy('own', 'orders', 'CREATE POLICY "own" ON "orders" USING (true)', $this->policy('own')['definition'])]);
 
-        $this->assertSame($source, $change->upPlan['replace']['public.orders.own']);
+        $this->assertArrayHasKey('public.orders.own', $change->upSkip);
     }
 
     public function testADependantsOwnDownIsLeftToTheColumnChange(): void
@@ -84,7 +83,11 @@ class ColumnDependantPlanTest extends TestCase
             $alterPolicy, $alterView, $dropTrigger, $unrelated,
         ]);
 
-        $this->assertTrue($alterPolicy->downHandledElsewhere);
+        // A changed policy still comes off at its own point in the DOWN, so a
+        // routine it calls can be dropped there; the column change recreates
+        // the target's version.
+        $this->assertFalse($alterPolicy->downHandledElsewhere);
+        $this->assertTrue($alterPolicy->downDropOnly);
         $this->assertTrue($alterView->downHandledElsewhere);
         $this->assertTrue($dropTrigger->downHandledElsewhere, 'a trigger on a dependent view goes with the view');
         $this->assertFalse($unrelated->downHandledElsewhere, 'a view the column change does not touch keeps its DOWN');
@@ -112,5 +115,19 @@ class ColumnDependantPlanTest extends TestCase
         ColumnDependantPlan::apply([$drop, $create]);
 
         $this->assertFalse($drop->downHandledElsewhere);
+    }
+
+    public function testADropOnlyPolicyDownIsJustTheDrop(): void
+    {
+        $previous = DialectRegistry::get();
+        DialectRegistry::set(new PostgresDialect());
+        try {
+            $policy = new AlterPolicy('own', 'orders', 'CREATE POLICY "own" ON "orders" USING (true)', 'CREATE POLICY "own" ON "orders" USING (false)');
+            $policy->downDropOnly = true;
+
+            $this->assertSame('DROP POLICY IF EXISTS "own" ON "orders";' . "\n", MigrationGenerator::generate([$policy], 'getDown'));
+        } finally {
+            DialectRegistry::set($previous);
+        }
     }
 }

@@ -25,18 +25,16 @@ class AlterTableChangeColumn {
     public ?array $dependants = null;
 
     /**
-     * How the UP differs from putting everything back as it was, keyed by
-     * `schema.name` (policies and triggers: `schema.table.name`).
-     *
-     * The migration may itself drop one of these dependants, or replace it
-     * with a new definition. Recreating the target's version regardless
-     * brought a dropped view back to life, and a policy's old expression can
-     * be invalid against the column's new type. Filled in by
+     * Dependants the UP leaves alone, keyed by `schema.name` (policies and
+     * triggers: `schema.table.name`): those another diff in the migration
+     * drops or changes, which that diff then handles itself. Recreating them
+     * here brought a dropped view back to life, and a changed policy's old
+     * expression can be invalid against the column's new type. Filled in by
      * ColumnDependantPlan once every diff is known.
      *
-     * @var array{skip: array<string, true>, replace: array<string, string>}
+     * @var array<string, true>
      */
-    public array $upPlan = ['skip' => [], 'replace' => []];
+    public array $upSkip = [];
 
     function __construct($table, $column, $diff) {
         $this->table = $table;

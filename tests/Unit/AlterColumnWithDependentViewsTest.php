@@ -30,11 +30,11 @@ class AlterColumnWithDependentViewsTest extends TestCase
         string $newDef,
         array $views,
         array $extra = [],
-        array $upPlan = ['skip' => [], 'replace' => []]
+        array $upSkip = []
     ): AlterTableChangeColumnSQL {
         $diff = new AlterTableChangeColumn('orders', 'amount', new DiffOpChange($oldDef, $newDef));
         $diff->dependants = $extra + ['views' => $views, 'policies' => [], 'triggers' => [], 'defaultGrantees' => []];
-        $diff->upPlan = $upPlan;
+        $diff->upSkip = $upSkip;
         return new AlterTableChangeColumnSQL($diff, new PostgresDialect());
     }
 
@@ -308,33 +308,47 @@ class AlterColumnWithDependentViewsTest extends TestCase
     public function testAViewTheMigrationDropsIsNotBroughtBack(): void
     {
         $sql = $this->sqlFor(self::OLD, self::NEW, [$this->view('paid_orders', 1)], [],
-            ['skip' => ['public.paid_orders' => true], 'replace' => []])->getUp();
+            ['public.paid_orders' => true])->getUp();
 
         $this->assertStringContainsString('DROP VIEW IF EXISTS "paid_orders"', $sql);
         $this->assertStringNotContainsString('CREATE VIEW "paid_orders"', $sql);
     }
 
-    public function testAPolicyTheMigrationChangesComesBackAsTheSourceHasIt(): void
+    public function testAPolicyTheMigrationChangesIsLeftToItsOwnDiff(): void
     {
         // `user_id = auth.uid()::text` is not valid once user_id is a uuid —
-        // the very change being made — so the old definition cannot go back.
-        $new = 'CREATE POLICY "own" ON "orders" FOR ALL USING ((amount > (1)::numeric))';
+        // the very change being made — so the old definition cannot go back,
+        // and AlterPolicy recreates the new one later, once any routine it
+        // calls exists. It is still dropped here, or the ALTER is refused.
         $sql = $this->sqlFor(self::OLD, self::NEW, [], [
             'policies' => [[
                 'schema' => 'public', 'table' => 'orders', 'name' => 'own',
                 'definition' => 'CREATE POLICY "own" ON "orders" FOR ALL USING ((amount > (0)::numeric))',
             ]],
-        ], ['skip' => [], 'replace' => ['public.orders.own' => $new]])->getUp();
+        ], ['public.orders.own' => true])->getUp();
 
-        $this->assertStringContainsString($new . ';', $sql);
-        $this->assertStringNotContainsString('(0)::numeric', $sql);
+        $this->assertStringContainsString('DROP POLICY IF EXISTS "own" ON "orders";', $sql);
+        $this->assertStringNotContainsString('CREATE POLICY', $sql);
+    }
+
+    public function testTheOwnersPrivilegesSurviveTheRevoke(): void
+    {
+        // The role running the migration owns the recreated view, and may be
+        // one of the default-privilege grantees.
+        $sql = $this->sqlFor(self::OLD, self::NEW, [$this->view('paid_orders', 1)],
+            ['defaultGrantees' => ['anon', 'migrator']])->getUp();
+
+        $this->assertLessThan(
+            strpos($sql, 'GRANT ALL ON "paid_orders" TO CURRENT_USER;'),
+            strpos($sql, 'REVOKE ALL ON "paid_orders" FROM anon, migrator;')
+        );
     }
 
     public function testTheDownIgnoresTheUpPlan(): void
     {
         // The DOWN restores the target, so everything goes back as it was.
         $sql = $this->sqlFor(self::OLD, self::NEW, [$this->view('paid_orders', 1)], [],
-            ['skip' => ['public.paid_orders' => true], 'replace' => []])->getDown();
+            ['public.paid_orders' => true])->getDown();
 
         $this->assertStringContainsString('CREATE VIEW "paid_orders"', $sql);
     }

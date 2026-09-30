@@ -13,18 +13,18 @@ use DBDiff\DB\Support\PostgresSchemaHelper;
  * only the options and triggers would have shown up on the next diff; grants
  * and comments were lost silently.
  *
- * `$plan` adjusts the UP to the rest of the migration — see
+ * `$skip` names the dependants the UP leaves to their own diffs — see
  * ColumnDependantPlan. The DOWN passes none.
  */
 final class ColumnDependantsSQL {
 
     /**
      * @param array<string, mixed> $dependants  see PostgresColumnDependants::find()
-     * @param array{skip?: array<string, true>, replace?: array<string, string>} $plan
+     * @param array<string, true> $skip
      */
     public function __construct(
         private array $dependants,
-        private array $plan = []
+        private array $skip = []
     ) {}
 
     /**
@@ -63,19 +63,19 @@ final class ColumnDependantsSQL {
 
         foreach (array_reverse($this->viewsDeepestFirst()) as $view) {
             $key = $view['schema'] . '.' . $view['name'];
-            if (isset($this->plan['skip'][$key])) {
+            if (isset($this->skip[$key])) {
                 continue;
             }
-            array_push($lines, ...$this->recreateView($view, $this->plan['replace'][$key] ?? null));
+            array_push($lines, ...$this->recreateView($view));
         }
 
         foreach (['policies', 'triggers'] as $kind) {
             foreach ($this->dependants[$kind] ?? [] as $object) {
                 $key = $object['schema'] . '.' . $object['table'] . '.' . $object['name'];
-                if (isset($this->plan['skip'][$key])) {
+                if (isset($this->skip[$key])) {
                     continue;
                 }
-                $lines[] = self::statement($this->plan['replace'][$key] ?? $object['definition']);
+                $lines[] = self::statement($object['definition']);
             }
         }
 
@@ -83,21 +83,15 @@ final class ColumnDependantsSQL {
     }
 
     /** @return string[] */
-    private function recreateView(array $view, ?string $replacement): array {
+    private function recreateView(array $view): array {
         $name  = PostgresSchemaHelper::qualifiedName($view['schema'], $view['name']);
-        $lines = [];
-
-        if ($replacement !== null) {
-            // The source's definition, which carries its own options and
-            // indexes — so the target's indexes are not added on top of it.
-            $lines[] = self::statement($replacement);
-        } else {
-            $lines[] = 'CREATE ' . self::keyword($view['kind']) . ' ' . $name
+        $lines = [
+            'CREATE ' . self::keyword($view['kind']) . ' ' . $name
                 . PostgresSchemaHelper::withOptions($view['options'] ?? null)
-                . ' AS ' . $view['definition'] . ';';
-            foreach ($view['indexes'] ?? [] as $indexDef) {
-                $lines[] = self::statement($indexDef);
-            }
+                . ' AS ' . $view['definition'] . ';',
+        ];
+        foreach ($view['indexes'] ?? [] as $indexDef) {
+            $lines[] = self::statement($indexDef);
         }
 
         array_push($lines, ...$this->privileges($view, $name));
@@ -110,7 +104,7 @@ final class ColumnDependantsSQL {
         }
 
         foreach ($view['triggers'] ?? [] as $trigger) {
-            if (isset($this->plan['skip'][$view['schema'] . '.' . $view['name'] . '.' . $trigger['name']])) {
+            if (isset($this->skip[$view['schema'] . '.' . $view['name'] . '.' . $trigger['name']])) {
                 continue;
             }
             $lines[] = self::statement($trigger['definition']);
@@ -141,6 +135,11 @@ final class ColumnDependantsSQL {
         $revokeFrom = array_values(array_diff($this->dependants['defaultGrantees'] ?? [], [$view['owner'] ?? '']));
         if ($revokeFrom !== []) {
             $lines[] = "REVOKE ALL ON $name FROM " . implode(', ', $revokeFrom) . ';';
+            // Whoever runs the migration creates the view and so owns it, and
+            // may be one of those grantees without having owned the original
+            // — the REVOKE would then strip the new owner's own privileges.
+            // Re-granting them is a no-op in every other case.
+            $lines[] = "GRANT ALL ON $name TO CURRENT_USER;";
         }
 
         // One statement per grantee, and a second where some privileges carry

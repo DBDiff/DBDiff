@@ -90,7 +90,6 @@ class DiffSorter {
 
         "DropRoutine",
         "AlterRoutine",
-        "CreateRoutine",
         // Policies and the RLS flags come off before the tables they sit on.
         "DropPolicy",
         "AlterPolicy",
@@ -105,6 +104,13 @@ class DiffSorter {
         "DropView",
         "AlterView",
         "CreateView",
+        // A routine the UP created is dropped only once the policies,
+        // triggers and views that call it have been reverted: dropping it
+        // first failed with "cannot drop function ... because other objects
+        // depend on it" — the DOWN of every new trigger with its own new
+        // trigger function. Still ahead of the types, which a routine's
+        // signature can use.
+        "CreateRoutine",
         "DropEnum",
         "AlterEnum",
         "CreateEnum",
