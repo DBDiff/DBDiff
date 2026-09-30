@@ -238,7 +238,7 @@ class TableSchema {
         array &$diffSequence
     ): void {
         $attached = [];
-        foreach ($changes as $column => $change) {
+        foreach ($changes as $change) {
             if (empty($change->dependants['generated']) || $change->regenerated) {
                 continue;
             }
