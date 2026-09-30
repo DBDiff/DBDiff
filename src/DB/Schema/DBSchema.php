@@ -13,6 +13,7 @@ use DBDiff\Diff\AlterTable;
 use DBDiff\Diff\CreateView;
 use DBDiff\Diff\DropView;
 use DBDiff\Diff\AlterTablePersistence;
+use DBDiff\DB\Support\PostgresExpressionEquivalence;
 use DBDiff\Diff\AlterView;
 use DBDiff\Diff\CreateTrigger;
 use DBDiff\Diff\DropTrigger;
@@ -141,6 +142,13 @@ class DBSchema {
         // way collation and charset above are asked for only of MySQL.
         if ($driver === 'pgsql') {
             $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+            // Before anything plans around them: a "change" that is the same
+            // definition rendered twice is not one (issue #234).
+            $diffs = PostgresExpressionEquivalence::dropEquivalent(
+                $diffs,
+                $this->manager->getDB('source'),
+                $this->manager->getDB('target')
+            );
             ColumnDependantPlan::apply($diffs);
         }
 
