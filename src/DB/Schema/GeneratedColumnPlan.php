@@ -38,6 +38,29 @@ final class GeneratedColumnPlan {
      * @return array{attach: array<string, string>, regenerate: array<string, true>, dropFirst: array<string, true>}
      */
     public static function plan(array $diffs): array {
+        $retyped = self::retypedColumns($diffs);
+        $plan = ['attach' => [], 'regenerate' => [], 'dropFirst' => []];
+        foreach ($diffs as $column => $diff) {
+            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
+                if (self::readsAny($diff->getOldValue(), $retyped, $column) !== null) {
+                    $plan['dropFirst'][$column] = true;
+                }
+            } elseif (self::definitionChanges($diff)) {
+                $old = $diff->getOldValue();
+                $new = $diff->getNewValue();
+                $base = self::readsAny($old, $retyped, $column) ?? self::readsAny($new, $retyped, $column);
+                if ($base !== null) {
+                    $plan['attach'][$column] = $base;
+                } else {
+                    $plan['regenerate'][$column] = true;
+                }
+            }
+        }
+        return $plan;
+    }
+
+    /** The plain (non-generated) columns whose type changes. */
+    private static function retypedColumns(array $diffs): array {
         $retyped = [];
         foreach ($diffs as $column => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpChange
@@ -46,39 +69,26 @@ final class GeneratedColumnPlan {
                 $retyped[$column] = true;
             }
         }
-
-        $plan = ['attach' => [], 'regenerate' => [], 'dropFirst' => []];
-        foreach ($diffs as $column => $diff) {
-            if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                if (self::readsAny($diff->getOldValue(), $retyped, $column) !== null) {
-                    $plan['dropFirst'][$column] = true;
-                }
-                continue;
-            }
-            if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) {
-                continue;
-            }
-            $old = $diff->getOldValue();
-            $new = $diff->getNewValue();
-            if (!self::isGenerated($old) || !self::isGenerated($new) || !self::definitionChanges($old, $new)) {
-                continue;
-            }
-            $base = self::readsAny($old, $retyped, $column) ?? self::readsAny($new, $retyped, $column);
-            if ($base !== null) {
-                $plan['attach'][$column] = $base;
-            } else {
-                $plan['regenerate'][$column] = true;
-            }
-        }
-        return $plan;
+        return $retyped;
     }
 
     public static function isGenerated(string $def): bool {
         return (bool) preg_match(self::GENERATED, $def);
     }
 
-    /** Expression or type differs — not merely nullability, which ALTER can change. */
-    private static function definitionChanges(string $old, string $new): bool {
+    /**
+     * A generated column staying generated whose expression or type differs —
+     * not merely its nullability, which ALTER can change.
+     */
+    private static function definitionChanges(object $diff): bool {
+        if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) {
+            return false;
+        }
+        $old = $diff->getOldValue();
+        $new = $diff->getNewValue();
+        if (!self::isGenerated($old) || !self::isGenerated($new)) {
+            return false;
+        }
         preg_match(self::GENERATED, $old, $a);
         preg_match(self::GENERATED, $new, $b);
         return ($a[1] ?? null) !== ($b[1] ?? null)

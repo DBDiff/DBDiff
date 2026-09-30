@@ -17,23 +17,18 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
     }
 
     public function getUp(): string {
-        $newDef = $this->obj->diff->getNewValue();
-        $oldDef = $this->obj->diff->getOldValue();
-        return $this->aroundDependants(
-            $this->statements($newDef, $oldDef),
-            $this->obj->upSkip ?? [],
-            'up'
-        );
+        // Carried by another change's bracket, which emits its statements.
+        if ($this->obj->carriedBy !== null) {
+            return '';
+        }
+        return $this->aroundDependants($this->bracketStatements(true), $this->obj->upSkip ?? [], 'up');
     }
 
     public function getDown(): string {
-        $oldDef = $this->obj->diff->getOldValue();
-        $newDef = $this->obj->diff->getNewValue();
-        return $this->aroundDependants(
-            $this->statements($oldDef, $newDef),
-            [],
-            'down'
-        );
+        if ($this->obj->carriedBy !== null) {
+            return '';
+        }
+        return $this->aroundDependants($this->bracketStatements(false), [], 'down');
     }
 
     /**
@@ -45,6 +40,23 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
             return '';
         }
         return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
+    }
+
+    /**
+     * This change's statements followed by those of the changes it carries,
+     * each in the same direction.
+     */
+    private function bracketStatements(bool $up): string {
+        $all = [];
+        foreach (array_merge([$this->obj], $this->obj->coChanges ?? []) as $change) {
+            $new = $change->diff->getNewValue();
+            $old = $change->diff->getOldValue();
+            $sql = (new self($change, $this->dialect))->statements($up ? $new : $old, $up ? $old : $new);
+            if ($sql !== '') {
+                $all[] = $sql;
+            }
+        }
+        return implode("\n", $all);
     }
 
     /**

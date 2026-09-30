@@ -106,34 +106,48 @@ final class ColumnDependantsSQL {
     private function recreateGenerated(array $generated): array {
         $table = PostgresSchemaHelper::qualifiedName($generated['schema'], $generated['table']);
         $name  = self::ident($generated['name']);
-        // On the way up a generated column whose own definition changes comes
-        // back as the source defines it; otherwise, and always on the way
-        // down, as the target has it.
-        $lines = [
-            $this->direction === 'up' && isset($generated['upDefinition'])
-                ? "ALTER TABLE $table ADD COLUMN " . rtrim(trim($generated['upDefinition']), ';') . ';'
-                : "ALTER TABLE $table ADD COLUMN $name {$generated['type']}"
-                    . ($generated['collation'] ? " COLLATE {$generated['collation']}" : '')
-                    . " GENERATED ALWAYS AS ({$generated['expression']}) STORED"
-                    . ($generated['notNull'] ? ' NOT NULL' : '') . ';',
-        ];
-        foreach ($generated['constraints'] ?? [] as $constraint) {
-            $lines[] = self::statement($constraint);
-        }
-        foreach ($generated['indexes'] ?? [] as $index) {
-            $lines[] = self::statement($index);
+        $lines = [$this->addGeneratedColumn($generated, $table, $name)];
+        foreach (array_merge($generated['constraints'] ?? [], $generated['indexes'] ?? []) as $statement) {
+            $lines[] = self::statement($statement);
         }
         if (($generated['comment'] ?? null) !== null) {
             $lines[] = "COMMENT ON COLUMN $table.$name IS {$generated['comment']};";
         }
+        return array_merge($lines, self::grantStatements($generated['grants'] ?? [], "($name) ON $table"));
+    }
+
+    /**
+     * On the way up a generated column whose own definition changes comes back
+     * as the source defines it; otherwise, and always on the way down, as the
+     * target has it.
+     */
+    private function addGeneratedColumn(array $generated, string $table, string $name): string {
+        if ($this->direction === 'up' && isset($generated['upDefinition'])) {
+            return "ALTER TABLE $table ADD COLUMN " . rtrim(trim($generated['upDefinition']), ';') . ';';
+        }
+        $collate = $generated['collation'] ? " COLLATE {$generated['collation']}" : '';
+        $notNull = $generated['notNull'] ? ' NOT NULL' : '';
+        return "ALTER TABLE $table ADD COLUMN $name {$generated['type']}$collate"
+            . " GENERATED ALWAYS AS ({$generated['expression']}) STORED$notNull;";
+    }
+
+    /**
+     * GRANT statements for `[grantee, privilege, grantable]` rows on `$target`
+     * (`ON "v"`, or `("col") ON "t"` for column grants): one per grantee, and
+     * a second where some privileges carry the grant option and others do not.
+     *
+     * @return string[]
+     */
+    private static function grantStatements(array $grants, string $target): array {
         $grouped = [];
-        foreach ($generated['grants'] ?? [] as $g) {
+        foreach ($grants as $g) {
             $grouped[$g['grantee']][$g['grantable'] ? 1 : 0][] = $g['privilege'];
         }
+        $lines = [];
         foreach ($grouped as $grantee => $byOption) {
             foreach ([0, 1] as $withOption) {
                 if (!empty($byOption[$withOption])) {
-                    $lines[] = 'GRANT ' . implode(', ', $byOption[$withOption]) . " ($name) ON $table TO $grantee"
+                    $lines[] = 'GRANT ' . implode(', ', $byOption[$withOption]) . " $target TO $grantee"
                         . ($withOption ? ' WITH GRANT OPTION' : '') . ';';
                 }
             }
@@ -201,23 +215,7 @@ final class ColumnDependantsSQL {
             $lines[] = "GRANT ALL ON $name TO CURRENT_USER;";
         }
 
-        // One statement per grantee, and a second where some privileges carry
-        // the grant option and others do not.
-        $grouped = [];
-        foreach ($view['grants'] ?? [] as $g) {
-            $grouped[$g['grantee']][$g['grantable'] ? 1 : 0][] = $g['privilege'];
-        }
-        foreach ($grouped as $grantee => $byOption) {
-            foreach ([0, 1] as $withOption) {
-                if (empty($byOption[$withOption])) {
-                    continue;
-                }
-                $lines[] = 'GRANT ' . implode(', ', $byOption[$withOption]) . " ON $name TO $grantee"
-                    . ($withOption ? ' WITH GRANT OPTION' : '') . ';';
-            }
-        }
-
-        return $lines;
+        return array_merge($lines, self::grantStatements($view['grants'] ?? [], "ON $name"));
     }
 
     /** @return array<int, array<string, mixed>> */

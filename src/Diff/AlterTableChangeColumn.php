@@ -42,6 +42,20 @@ class AlterTableChangeColumn {
     public bool $regenerated = false;
 
     /**
+     * Other column changes on the table carried out inside this one's
+     * bracket, and — on each of those — the change carrying it.
+     *
+     * A generated column reading two retyped columns can only be re-added
+     * once both are retyped, so changes linked through their generated
+     * dependants are made one bracket: drop the dependants once, retype every
+     * linked column, put the dependants back once (issue #233).
+     *
+     * @var AlterTableChangeColumn[]
+     */
+    public array $coChanges = [];
+    public ?AlterTableChangeColumn $carriedBy = null;
+
+    /**
      * Dependants the UP leaves alone, keyed by `schema.name` (policies and
      * triggers: `schema.table.name`): those another diff in the migration
      * drops or changes, which that diff then handles itself. Recreating them

@@ -64,22 +64,16 @@ final class PostgresExpressionEquivalence {
      * applies to, or null.
      */
     private static function definitions(object $diff): ?array {
-        if ($diff instanceof AlterTableChangeConstraint) {
-            return ['check', $diff->table, $diff->diff->getNewValue(), $diff->diff->getOldValue()];
-        }
-        if ($diff instanceof AlterTableChangeKey) {
-            return ['index', $diff->table, $diff->diff->getNewValue(), $diff->diff->getOldValue()];
-        }
-        if ($diff instanceof AlterPolicy) {
-            return ['policy', $diff->table, $diff->sourceDefinition, $diff->targetDefinition];
-        }
-        if ($diff instanceof AlterTrigger) {
-            return ['trigger', $diff->table, $diff->sourceDefinition, $diff->targetDefinition];
-        }
-        if ($diff instanceof AlterView || $diff instanceof AlterMatView) {
-            return ['view', null, $diff->sourceDefinition, $diff->targetDefinition];
-        }
-        return null;
+        $readers = [
+            AlterTableChangeConstraint::class => fn($d) => ['check', $d->table, $d->diff->getNewValue(), $d->diff->getOldValue()],
+            AlterTableChangeKey::class        => fn($d) => ['index', $d->table, $d->diff->getNewValue(), $d->diff->getOldValue()],
+            AlterPolicy::class                => fn($d) => ['policy', $d->table, $d->sourceDefinition, $d->targetDefinition],
+            AlterTrigger::class               => fn($d) => ['trigger', $d->table, $d->sourceDefinition, $d->targetDefinition],
+            AlterView::class                  => fn($d) => ['view', null, $d->sourceDefinition, $d->targetDefinition],
+            AlterMatView::class               => fn($d) => ['view', null, $d->sourceDefinition, $d->targetDefinition],
+        ];
+        $read = $readers[get_class($diff)] ?? null;
+        return $read === null ? null : $read($diff);
     }
 
     /**

@@ -245,7 +245,9 @@ class TableSchema {
             $kept = [];
             foreach ($change->dependants['generated'] as $generated) {
                 $name = $generated['name'];
-                if (($plan['attach'][$name] ?? null) === $column) {
+                // Kept under every retyped column it reads, so those changes
+                // are linked into one bracket below; re-added once, there.
+                if (isset($plan['attach'][$name])) {
                     $generated['upDefinition'] = $diffs[$name]->getNewValue();
                     $attached[$name] = true;
                 } elseif (isset($diffs[$name])) {
@@ -255,6 +257,8 @@ class TableSchema {
             }
             $change->dependants['generated'] = $kept;
         }
+
+        self::groupLinkedChanges($changes);
 
         foreach ($plan['attach'] as $name => $_) {
             if (isset($attached[$name])) {
@@ -268,6 +272,54 @@ class TableSchema {
                 [$name => $diffs[$name]->getNewValue()]
             );
             $diffSequence[] = $change;
+        }
+    }
+
+    /**
+     * Make column changes linked through a shared generated dependant one bracket.
+     *
+     * `x GENERATED ALWAYS AS (a + b)` with both `a` and `b` retyped: in two
+     * brackets, `x` came back after `a` was retyped and before `b` was, and
+     * `b`'s change was refused. Changes are grouped by the generated columns
+     * they share (transitively), and the first of each group, by column name,
+     * carries the rest.
+     *
+     * @param array<string, AlterTableChangeColumn> $changes
+     */
+    private static function groupLinkedChanges(array $changes): void {
+        $parent = [];
+        $find = function (string $c) use (&$parent, &$find): string {
+            return ($parent[$c] ?? $c) === $c ? $c : ($parent[$c] = $find($parent[$c]));
+        };
+        $readers = [];
+        foreach ($changes as $column => $change) {
+            foreach ($change->dependants['generated'] ?? [] as $generated) {
+                $readers[$generated['name']][] = $column;
+            }
+        }
+        foreach ($readers as $columns) {
+            foreach (array_slice($columns, 1) as $other) {
+                $parent[$find($other)] = $find($columns[0]);
+            }
+        }
+
+        $groups = [];
+        foreach (array_keys($changes) as $column) {
+            $groups[$find($column)][] = $column;
+        }
+        foreach ($groups as $members) {
+            if (count($members) < 2) {
+                continue;
+            }
+            sort($members);
+            $carrier = $changes[array_shift($members)];
+            foreach ($members as $column) {
+                $carried = $changes[$column];
+                $carrier->dependants = ColumnDependantPlan::mergeDependants($carrier->dependants, $carried->dependants);
+                $carrier->upSkip += $carried->upSkip;
+                $carrier->coChanges[] = $carried;
+                $carried->carriedBy = $carrier;
+            }
         }
     }
 

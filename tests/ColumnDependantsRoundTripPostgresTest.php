@@ -476,4 +476,33 @@ class ColumnDependantsRoundTripPostgresTest extends TestCase
             'CREATE TABLE t (id int, a numeric(10,2));'
         );
     }
+
+    public function testAGeneratedColumnReadingTwoRetypedColumns(): void
+    {
+        // The regression suite's gtest27. In one bracket per column, x came
+        // back after a was retyped and before b was, and b's change was
+        // refused. Changes linked by a generated column are one bracket.
+        $up = $this->assertRoundTrip(
+            'gentwo',
+            'CREATE TABLE gtest27 (a bigint, b bigint, x bigint GENERATED ALWAYS AS ((a + b) * 2) STORED);',
+            'CREATE TABLE gtest27 (a int, b int, x int GENERATED ALWAYS AS ((a + b) * 2) STORED);
+             INSERT INTO gtest27 (a, b) VALUES (3, 4);'
+        );
+
+        $this->assertSame(1, substr_count($up, 'DROP COLUMN "x"'));
+        $this->assertSame(1, substr_count($up, 'ADD COLUMN "x"'));
+        $this->assertLessThan(strpos($up, 'ADD COLUMN "x"'), strpos($up, 'ALTER COLUMN "b" TYPE'));
+    }
+
+    public function testGeneratedColumnsChainingThreeRetypedColumns(): void
+    {
+        $views = 'CREATE VIEW v AS SELECT x, y FROM t;';
+        $this->assertRoundTrip(
+            'genchain',
+            'CREATE TABLE t (a bigint, b bigint, c bigint, x bigint GENERATED ALWAYS AS (a + b) STORED,
+                             y bigint GENERATED ALWAYS AS (b + c) STORED);' . $views,
+            'CREATE TABLE t (a int, b int, c int, x bigint GENERATED ALWAYS AS (a + b) STORED,
+                             y bigint GENERATED ALWAYS AS (b + c) STORED);' . $views
+        );
+    }
 }
