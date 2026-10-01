@@ -16,6 +16,9 @@ use DBDiff\Diff\DropRoutine;
 use DBDiff\Diff\CreateEnum;
 use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\AlterEnum;
+use DBDiff\Diff\CreateDomain;
+use DBDiff\Diff\CreateSequence;
+use DBDiff\Diff\CreateCompositeType;
 
 class DiffSorterProgrammableTest extends TestCase
 {
@@ -293,5 +296,60 @@ class DiffSorterProgrammableTest extends TestCase
 
         // CreateEnum before CreateView
         $this->assertLessThan($createViewIdx, $createEnumIdx);
+    }
+
+    /**
+     * A routine a table's default, check or index calls is created before
+     * the tables (issue #238); any other stays after them.
+     */
+    public function testUpOrderAnEarlyRoutineGoesBeforeTheTables(): void
+    {
+        $stub  = $this->createMock(\DBDiff\DB\DBManager::class);
+        $early = new CreateRoutine('f', 'CREATE FUNCTION f() ...');
+        $early->early = true;
+        $diffs = [new AddTable('t1', $stub, 'source'), new CreateRoutine('g', 'CREATE FUNCTION g() ...'), $early];
+
+        $sorted = $this->sorter->sort($diffs, 'up');
+
+        $this->assertSame([$early, $diffs[0], $diffs[1]], $sorted);
+    }
+
+    /**
+     * The DOWN drops what the UP created only once nothing uses it: after the
+     * tables and columns that may be typed by it or call it (issue #238).
+     */
+    public function testDownOrderDropsCreatedTypesAndRoutinesLast(): void
+    {
+        $stub  = $this->createMock(\DBDiff\DB\DBManager::class);
+        $diffs = [
+            new CreateEnum('e', "CREATE TYPE \"e\" AS ENUM ('a')"),
+            new CreateDomain('d', 'CREATE DOMAIN "d" AS int'),
+            new CreateSequence('s', 'CREATE SEQUENCE "s"'),
+            new CreateCompositeType('c', 'CREATE TYPE "c" AS (a int)'),
+            new CreateRoutine('f', 'CREATE FUNCTION f() ...'),
+            new AddTable('t1', $stub, 'source'),
+        ];
+
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'down'));
+
+        $this->assertSame('AddTable', $names[0]);
+        $this->assertSame(['CreateRoutine', 'CreateCompositeType', 'CreateDomain', 'CreateEnum', 'CreateSequence'], array_slice($names, 1));
+    }
+
+    /**
+     * The DOWN changes an enum's labels before it puts back the routines,
+     * views and policies that may name them (issue #237).
+     */
+    public function testDownOrderAlterEnumBeforeProgrammableObjects(): void
+    {
+        $diffs = [
+            new AlterView('v', 'CREATE VIEW ...', 'CREATE VIEW ...'),
+            new DropRoutine('f', 'CREATE FUNCTION ...'),
+            new AlterEnum('e', "CREATE TYPE \"e\" AS ENUM ('a')", "CREATE TYPE \"e\" AS ENUM ('a', 'b')"),
+        ];
+
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'down'));
+
+        $this->assertSame('AlterEnum', $names[0]);
     }
 }

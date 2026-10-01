@@ -33,6 +33,9 @@ CREATE VIEW "expensive_products" AS SELECT products.id,
   WHERE (products.price > (10)::numeric);
 CREATE TRIGGER trg_products_updated BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION trg_products_updated_fn();
 #---------- DOWN ----------
+CREATE TYPE "priority__new" AS ENUM ('low', 'medium', 'high');
+DROP TYPE "priority";
+ALTER TYPE "priority__new" RENAME TO "priority";
 CREATE OR REPLACE FUNCTION public.cleanup_products()
  RETURNS void
  LANGUAGE sql
@@ -59,12 +62,7 @@ CREATE VIEW "expensive_products" AS SELECT products.id,
    FROM products
   WHERE (products.price > (50)::numeric);
 DROP VIEW IF EXISTS "product_names";
+CREATE TYPE "old_status" AS ENUM ('draft', 'published', 'archived');
 DROP FUNCTION IF EXISTS "get_product_count"();
 DROP FUNCTION IF EXISTS "trg_products_updated_fn"();
-CREATE TYPE "old_status" AS ENUM ('draft', 'published', 'archived');
--- Removing or reordering enum labels needs the type replaced, which
--- PostgreSQL refuses while any column still uses it. Migrate the
--- dependent columns to a new type first, or apply this by hand.
-DROP TYPE IF EXISTS "priority";
-CREATE TYPE "priority" AS ENUM ('low', 'medium', 'high');
 DROP TYPE IF EXISTS "order_status";
