@@ -15,8 +15,10 @@ interface ColumnDependencyAdapterInterface {
 
     /**
      * Everything reading `$table`.`$column` — see PostgresColumnDependants.
+     * With `$regenerate`, the column is a generated one about to be dropped
+     * and re-added, and is itself included with what dropping it removes.
      *
      * @return array{views: array<int, array<string, mixed>>, policies: array<int, array<string, string>>, triggers: array<int, array<string, string>>, defaultGrantees: string[]}
      */
-    public function getColumnDependants(Connection $connection, string $table, string $column): array;
+    public function getColumnDependants(Connection $connection, string $table, string $column, bool $regenerate = false): array;
 }

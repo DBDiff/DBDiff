@@ -90,7 +90,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
             'engine' => null, 'collation' => null,
-            'unlogged' => false, 'reloptions' => null,
+            'unlogged' => false, 'reloptions' => null, 'inheritedColumns' => [],
             'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
@@ -348,8 +348,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
      * What reads one column, so a type change can drop it and put it back.
      * See PostgresColumnDependants (issue #226).
      */
-    public function getColumnDependants(Connection $connection, string $table, string $column): array {
-        return PostgresColumnDependants::find($connection, $table, $column);
+    public function getColumnDependants(Connection $connection, string $table, string $column, bool $regenerate = false): array {
+        return PostgresColumnDependants::find($connection, $table, $column, $regenerate);
     }
 
     public function getSchemaHashMap(Connection $connection, array $tables = []): array
@@ -692,6 +692,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             $result[$t] = [
                 'engine'      => null,
                 'collation'   => null,
+                'inheritedColumns' => array_keys(array_filter(
+                    $attrByCol[$t] ?? [],
+                    fn(array $attr) => !empty($attr['inherited'])
+                )),
                 'unlogged'    => $relMeta[$t]['unlogged']   ?? false,
                 'reloptions'  => $relMeta[$t]['reloptions'] ?? null,
                 'columns'     => $columns[$t]     ?? [],

@@ -37,9 +37,9 @@ final class PostgresColumnDependants {
      * grant to on a new relation, which a recreated view would pick up on top
      * of the grants it had.
      *
-     * @return array{views: array<int, array<string, mixed>>, policies: array<int, array<string, string>>, triggers: array<int, array<string, string>>, defaultGrantees: string[]}
+     * @return array{views: array<int, array<string, mixed>>, policies: array<int, array<string, string>>, triggers: array<int, array<string, string>>, generated: array<int, array<string, mixed>>, defaultGrantees: string[]}
      */
-    public static function find(Connection $connection, string $table, string $column): array {
+    public static function find(Connection $connection, string $table, string $column, bool $regenerate = false): array {
         $views    = self::views($connection, $table, $column);
         $viewOids = array_map(fn(array $v) => (int) $v['oid'], $views);
 
@@ -47,6 +47,7 @@ final class PostgresColumnDependants {
             'views'    => array_map([self::class, 'withoutOid'], $views),
             'policies' => self::policies($connection, $table, $column, $viewOids),
             'triggers' => self::triggers($connection, $table, $column),
+            'generated' => self::generatedColumns($connection, $table, $column, $regenerate),
             'defaultGrantees' => [],
         ];
 
@@ -67,7 +68,8 @@ final class PostgresColumnDependants {
     public static function isEmpty(array $dependants): bool {
         return ($dependants['views'] ?? []) === []
             && ($dependants['policies'] ?? []) === []
-            && ($dependants['triggers'] ?? []) === [];
+            && ($dependants['triggers'] ?? []) === []
+            && ($dependants['generated'] ?? []) === [];
     }
 
     private static function withoutOid(array $view): array {
@@ -76,13 +78,60 @@ final class PostgresColumnDependants {
     }
 
     /** The column being changed, as `target_col (rel_oid, attnum)`. */
-    private const TARGET_COLUMN_CTE = "target_col AS (
-                 SELECT c.oid AS rel_oid, a.attnum
-                 FROM pg_class c
-                 JOIN pg_namespace n ON n.oid = c.relnamespace
-                 JOIN pg_attribute a ON a.attrelid = c.oid
-                 WHERE n.nspname = 'public' AND c.relname = ? AND a.attname = ?
+    /**
+     * `g` reads the column `reads.refobjsubid` of its own table.
+     *
+     * Recorded two ways: up to PostgreSQL 17 the generated column depends on
+     * the columns it reads; from 18 its generation expression (the pg_attrdef
+     * entry) does. Either has to be found, or the column change runs into
+     * "cannot alter type of a column used by a generated column".
+     */
+    private const GENERATED_READS = "EXISTS (
+                     SELECT 1 FROM pg_depend reads
+                     LEFT JOIN pg_attrdef ad ON ad.oid = reads.objid
+                     WHERE reads.refclassid = 'pg_class'::regclass
+                       AND reads.refobjid = g.attrelid
+                       AND reads.refobjsubid = %s
+                       AND ((reads.classid = 'pg_class'::regclass
+                             AND reads.objid = g.attrelid AND reads.objsubid = g.attnum)
+                         OR (reads.classid = 'pg_attrdef'::regclass
+                             AND ad.adrelid = g.attrelid AND ad.adnum = g.attnum)))";
+
+    /**
+     * The column being changed, as `target_col (rel_oid, attnum)`, and every
+     * column standing in for it:
+     *
+     *   - the same column in each partition or inheritance child. The parent's
+     *     type change reaches them, so a view reading the column through a
+     *     partition blocks it just the same (issue #232).
+     *   - the stored generated columns that read it. They are dropped and
+     *     re-added around the change, so whatever reads *them* has to stand
+     *     aside too (issue #233).
+     */
+    private static function targetColumnCte(): string {
+        return "target_col AS (
+                 WITH RECURSIVE rels AS (
+                     SELECT c.oid
+                     FROM pg_class c
+                     JOIN pg_namespace n ON n.oid = c.relnamespace
+                     WHERE n.nspname = 'public' AND c.relname = ?
+                     UNION
+                     SELECT i.inhrelid FROM pg_inherits i JOIN rels ON i.inhparent = rels.oid
+                 ),
+                 base AS (
+                     SELECT a.attrelid AS rel_oid, a.attnum
+                     FROM rels
+                     JOIN pg_attribute a ON a.attrelid = rels.oid
+                     WHERE a.attname = ? AND NOT a.attisdropped
+                 )
+                 SELECT rel_oid, attnum FROM base
+                 UNION
+                 SELECT g.attrelid, g.attnum
+                 FROM base
+                 JOIN pg_attribute g ON g.attrelid = base.rel_oid AND g.attgenerated = 's'
+                 WHERE " . sprintf(self::GENERATED_READS, 'base.attnum') . "
              )";
+    }
 
     /**
      * Views and materialised views reading the column, directly or through
@@ -90,7 +139,7 @@ final class PostgresColumnDependants {
      */
     private static function views(Connection $connection, string $table, string $column): array {
         $rows = $connection->select(
-            "WITH RECURSIVE " . self::TARGET_COLUMN_CTE . ",
+            "WITH RECURSIVE " . self::targetColumnCte() . ",
              deps AS (
                  SELECT DISTINCT dependent.oid AS view_oid, 1 AS depth
                  FROM pg_depend d
@@ -192,7 +241,7 @@ final class PostgresColumnDependants {
         $viewList = $viewOids === [] ? '0' : implode(',', array_map('intval', $viewOids));
 
         $rows = $connection->select(
-            "WITH " . self::TARGET_COLUMN_CTE . "
+            "WITH " . self::targetColumnCte() . "
              SELECT DISTINCT n.nspname AS schema, c.relname AS table_name, p.polname AS name,
                     p.polpermissive AS permissive,
                     CASE p.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
@@ -233,7 +282,7 @@ final class PostgresColumnDependants {
     /** Triggers whose WHEN condition or column list names the column. */
     private static function triggers(Connection $connection, string $table, string $column): array {
         $rows = $connection->select(
-            "WITH " . self::TARGET_COLUMN_CTE . "
+            "WITH " . self::targetColumnCte() . "
              SELECT DISTINCT n.nspname AS schema, c.relname AS table_name, t.tgname AS name,
                     pg_get_triggerdef(t.oid) AS definition
              FROM pg_depend d
@@ -244,6 +293,10 @@ final class PostgresColumnDependants {
              WHERE d.classid = 'pg_trigger'::regclass
                AND d.refclassid = 'pg_class'::regclass
                AND NOT t.tgisinternal
+               -- A partition's copy of a trigger declared on the parent: it
+               -- goes and comes back with the parent's, and dropping it on
+               -- its own is refused.
+               AND t.tgparentid = 0
              ORDER BY n.nspname, c.relname, t.tgname",
             [$table, $column]
         );
@@ -253,6 +306,85 @@ final class PostgresColumnDependants {
             'table'      => $row['table_name'],
             'name'       => $row['name'],
             'definition' => $row['definition'],
+        ], $rows);
+    }
+
+    /**
+     * Stored generated columns on the table that read the column (issue #233).
+     *
+     * PostgreSQL refuses to retype a column a generated column reads, and has
+     * no way to suspend the expression and restore it — DROP EXPRESSION makes
+     * the column a plain one for good. So each is dropped and re-added, which
+     * recomputes it from its expression: no data is lost. Dropping a column
+     * also drops the indexes and constraints on it, so those are captured to
+     * go back with it, along with its comment and column grants.
+     *
+     * Only the table's own: a partition's generated column is the parent's,
+     * and goes and comes back with it.
+     */
+    private static function generatedColumns(Connection $connection, string $table, string $column, bool $itself = false): array {
+        // Either the generated columns reading `$column`, or — when
+        // `$column` is itself a generated column being regenerated — that
+        // column alone, with what dropping it would take away.
+        $which = $itself
+            ? 'g.attname = src.attname'
+            : sprintf(self::GENERATED_READS, 'src.attnum');
+        $rows = $connection->select(
+            "SELECT n.nspname AS schema, c.relname AS table_name, g.attname AS name,
+                    format_type(g.atttypid, g.atttypmod) AS type,
+                    CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
+                         THEN quote_ident(co.collname) END AS collation,
+                    pg_get_expr(ad.adbin, ad.adrelid) AS expression,
+                    g.attnotnull AS not_null,
+                    quote_literal(col_description(c.oid, g.attnum)) AS comment,
+                    (SELECT json_agg(pg_get_indexdef(i.indexrelid) ORDER BY i.indexrelid::regclass::text)
+                       FROM pg_index i
+                      WHERE i.indrelid = c.oid
+                        AND (g.attnum = ANY (i.indkey::int2[])
+                             OR EXISTS (SELECT 1 FROM pg_depend x
+                                         WHERE x.classid = 'pg_class'::regclass AND x.objid = i.indexrelid
+                                           AND x.refobjid = c.oid AND x.refobjsubid = g.attnum))
+                        AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid)
+                    ) AS indexes,
+                    (SELECT json_agg(format('ALTER TABLE %s ADD CONSTRAINT %I %s',
+                                            c.oid::regclass, k.conname, pg_get_constraintdef(k.oid))
+                                     ORDER BY k.conname)
+                       FROM pg_constraint k
+                      WHERE k.conrelid = c.oid AND g.attnum = ANY (k.conkey)
+                        AND k.contype IN ('c', 'u', 'x', 'f')
+                    ) AS constraints,
+                    (SELECT json_agg(json_build_object(
+                                'grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                                ELSE quote_ident(pg_get_userbyid(a.grantee)) END,
+                                'privilege', a.privilege_type,
+                                'grantable', a.is_grantable)
+                              ORDER BY a.grantee, a.privilege_type)
+                       FROM aclexplode(g.attacl) a
+                      WHERE a.grantee <> c.relowner) AS grants
+             FROM pg_class c
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             JOIN pg_attribute src ON src.attrelid = c.oid AND src.attname = ? AND NOT src.attisdropped
+             JOIN pg_attribute g ON g.attrelid = c.oid AND g.attgenerated = 's' AND NOT g.attisdropped
+             LEFT JOIN pg_attrdef ad ON ad.adrelid = c.oid AND ad.adnum = g.attnum
+             LEFT JOIN pg_collation co ON co.oid = g.attcollation
+             WHERE n.nspname = 'public' AND c.relname = ? AND g.attinhcount = 0
+               AND $which
+             ORDER BY g.attnum",
+            [$column, $table]
+        );
+
+        return array_map(fn($row) => [
+            'schema'      => $row['schema'],
+            'table'       => $row['table_name'],
+            'name'        => $row['name'],
+            'type'        => $row['type'],
+            'collation'   => $row['collation'],
+            'expression'  => $row['expression'],
+            'notNull'     => (bool) $row['not_null'],
+            'comment'     => $row['comment'] ?? null,
+            'indexes'     => self::json($row['indexes'] ?? null),
+            'constraints' => self::json($row['constraints'] ?? null),
+            'grants'      => self::json($row['grants'] ?? null),
         ], $rows);
     }
 

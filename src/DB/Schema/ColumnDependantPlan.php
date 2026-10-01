@@ -77,6 +77,42 @@ final class ColumnDependantPlan {
     }
 
     /**
+     * Two dependant sets as one, each object once — for column changes made
+     * one bracket (see TableSchema::groupLinkedChanges()).
+     */
+    public static function mergeDependants(?array $a, ?array $b): ?array {
+        if ($a === null || $b === null) {
+            return $a ?? $b;
+        }
+        $merged = $a;
+        $keyed = [
+            'views'     => fn($v) => $v['schema'] . '.' . $v['name'],
+            'policies'  => fn($p) => $p['schema'] . '.' . $p['table'] . '.' . $p['name'],
+            'triggers'  => fn($t) => $t['schema'] . '.' . $t['table'] . '.' . $t['name'],
+            'generated' => fn($g) => $g['schema'] . '.' . $g['table'] . '.' . $g['name'],
+        ];
+        foreach ($keyed as $kind => $key) {
+            $byKey = [];
+            foreach (array_merge($a[$kind] ?? [], $b[$kind] ?? []) as $item) {
+                $k = $key($item);
+                $existing = $byKey[$k] ?? null;
+                // The deeper view wins, so it is dropped first and recreated
+                // last; a generated column carrying its source definition wins.
+                if ($existing === null
+                    || ($kind === 'views' && $item['depth'] > $existing['depth'])
+                    || ($kind === 'generated' && isset($item['upDefinition']) && !isset($existing['upDefinition']))) {
+                    $byKey[$k] = $item;
+                }
+            }
+            $merged[$kind] = array_values($byKey);
+        }
+        $merged['defaultGrantees'] = array_values(array_unique(array_merge(
+            $a['defaultGrantees'] ?? [], $b['defaultGrantees'] ?? []
+        )));
+        return $merged;
+    }
+
+    /**
      * The keys of every dependant, matching keyOf().
      *
      * @return array<string, true>
