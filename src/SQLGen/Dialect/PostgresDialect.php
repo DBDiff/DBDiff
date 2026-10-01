@@ -75,30 +75,16 @@ class PostgresDialect extends AbstractAnsiDialect {
         $old = $oldDef !== '' ? Column::parse($oldDef) : null;
         $alter = fn(string $clause) => "ALTER TABLE $t ALTER COLUMN $c $clause;";
 
-        $stmts = [];
-        if ($old?->isIdentity() && !$new->isIdentity()) {
-            $stmts[] = $alter('DROP IDENTITY');
-        } elseif ($old?->isGenerated() && !$new->isGenerated()) {
-            $stmts[] = $alter('DROP EXPRESSION');
-        }
-
-        // Only when the type actually changes. PostgreSQL refuses
-        // `ALTER COLUMN ... TYPE` while a view or policy reads the column even
-        // when the type named is the one it already has, so restating it made
-        // a default change on such a column fail (issue #226).
+        // TYPE only when the type actually changes: PostgreSQL refuses it
+        // while a view or policy reads the column even when the type named is
+        // the one it already has (issue #226).
         $retyped = self::typeChanges($old, $new);
-        if ($retyped) {
-            $stmts[] = $alter('TYPE ' . $new->typeWithCollation() . self::usingClause($c, $old, $new));
-        }
-        if ($old === null || $old->notNull !== $new->notNull) {
-            $stmts[] = $alter($new->notNull ? 'SET NOT NULL' : 'DROP NOT NULL');
-        }
-        $serialSwitch = $old !== null && $old->serial !== $new->serial;
-        if (($old === null || $old->default !== $new->default || ($serialSwitch && $old->serial))
-            && !$new->isGenerated()) {
-            $stmts[] = $alter($new->default !== null ? "SET DEFAULT {$new->default}" : 'DROP DEFAULT');
-        }
-        if ($serialSwitch) {
+        $stmts = array_map($alter, array_merge(
+            self::removals($old, $new),
+            $retyped ? ['TYPE ' . $new->typeWithCollation() . self::usingClause($c, $old, $new)] : [],
+            self::nullabilityAndDefault($old, $new)
+        ));
+        if ($old !== null && $old->serial !== $new->serial) {
             array_push($stmts, ...$this->serialChange($t, $c, $new, $this->serialSequence ?? self::serialSequenceName($table, $col)));
         }
         // A type change resets compression to the server default, so a
@@ -112,6 +98,30 @@ class PostgresDialect extends AbstractAnsiDialect {
         }
 
         return implode("\n", $stmts);
+    }
+
+    /** What the column stops being — an identity or a generated column — first. */
+    private static function removals(?Column $old, Column $new): array {
+        if ($old?->isIdentity() && !$new->isIdentity()) {
+            return ['DROP IDENTITY'];
+        }
+        return $old?->isGenerated() && !$new->isGenerated() ? ['DROP EXPRESSION'] : [];
+    }
+
+    /**
+     * SET / DROP NOT NULL and DEFAULT where they differ. A serial column's
+     * default is implied by `serial`, so one ceasing to be serial loses it.
+     */
+    private static function nullabilityAndDefault(?Column $old, Column $new): array {
+        $clauses = [];
+        if ($old === null || $old->notNull !== $new->notNull) {
+            $clauses[] = $new->notNull ? 'SET NOT NULL' : 'DROP NOT NULL';
+        }
+        $defaultChanges = $old === null || $old->default !== $new->default || ($old->serial && !$new->serial);
+        if ($defaultChanges && !$new->isGenerated()) {
+            $clauses[] = $new->default !== null ? "SET DEFAULT {$new->default}" : 'DROP DEFAULT';
+        }
+        return $clauses;
     }
 
     /**

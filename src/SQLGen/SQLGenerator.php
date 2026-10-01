@@ -11,7 +11,7 @@ class SQLGenerator implements SQLGenInterface {
     protected $diff;
 
     /** @param bool $units  mark each change as one unit (see MigrationGenerator::UNIT_BEGIN) */
-    function __construct($diff, private bool $units = false) {
+    public function __construct($diff, private bool $units = false) {
         $this->diffSorter = new DiffSorter;
         $this->diff = array_merge($diff['schema'], $diff['data']);
     }

@@ -379,6 +379,39 @@ class PostgresSchemaHelper {
     }
 
     /**
+     * Durability and storage parameters of public tables, by name.
+     *
+     * Both were already read for rendering a *new* table and never compared
+     * for one that exists on both sides, so switching a table between LOGGED
+     * and UNLOGGED, or changing its fillfactor, was reported as "Databases are
+     * identical" (issue #229). UNLOGGED is not decoration: an unlogged table is
+     * not crash-safe and is emptied on recovery.
+     *
+     * @param string[] $tables
+     * @return array<string, array{unlogged: bool, reloptions: ?string}>
+     */
+    public static function relationMeta(Connection $connection, array $tables): array {
+        $ph = QueryHelper::placeholders($tables);
+        $rows = $connection->select(
+            "SELECT c.relname AS table_name,
+                    c.relpersistence,
+                    " . self::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
+               FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname IN ($ph)",
+            $tables
+        );
+        $meta = [];
+        foreach ($rows as $row) {
+            $meta[$row['table_name']] = [
+                'unlogged'   => ($row['relpersistence'] ?? 'p') === 'u',
+                'reloptions' => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+            ];
+        }
+        return $meta;
+    }
+
+    /**
      * The sequence a public table's serial column defaults to, as
      * `pg_get_serial_sequence` names it (`public.t_id_seq`), or null.
      */

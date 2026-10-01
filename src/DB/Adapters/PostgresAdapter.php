@@ -657,30 +657,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $keys        = $this->assembleIndexes($idxRows, $skipByTable);
         $constraints = $this->assembleConstraints($conRows, $checkRows, $namedNotNull);
 
-        // Durability and storage parameters, per table.
-        //
-        // Both were already read for rendering a *new* table and never
-        // compared for one that exists on both sides, so switching a table
-        // between LOGGED and UNLOGGED, or changing its fillfactor, was reported
-        // as "Databases are identical" (issue #229). UNLOGGED is not
-        // decoration: an unlogged table is not crash-safe and is emptied on
-        // recovery.
-        $relRows = $connection->select(
-            "SELECT c.relname AS table_name,
-                    c.relpersistence,
-                    " . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
-               FROM pg_class c
-               JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = 'public' AND c.relname IN ($ph)",
-            $tables
-        );
-        $relMeta = [];
-        foreach ($relRows as $row) {
-            $relMeta[$row['table_name']] = [
-                'unlogged'   => ($row['relpersistence'] ?? 'p') === 'u',
-                'reloptions' => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
-            ];
-        }
+        // Durability and storage parameters, per table (issue #229).
+        $relMeta = PostgresSchemaHelper::relationMeta($connection, $tables);
 
         $result = [];
         foreach ($tables as $t) {

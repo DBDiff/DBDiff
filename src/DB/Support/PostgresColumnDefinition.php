@@ -121,74 +121,72 @@ final class PostgresColumnDefinition {
 
     /** One clause starting at token `$i`; returns the index after it. */
     private function readClause(array $tokens, int $i, string $source): int {
-        $word = strtoupper($tokens[$i]['text']);
-        $next = strtoupper($tokens[$i + 1]['text'] ?? '');
+        $value = $tokens[$i + 1]['text'] ?? '';
+        return match (strtoupper($tokens[$i]['text'])) {
+            'NOT'         => strtoupper($value) === 'NULL' ? $this->take('notNull', true, $i) : $i + 1,
+            'COLLATE'     => $this->take('collation', trim($value, '"'), $i),
+            'COMPRESSION' => $this->take('compression', strtolower($value), $i),
+            'STORAGE'     => $i + 2,
+            'DEFAULT'     => $this->readDefault($tokens, $i + 1, $source),
+            'GENERATED'   => $this->readGenerated($tokens, $i + 1),
+            default       => $i + 1,
+        };
+    }
 
-        if ($word === 'NOT' && $next === 'NULL') {
-            $this->notNull = true;
-            return $i + 2;
-        }
-        if ($word === 'COLLATE') {
-            $this->collation = trim($tokens[$i + 1]['text'] ?? '', '"');
-            return $i + 2;
-        }
-        if ($word === 'COMPRESSION') {
-            $this->compression = strtolower($tokens[$i + 1]['text'] ?? '');
-            return $i + 2;
-        }
-        if ($word === 'STORAGE') {
-            return $i + 2;
-        }
-        if ($word === 'DEFAULT') {
-            return $this->readUntilTrailingNotNull($tokens, $i + 1, $source, 'default');
-        }
-        if ($word === 'GENERATED') {
-            return $this->readGenerated($tokens, $i + 1, $source);
-        }
-        return $i + 1;
+    /** A keyword and its one-token value; returns the index after both. */
+    private function take(string $property, mixed $value, int $i): int {
+        $this->$property = $value;
+        return $i + 2;
     }
 
     /** `ALWAYS AS IDENTITY [(..)]`, `BY DEFAULT AS IDENTITY [(..)]` or `ALWAYS AS (expr) STORED`. */
-    private function readGenerated(array $tokens, int $i, string $source): int {
+    private function readGenerated(array $tokens, int $i): int {
         $kind = strtoupper($tokens[$i]['text'] ?? '');
         if ($kind === 'BY') {
             $kind = 'BY DEFAULT';
             $i++;
         }
         $i++;                                           // past ALWAYS / DEFAULT
-        if (strtoupper($tokens[$i]['text'] ?? '') === 'AS') {
+        if (self::is($tokens, $i, 'AS')) {
             $i++;
         }
-        if (strtoupper($tokens[$i]['text'] ?? '') === 'IDENTITY') {
+        $identity = self::is($tokens, $i, 'IDENTITY');
+        if ($identity) {
             $this->identity = $kind;
             $i++;
-            if (isset($tokens[$i]) && str_starts_with($tokens[$i]['text'], '(')) {
-                $this->identityOptions = trim(substr($tokens[$i]['text'], 1, -1));
-                $i++;
-            }
-            return $i;
         }
-        if (isset($tokens[$i]) && str_starts_with($tokens[$i]['text'], '(')) {
-            $this->generated = trim(substr($tokens[$i]['text'], 1, -1));
+        $group = self::parenthesised($tokens, $i);
+        if ($group !== null) {
+            if ($identity) {
+                $this->identityOptions = $group;
+            } else {
+                $this->generated = $group;
+            }
             $i++;
-            if (strtoupper($tokens[$i]['text'] ?? '') === 'STORED') {
-                $i++;
-            }
         }
-        return $i;
+        return !$identity && self::is($tokens, $i, 'STORED') ? $i + 1 : $i;
+    }
+
+    private static function is(array $tokens, int $i, string $keyword): bool {
+        return strtoupper($tokens[$i]['text'] ?? '') === $keyword;
+    }
+
+    /** The inside of a parenthesised token, or null if token `$i` is not one. */
+    private static function parenthesised(array $tokens, int $i): ?string {
+        return isset($tokens[$i]) && str_starts_with($tokens[$i]['text'], '(')
+            ? trim(substr($tokens[$i]['text'], 1, -1))
+            : null;
     }
 
     /** The rest of the definition, less a trailing `NOT NULL`, as one expression. */
-    private function readUntilTrailingNotNull(array $tokens, int $i, string $source, string $into): int {
+    private function readDefault(array $tokens, int $i, string $source): int {
         $end = count($tokens);
-        if ($end - $i >= 2
-            && strtoupper($tokens[$end - 2]['text']) === 'NOT'
-            && strtoupper($tokens[$end - 1]['text']) === 'NULL') {
+        if ($end - $i >= 2 && self::is($tokens, $end - 2, 'NOT') && self::is($tokens, $end - 1, 'NULL')) {
             $this->notNull = true;
             $end -= 2;
         }
         if ($end > $i) {
-            $this->$into = trim(substr($source, $tokens[$i]['start'], $tokens[$end - 1]['end'] - $tokens[$i]['start']));
+            $this->default = trim(substr($source, $tokens[$i]['start'], $tokens[$end - 1]['end'] - $tokens[$i]['start']));
         }
         return count($tokens);
     }
@@ -204,46 +202,20 @@ final class PostgresColumnDefinition {
      * @return list<array{text: string, start: int, end: int}>
      */
     private static function tokens(string $s): array {
-        $tokens = [];
-        $len = strlen($s);
-        $start = null;
-        $depth = 0;
-        $quote = null;
-        for ($i = 0; $i < $len; $i++) {
-            $ch = $s[$i];
-            if ($quote !== null) {
-                if ($ch === $quote) {
-                    // A doubled quote is an escaped one.
-                    if (($s[$i + 1] ?? '') === $quote) {
-                        $i++;
-                        continue;
-                    }
-                    $quote = null;
-                }
-                continue;
-            }
-            if ($ch === "'" || $ch === '"') {
-                $quote = $ch;
-                $start ??= $i;
-                continue;
-            }
-            if ($ch === '(') {
-                $depth++;
-            } elseif ($ch === ')') {
-                $depth--;
-            }
-            if ($depth === 0 && ctype_space($ch)) {
-                if ($start !== null) {
-                    $tokens[] = ['text' => substr($s, $start, $i - $start), 'start' => $start, 'end' => $i];
-                    $start = null;
-                }
-                continue;
-            }
-            $start ??= $i;
-        }
-        if ($start !== null) {
-            $tokens[] = ['text' => substr($s, $start), 'start' => $start, 'end' => $len];
-        }
-        return $tokens;
+        preg_match_all(self::TOKEN, $s, $matches, PREG_OFFSET_CAPTURE);
+        return array_map(
+            fn(array $m) => ['text' => $m[0], 'start' => $m[1], 'end' => $m[1] + strlen($m[0])],
+            $matches[0]
+        );
     }
+
+    /**
+     * One token: a run of quoted strings (a doubled quote escapes one),
+     * balanced parenthesised groups — which may hold quotes and spaces — and
+     * other non-space characters. A stray parenthesis is a character of its
+     * own, so malformed input still tokenises.
+     */
+    private const TOKEN = <<<'RE'
+        /(?:'(?:[^']|'')*'|"(?:[^"]|"")*"|(\((?:[^()'"]++|'(?:[^']|'')*'|"(?:[^"]|"")*"|(?1))*\))|[^\s'"()]|[()])+/
+        RE;
 }

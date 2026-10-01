@@ -57,15 +57,14 @@ final class EnumSwapSQL {
         $usage = $this->swap['usage'];
         $lines = [];
         foreach ($usage['constraints'] as $c) {
-            $lines[] = 'ALTER TABLE ' . $this->dialect->quote($c['table'])
-                . ' DROP CONSTRAINT IF EXISTS ' . $this->dialect->quote($c['name']) . ';';
+            $lines[] = $this->alterTable($c['table'], 'DROP CONSTRAINT IF EXISTS ' . $this->dialect->quote($c['name']));
         }
         foreach ($usage['indexes'] as $i) {
             $lines[] = 'DROP INDEX IF EXISTS ' . $this->dialect->quote($i['name']) . ';';
         }
         foreach ($usage['columns'] as $c) {
             if ($c['default'] !== null) {
-                $lines[] = $this->alterColumn($c, 'DROP DEFAULT') . ';';
+                $lines[] = $this->alterColumn($c, 'DROP DEFAULT');
             }
         }
         return $lines;
@@ -80,14 +79,13 @@ final class EnumSwapSQL {
         $lines = [];
         foreach ($usage['columns'] as $c) {
             if (!empty($c['restoreDefault'])) {
-                $lines[] = $this->alterColumn($c, 'SET DEFAULT ' . $c['default']) . ';';
+                $lines[] = $this->alterColumn($c, 'SET DEFAULT ' . $c['default']);
             }
         }
         foreach (array_filter($usage['constraints'], fn($c) => $c['recreate']) as $c) {
-            $table = $this->dialect->quote($c['table']);
-            $name  = $this->dialect->quote($c['name']);
-            $lines[] = "ALTER TABLE $table ADD CONSTRAINT $name {$c['definition']};";
-            array_push($lines, ...self::comment("CONSTRAINT $name ON $table", $c['comment']));
+            $name    = $this->dialect->quote($c['name']);
+            $lines[] = $this->alterTable($c['table'], "ADD CONSTRAINT $name {$c['definition']}");
+            array_push($lines, ...self::comment("CONSTRAINT $name ON " . $this->dialect->quote($c['table']), $c['comment']));
         }
         foreach (array_filter($usage['indexes'], fn($i) => $i['recreate']) as $i) {
             $lines[] = rtrim($i['definition'], ';') . ';';
@@ -110,14 +108,18 @@ final class EnumSwapSQL {
         }
         $lines = [];
         foreach ($byTable as $table => $clauses) {
-            $lines[] = 'ALTER TABLE ' . $this->dialect->quote($table) . ' ' . implode(', ', $clauses) . ';';
+            $lines[] = $this->alterTable($table, implode(', ', $clauses));
         }
         return $lines;
     }
 
     private function alterColumn(array $column, string $clause): string {
-        return 'ALTER TABLE ' . $this->dialect->quote($column['table'])
-            . ' ALTER COLUMN ' . $this->dialect->quote($column['column']) . ' ' . $clause;
+        return $this->alterTable($column['table'], 'ALTER COLUMN ' . $this->dialect->quote($column['column']) . ' ' . $clause);
+    }
+
+    /** `ALTER TABLE "t" <clause>;` */
+    private function alterTable(string $table, string $clause): string {
+        return 'ALTER TABLE ' . $this->dialect->quote($table) . " $clause;";
     }
 
     /** The comment and grants DROP TYPE took with the old type. */
