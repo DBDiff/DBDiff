@@ -150,7 +150,7 @@ class TableSchema {
                     || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
                     $changeCol->isGenerated = true;
                 }
-                if ($driver === 'pgsql' && PostgresColumnDefinition::switchesSerial($oldDef, $diff->getNewValue())) {
+                if ($driver === 'pgsql' && PostgresColumnDefinition::needsSerialSequence($oldDef, $diff->getNewValue())) {
                     $serialSide = PostgresColumnDefinition::parse($oldDef)->serial ? 'target' : 'source';
                     $changeCol->serialSequence = PostgresSchemaHelper::serialSequence(
                         $this->manager->getDB($serialSide), $table, $column

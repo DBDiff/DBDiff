@@ -160,9 +160,12 @@ DOWN. The cases where that takes more than one statement:
   the views, policies, triggers and generated columns reading them stand aside
   and come back; so do the type's comment and grants.
 - **Creation order.** A function a column default, CHECK constraint or
-  expression index calls is created before the tables; the DOWN drops created
-  types, domains, sequences and routines only after the tables and columns that
-  use them.
+  expression index calls is created before the tables. Types, domains,
+  sequences and routines the source no longer has are dropped last, once the
+  tables, columns, views, triggers and policies using them are gone. The DOWN
+  mirrors both: it recreates dropped types and table-called functions first,
+  other functions, views, triggers and policies after the tables, and drops
+  what the UP created only once nothing uses it.
 - **Storage.** `UNLOGGED` / `LOGGED` is compared and ordered by foreign keys,
   and storage parameters (`fillfactor`, `autovacuum_*`) are compared regardless
   of the order they were set in or how a boolean was spelled.

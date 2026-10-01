@@ -141,6 +141,15 @@ class PostgresDialectTest extends TestCase
         );
     }
 
+    public function testARetypedSerialTakesItsSequenceWithIt(): void
+    {
+        $this->assertSame(
+            "ALTER TABLE \"t\" ALTER COLUMN \"id\" TYPE bigint;\n"
+            . 'ALTER SEQUENCE public.t_id_seq AS bigint;',
+            $this->dialect->withSerialSequence('public.t_id_seq')->changeColumn('t', 'id', '"id" bigserial', '"id" serial')
+        );
+    }
+
     public function testASerialSequenceNameIsGuessedWhenNotRead(): void
     {
         $this->assertStringContainsString(

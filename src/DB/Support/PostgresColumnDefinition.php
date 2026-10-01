@@ -107,11 +107,15 @@ final class PostgresColumnDefinition {
     }
 
     /**
-     * Whether one of the two definitions is serial and the other is not —
-     * a change that needs the column's sequence by name.
+     * Whether a change needs the column's serial sequence by name: one side is
+     * serial and the other is not, or a serial column changes type, which its
+     * sequence has to follow (`serial` to `bigserial`).
      */
-    public static function switchesSerial(string $a, string $b): bool {
-        return self::parse($a)->serial !== self::parse($b)->serial;
+    public static function needsSerialSequence(string $a, string $b): bool {
+        $x = self::parse($a);
+        $y = self::parse($b);
+        return $x->serial !== $y->serial
+            || ($x->serial && $x->typeWithCollation() !== $y->typeWithCollation());
     }
 
     /** The type with its collation — what `ALTER COLUMN ... TYPE` takes. */

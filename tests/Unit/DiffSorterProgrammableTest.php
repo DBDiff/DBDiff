@@ -18,6 +18,8 @@ use DBDiff\Diff\DropEnum;
 use DBDiff\Diff\AlterEnum;
 use DBDiff\Diff\CreateDomain;
 use DBDiff\Diff\CreateSequence;
+use DBDiff\Diff\DropDomain;
+use DBDiff\Diff\DropSequence;
 use DBDiff\Diff\CreateCompositeType;
 
 class DiffSorterProgrammableTest extends TestCase
@@ -35,11 +37,10 @@ class DiffSorterProgrammableTest extends TestCase
     }
 
     /**
-     * UP order: DropView/DropTrigger/DropRoutine come before AddTable, and
-     * CreateView/CreateTrigger come after data ops.
-     *
-     * CreateRoutine is no longer in that trailing group — see
-     * testUpOrderCreateRoutineBeforeItsCallers.
+     * UP order: views and triggers the source no longer has come off before
+     * any table is touched; routines it no longer has are dropped last, once
+     * the triggers, views, defaults and tables calling them are gone (issue
+     * #238). New views and triggers come after the tables.
      */
     public function testUpOrderDropsProgrammableBeforeTables(): void
     {
@@ -55,31 +56,22 @@ class DiffSorterProgrammableTest extends TestCase
             new DropRoutine('fn2', 'CREATE FUNCTION ...'),
         ];
 
-        $sorted = $this->sorter->sort($diffs, 'up');
-        $names  = array_map([$this, 'className'], $sorted);
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'up'));
+        $addTableIdx = array_search('AddTable', $names);
 
-        // Drops of programmable objects before AddTable
-        $dropViewIdx    = array_search('DropView', $names);
-        $dropTriggerIdx = array_search('DropTrigger', $names);
-        $dropRoutineIdx = array_search('DropRoutine', $names);
-        $addTableIdx    = array_search('AddTable', $names);
+        $this->assertLessThan($addTableIdx, array_search('DropView', $names));
+        $this->assertLessThan($addTableIdx, array_search('DropTrigger', $names));
+        $this->assertSame('DropRoutine', end($names));
 
-        $this->assertLessThan($addTableIdx, $dropViewIdx);
-        $this->assertLessThan($addTableIdx, $dropTriggerIdx);
-        $this->assertLessThan($addTableIdx, $dropRoutineIdx);
-
-        // Creates of programmable objects after AddTable
-        $createViewIdx    = array_search('CreateView', $names);
-        $createTriggerIdx = array_search('CreateTrigger', $names);
-        $createRoutineIdx = array_search('CreateRoutine', $names);
-
-        $this->assertGreaterThan($addTableIdx, $createViewIdx);
-        $this->assertGreaterThan($addTableIdx, $createTriggerIdx);
-        $this->assertGreaterThan($addTableIdx, $createRoutineIdx);
+        $this->assertGreaterThan($addTableIdx, array_search('CreateView', $names));
+        $this->assertGreaterThan($addTableIdx, array_search('CreateTrigger', $names));
+        $this->assertGreaterThan($addTableIdx, array_search('CreateRoutine', $names));
     }
 
     /**
-     * DOWN order: programmable object operations before table operations.
+     * DOWN order: views the UP created or changed are taken back before the
+     * tables are reverted; a view the UP dropped is recreated after them,
+     * since it may read a table or column the DOWN puts back (issue #238).
      */
     public function testDownOrderProgrammableBeforeTables(): void
     {
@@ -93,21 +85,13 @@ class DiffSorterProgrammableTest extends TestCase
             new AlterView('v3', 'src def', 'tgt def'),
         ];
 
-        $sorted = $this->sorter->sort($diffs, 'down');
-        $names  = array_map([$this, 'className'], $sorted);
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'down'));
+        $firstTableIdx = min(array_search('AddTable', $names), array_search('DropTable', $names));
+        $lastTableIdx  = max(array_search('AddTable', $names), array_search('DropTable', $names));
 
-        // All view operations should come before table operations in DOWN
-        $lastViewIdx  = max(
-            array_search('DropView', $names),
-            array_search('AlterView', $names),
-            array_search('CreateView', $names)
-        );
-        $firstTableIdx = min(
-            array_search('AddTable', $names),
-            array_search('DropTable', $names)
-        );
-
-        $this->assertLessThan($firstTableIdx, $lastViewIdx);
+        $this->assertLessThan($firstTableIdx, array_search('CreateView', $names));
+        $this->assertLessThan($firstTableIdx, array_search('AlterView', $names));
+        $this->assertGreaterThan($lastTableIdx, array_search('DropView', $names));
     }
 
     /**
@@ -128,19 +112,20 @@ class DiffSorterProgrammableTest extends TestCase
     }
 
     /**
-     * UP order: DropEnum before DropView (enums may be referenced by views/tables).
+     * UP order: an enum the source no longer has is dropped after the views
+     * that may use it — the other way round, DROP TYPE failed with "cannot
+     * drop type ... because other objects depend on it" (issue #238).
      */
-    public function testUpOrderDropEnumBeforeDropView(): void
+    public function testUpOrderDropEnumAfterDropView(): void
     {
         $diffs = [
-            new DropView('v1', 'CREATE VIEW ...'),
             new DropEnum('status', 'CREATE TYPE "status" AS ENUM (\'a\')'),
+            new DropView('v1', 'CREATE VIEW ...'),
         ];
 
-        $sorted = $this->sorter->sort($diffs, 'up');
-        $names  = array_map([$this, 'className'], $sorted);
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'up'));
 
-        $this->assertSame(['DropEnum', 'DropView'], $names);
+        $this->assertSame(['DropView', 'DropEnum'], $names);
     }
 
     /**
@@ -160,37 +145,41 @@ class DiffSorterProgrammableTest extends TestCase
     }
 
     /**
-     * DOWN order: Enum operations come after view/trigger/routine operations.
+     * DOWN order: an enum the UP dropped is recreated before a view the UP
+     * dropped, which may use it (issue #238).
      */
-    public function testDownOrderEnumAfterViews(): void
+    public function testDownOrderRecreatesEnumBeforeViews(): void
     {
         $diffs = [
-            new DropEnum('e1', 'CREATE TYPE "e1" AS ENUM (\'x\')'),
             new DropView('v1', 'CREATE VIEW ...'),
+            new DropEnum('e1', 'CREATE TYPE "e1" AS ENUM (\'x\')'),
         ];
 
-        $sorted = $this->sorter->sort($diffs, 'down');
-        $names  = array_map([$this, 'className'], $sorted);
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'down'));
 
-        $this->assertSame(['DropView', 'DropEnum'], $names);
+        $this->assertSame(['DropEnum', 'DropView'], $names);
     }
 
     /**
-     * UP order: DropEnum before AddTable (tables may reference enum types).
+     * UP order: an enum, domain, composite or sequence the source no longer
+     * has is dropped after the tables — a dropped table or column may still
+     * be typed by it, or default to it (issue #238).
      */
-    public function testUpOrderDropEnumBeforeAddTable(): void
+    public function testUpOrderDroppedTypesAfterTables(): void
     {
         $stub = $this->createMock(\DBDiff\DB\DBManager::class);
 
         $diffs = [
-            new AddTable('t1', $stub, 'source'),
             new DropEnum('old_type', 'CREATE TYPE "old_type" AS ENUM (\'x\')'),
+            new DropDomain('d', 'CREATE DOMAIN "d" AS int'),
+            new DropSequence('s', 'CREATE SEQUENCE "s"'),
+            new DropTable('t1', $stub, 'target'),
+            new AddTable('t2', $stub, 'source'),
         ];
 
-        $sorted = $this->sorter->sort($diffs, 'up');
-        $names  = array_map([$this, 'className'], $sorted);
+        $names = array_map([$this, 'className'], $this->sorter->sort($diffs, 'up'));
 
-        $this->assertSame(['DropEnum', 'AddTable'], $names);
+        $this->assertSame(['AddTable', 'DropTable', 'DropSequence', 'DropDomain', 'DropEnum'], $names);
     }
 
     /**
@@ -273,7 +262,8 @@ class DiffSorterProgrammableTest extends TestCase
         $sorted = $this->sorter->sort($diffs, 'up');
         $names  = array_map([$this, 'className'], $sorted);
 
-        // Drops come first: DropEnum → DropView → DropTrigger
+        // Views and triggers come off first; the enum only once nothing can
+        // use it.
         $dropEnumIdx   = array_search('DropEnum', $names);
         $dropViewIdx   = array_search('DropView', $names);
         $dropTrigIdx   = array_search('DropTrigger', $names);
@@ -282,8 +272,7 @@ class DiffSorterProgrammableTest extends TestCase
         $createViewIdx = array_search('CreateView', $names);
         $createTrigIdx = array_search('CreateTrigger', $names);
 
-        // All drops before AddTable
-        $this->assertLessThan($addTableIdx, $dropEnumIdx);
+        $this->assertSame(count($names) - 1, $dropEnumIdx);
         $this->assertLessThan($addTableIdx, $dropViewIdx);
         $this->assertLessThan($addTableIdx, $dropTrigIdx);
 

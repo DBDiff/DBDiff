@@ -84,8 +84,8 @@ class PostgresDialect extends AbstractAnsiDialect {
             $retyped ? ['TYPE ' . $new->typeWithCollation() . self::usingClause($c, $old, $new)] : [],
             self::nullabilityAndDefault($old, $new)
         ));
-        if ($old !== null && $old->serial !== $new->serial) {
-            array_push($stmts, ...$this->serialChange($t, $c, $new, $this->serialSequence ?? self::serialSequenceName($table, $col)));
+        if ($old !== null && ($old->serial !== $new->serial || ($new->serial && $retyped))) {
+            array_push($stmts, ...$this->serialChange($t, $c, $old, $new, $this->serialSequence ?? self::serialSequenceName($table, $col)));
         }
         // A type change resets compression to the server default, so a
         // compressed column is set again after one, not only when the method
@@ -129,10 +129,15 @@ class PostgresDialect extends AbstractAnsiDialect {
      * started past the values already there; one ceasing to be serial loses
      * its sequence once the default no longer reads it. Before an identity is
      * added, so that `pg_get_serial_sequence` then finds only the identity's.
+     * A serial column retyped takes its sequence with it — `serial` to
+     * `bigserial` otherwise still stops at 2^31.
      *
      * @return string[]
      */
-    private function serialChange(string $t, string $c, Column $new, string $sequence): array {
+    private function serialChange(string $t, string $c, Column $old, Column $new, string $sequence): array {
+        if ($old->serial && $new->serial) {
+            return ["ALTER SEQUENCE $sequence AS {$new->type};"];
+        }
         if (!$new->serial) {
             return ["DROP SEQUENCE IF EXISTS $sequence;"];
         }

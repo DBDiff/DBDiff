@@ -78,11 +78,6 @@ final class PostgresEnumUsage {
         return $usage;
     }
 
-    /** Whether nothing in the way of a swap is beyond it. */
-    public static function swappable(array $usage, array $dependants): bool {
-        return $usage['others'] === [] && self::uncarried($usage, $dependants) === [];
-    }
-
     /**
      * The readers of the type the dependant lookup did not find — a view
      * selecting a literal of the type without reading a column of it, say.

@@ -64,6 +64,20 @@ class ColumnAttributesRoundTripPostgresTest extends PostgresRoundTripTestCase
         );
     }
 
+    public function testARetypedSerialTakesItsSequenceWithIt(): void
+    {
+        $this->assertRoundTrip(
+            'bigserial',
+            'CREATE TABLE t (id bigserial, v int);' . self::ROWS,
+            'CREATE TABLE t (id serial, v int);' . self::ROWS,
+            fn(string $db) => $this->rows(
+                $db,
+                "SELECT seqtypid::regtype::text AS type FROM pg_sequence
+                  WHERE seqrelid = pg_get_serial_sequence('t', 'id')::regclass"
+            )
+        );
+    }
+
     public function testStorageAndCompressionAreApplied(): void
     {
         $up = $this->assertRoundTrip(
