@@ -192,14 +192,7 @@ final class PostgresColumnDependants {
                               ORDER BY i.indexrelid::regclass::text)
                        FROM pg_index i
                       WHERE i.indrelid = c.oid)        AS indexes,
-                    (SELECT json_agg(json_build_object(
-                                'grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
-                                                ELSE quote_ident(pg_get_userbyid(a.grantee)) END,
-                                'privilege', a.privilege_type,
-                                'grantable', a.is_grantable)
-                              ORDER BY a.grantee, a.privilege_type)
-                       FROM aclexplode(c.relacl) a
-                      WHERE a.grantee <> c.relowner)   AS grants
+                    " . PostgresSchemaHelper::grantsJson('c.relacl', 'c.relowner') . "   AS grants
              FROM deepest
              JOIN pg_class c     ON c.oid = deepest.view_oid
              JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -356,14 +349,7 @@ final class PostgresColumnDependants {
                       WHERE k.conrelid = c.oid AND g.attnum = ANY (k.conkey)
                         AND k.contype IN ('c', 'u', 'x', 'f')
                     ) AS constraints,
-                    (SELECT json_agg(json_build_object(
-                                'grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
-                                                ELSE quote_ident(pg_get_userbyid(a.grantee)) END,
-                                'privilege', a.privilege_type,
-                                'grantable', a.is_grantable)
-                              ORDER BY a.grantee, a.privilege_type)
-                       FROM aclexplode(g.attacl) a
-                      WHERE a.grantee <> c.relowner) AS grants
+                    " . PostgresSchemaHelper::grantsJson('g.attacl', 'c.relowner') . " AS grants
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
              JOIN pg_attribute src ON src.attrelid = c.oid AND src.attname = ? AND NOT src.attisdropped

@@ -129,11 +129,7 @@ final class EnumSwapSQL {
         if (!empty($usage['publicRevoked'])) {
             $lines[] = "REVOKE USAGE ON TYPE $type FROM PUBLIC;";
         }
-        foreach ($usage['grants'] ?? [] as $g) {
-            $lines[] = "GRANT {$g['privilege']} ON TYPE $type TO {$g['grantee']}"
-                . ($g['grantable'] ? ' WITH GRANT OPTION' : '') . ';';
-        }
-        return $lines;
+        return array_merge($lines, GrantSQL::statements($usage['grants'] ?? [], "ON TYPE $type"));
     }
 
     /** @return string[] */

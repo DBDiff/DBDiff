@@ -292,14 +292,7 @@ final class PostgresEnumUsage {
             SELECT quote_literal(obj_description(t.oid, 'pg_type')) AS comment,
                    t.typacl IS NOT NULL
                      AND NOT EXISTS (SELECT 1 FROM aclexplode(t.typacl) a WHERE a.grantee = 0) AS public_revoked,
-                   (SELECT json_agg(json_build_object(
-                               'grantee', CASE WHEN a.grantee = 0 THEN 'PUBLIC'
-                                               ELSE quote_ident(pg_get_userbyid(a.grantee)) END,
-                               'privilege', a.privilege_type,
-                               'grantable', a.is_grantable)
-                             ORDER BY a.grantee)
-                      FROM aclexplode(t.typacl) a
-                     WHERE a.grantee NOT IN (0, t.typowner)) AS grants
+                   " . PostgresSchemaHelper::grantsJson('t.typacl', 't.typowner', true) . " AS grants
               FROM ty JOIN pg_type t ON t.oid = ty.oid",
             [$type]
         );
