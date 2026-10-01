@@ -567,6 +567,27 @@ class PostgresBulkSchemaTest extends TestCase
         );
     }
 
+    public function testAForeignKeyOutsidePublicIsQualifiedAndKeepsEveryColumn(): void
+    {
+        // A key onto auth.users rendered as REFERENCES "users", and a
+        // two-column key as REFERENCES "p" ("a"): neither could be applied.
+        $c = self::conRow('t', 'fk', [
+            'constraint_type' => 'FOREIGN KEY',
+            'foreign_table'   => 'users',
+            'foreign_schema'  => 'auth',
+            'foreign_columns' => '["id", "tenant"]',
+            'update_rule'     => 'NO ACTION',
+            'delete_rule'     => 'CASCADE',
+        ]);
+        $c['columns'] = ['user_id', 'tenant_id'];
+
+        $this->assertSame(
+            'CONSTRAINT "fk" FOREIGN KEY ("user_id", "tenant_id") REFERENCES "auth"."users" ("id", "tenant")'
+            . ' ON UPDATE NO ACTION ON DELETE CASCADE',
+            PostgresSchemaHelper::constraintDefinition('fk', $c)
+        );
+    }
+
     /** @dataProvider matchOptionProvider */
     public function testBuildConstraintDefMatchOptions(?string $option, string $expected): void
     {

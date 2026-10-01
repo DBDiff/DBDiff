@@ -319,9 +319,12 @@ class BulkSchemaPostgresTest extends TestCase
         $this->assertStringEndsWith('DEFERRABLE INITIALLY IMMEDIATE', $c['fk_immediate']);
         $this->assertStringEndsWith('NOT VALID', $c['fk_unvalidated']);
 
-        // Composite key columns appear once each, in ordinal order.
+        // Composite key columns appear once each, in ordinal order — on both
+        // sides. This used to assert REFERENCES "fk_target" ("a"): only the
+        // first referenced column, which PostgreSQL rejects for a two-column
+        // key ("there is no unique constraint matching given keys").
         $this->assertStringContainsString(
-            'FOREIGN KEY ("cas_a", "cas_b") REFERENCES "fk_target" ("a")',
+            'FOREIGN KEY ("cas_a", "cas_b") REFERENCES "fk_target" ("a", "b")',
             $c['fk_cascade']
         );
     }
