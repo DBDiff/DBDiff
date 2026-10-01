@@ -94,6 +94,11 @@ class EnumSwapRoundTripPostgresTest extends PostgresRoundTripTestCase
         // The UP removes the label and, with it, what names it.
         $up = $this->assertRoundTrip('labelup', self::TWO . self::TABLE, self::THREE . self::TABLE . $paid);
         $this->assertStringNotContainsString('ADD CONSTRAINT "ck_paid"', $up);
+        // The swap drops it itself, and the constraint's own DROP tolerates
+        // that: either can run first, as a tool applying changes one at a
+        // time may order them.
+        $this->assertStringContainsString('ALTER TABLE "o" DROP CONSTRAINT IF EXISTS "ck_paid";', $up);
+        $this->assertSame(2, substr_count($up, 'DROP CONSTRAINT IF EXISTS "ck_paid"'));
 
         // The DOWN does: the source has the label and its check.
         $this->assertRoundTrip('labeldown', self::THREE . self::TABLE . $paid, self::TWO . self::TABLE);
