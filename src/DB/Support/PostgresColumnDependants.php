@@ -192,7 +192,7 @@ final class PostgresColumnDependants {
                               ORDER BY i.indexrelid::regclass::text)
                        FROM pg_index i
                       WHERE i.indrelid = c.oid)        AS indexes,
-                    " . PostgresSchemaHelper::grantsJson('c.relacl', 'c.relowner') . "   AS grants
+                    " . PostgresAcl::grantsJson('c.relacl', 'c.relowner') . "   AS grants
              FROM deepest
              JOIN pg_class c     ON c.oid = deepest.view_oid
              JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -349,7 +349,7 @@ final class PostgresColumnDependants {
                       WHERE k.conrelid = c.oid AND g.attnum = ANY (k.conkey)
                         AND k.contype IN ('c', 'u', 'x', 'f')
                     ) AS constraints,
-                    " . PostgresSchemaHelper::grantsJson('g.attacl', 'c.relowner') . " AS grants
+                    " . PostgresAcl::grantsJson('g.attacl', 'c.relowner') . " AS grants
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
              JOIN pg_attribute src ON src.attrelid = c.oid AND src.attname = ? AND NOT src.attisdropped

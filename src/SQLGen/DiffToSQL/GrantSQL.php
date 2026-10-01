@@ -2,7 +2,7 @@
 
 /**
  * GRANT statements putting back grants read with
- * PostgresSchemaHelper::grantsJson() — for a recreated view, a re-added
+ * PostgresAcl::grantsJson() — for a recreated view, a re-added
  * column, a swapped enum type.
  */
 final class GrantSQL {
