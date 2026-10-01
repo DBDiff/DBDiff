@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use DBDiff\Diff\AlterEnum;
+use DBDiff\DB\Support\EnumLabels;
 use DBDiff\SQLGen\DiffToSQL\AlterEnumSQL;
 use PHPUnit\Framework\TestCase;
 
@@ -148,23 +149,23 @@ class AlterEnumSQLTest extends TestCase
     {
         $this->assertSame(
             ['new', 'paid'],
-            AlterEnumSQL::labelsOf($this->enum('t', ['new', 'paid']))
+            EnumLabels::of($this->enum('t', ['new', 'paid']))
         );
     }
 
     public function testADoubledQuoteIsOneEscapedQuote(): void
     {
-        $this->assertSame(["it's"], AlterEnumSQL::labelsOf("CREATE TYPE \"t\" AS ENUM ('it''s')"));
+        $this->assertSame(["it's"], EnumLabels::of("CREATE TYPE \"t\" AS ENUM ('it''s')"));
     }
 
     public function testACommaInsideALabelIsNotASeparator(): void
     {
-        $this->assertSame(['a,b'], AlterEnumSQL::labelsOf("CREATE TYPE \"t\" AS ENUM ('a,b')"));
+        $this->assertSame(['a,b'], EnumLabels::of("CREATE TYPE \"t\" AS ENUM ('a,b')"));
     }
 
     public function testAnUnparseableDefinitionFallsBackRatherThanGuessing(): void
     {
-        $this->assertNull(AlterEnumSQL::labelsOf('CREATE DOMAIN "d" AS integer'));
+        $this->assertNull(EnumLabels::of('CREATE DOMAIN "d" AS integer'));
 
         // And the generator takes the replacement path for it.
         $sql = (new AlterEnumSQL(new AlterEnum('d', 'CREATE DOMAIN "d" AS integer', 'CREATE DOMAIN "d" AS bigint')))->getUp();

@@ -10,6 +10,9 @@ class AlterTableAddKey {
     public $source;
     public $target;
 
+    /** Its DROP may find the object gone — an enum swap could not put it back (EnumSwapPlan). */
+    public bool $dropIfExists = false;
+
     function __construct($table, $key, $diff) {
         $this->table = $table;
         $this->key = $key;

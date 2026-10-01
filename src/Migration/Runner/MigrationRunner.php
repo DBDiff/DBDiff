@@ -1,6 +1,7 @@
 <?php namespace DBDiff\Migration\Runner;
 
 use DBDiff\Migration\Config\MigrationConfig;
+use DBDiff\SQLGen\DiffToSQL\AlterEnumSQL;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\StatementPrepared;
@@ -413,19 +414,30 @@ class MigrationRunner
     /**
      * Execute multi-statement SQL inside a single transaction.
      * Splits on semicolons, ignoring empty statements and comment-only lines.
+     *
+     * Enum label additions run first, each committed on its own: PostgreSQL
+     * will not let a label added inside a transaction be used before that
+     * transaction commits (`unsafe use of new value`), and the rest of the
+     * migration may well use it. They are `ADD VALUE IF NOT EXISTS`, so a
+     * migration that fails after them can simply be run again.
      */
     private function executeInTransaction(string $sql): void
     {
+        $statements = array_filter(
+            $this->splitStatements($sql),
+            fn(string $s) => trim(preg_replace('/--[^\n]*/', '', $s)) !== ''
+        );
+        foreach ($statements as $i => $statement) {
+            if (AlterEnumSQL::isValueAddition($statement)) {
+                $this->connection->statement($statement);
+                unset($statements[$i]);
+            }
+        }
+
         $this->connection->beginTransaction();
 
         try {
-            foreach ($this->splitStatements($sql) as $statement) {
-                // Skip pure-comment statements
-                $stripped = preg_replace('/--[^\n]*/', '', $statement);
-                if (trim($stripped) === '') {
-                    continue;
-                }
-
+            foreach ($statements as $statement) {
                 $this->connection->statement($statement);
             }
 

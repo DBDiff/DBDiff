@@ -5,6 +5,10 @@ use DBDiff\Diff\AlterMatView;
 use DBDiff\Diff\AlterPolicy;
 use DBDiff\Diff\AlterTrigger;
 use DBDiff\Diff\AlterView;
+use DBDiff\Diff\CreateMatView;
+use DBDiff\Diff\CreatePolicy;
+use DBDiff\Diff\CreateTrigger;
+use DBDiff\Diff\CreateView;
 use DBDiff\Diff\DropMatView;
 use DBDiff\Diff\DropPolicy;
 use DBDiff\Diff\DropTrigger;
@@ -40,13 +44,7 @@ final class ColumnDependantPlan {
 
     /** @param array<int, object> $diffs */
     public static function apply(array $diffs): void {
-        $handledByOwnDiff = [];
-        foreach ($diffs as $diff) {
-            $key = self::keyOf($diff);
-            if ($key !== null) {
-                $handledByOwnDiff[$key] = true;
-            }
-        }
+        $handledByOwnDiff = self::handledByOwnDiff($diffs);
 
         $dependantKeys = [];
         foreach ($diffs as $diff) {
@@ -74,6 +72,30 @@ final class ColumnDependantPlan {
                 $diff->downHandledElsewhere = true;
             }
         }
+    }
+
+    /**
+     * The views, policies and triggers another diff drops or changes in the
+     * given direction, keyed as a dependant set keys them — what a bracket
+     * leaves out. In the UP those are the Drop and Alter diffs; in the DOWN
+     * the Create diffs, whose DOWN drops, and the Alter diffs.
+     *
+     * @param array<int, object> $diffs
+     * @return array<string, true>
+     */
+    public static function handledByOwnDiff(array $diffs, string $direction = 'up'): array {
+        $keys = [];
+        foreach ($diffs as $diff) {
+            $key = match (true) {
+                $direction === 'up'     => self::keyOf($diff),
+                self::isDrop($diff)     => null,
+                default                 => self::keyOf($diff, true),
+            };
+            if ($key !== null) {
+                $keys[$key] = true;
+            }
+        }
+        return $keys;
     }
 
     /**
@@ -139,15 +161,22 @@ final class ColumnDependantPlan {
      * Only drops and changes: a Create diff is for an object the target does
      * not have, so it is never a dependant.
      */
-    private static function keyOf(object $diff): ?string {
+    private static function keyOf(object $diff, bool $create = false): ?string {
         if ($diff instanceof DropView || $diff instanceof DropMatView
-            || $diff instanceof AlterView || $diff instanceof AlterMatView) {
+            || $diff instanceof AlterView || $diff instanceof AlterMatView
+            || ($create && ($diff instanceof CreateView || $diff instanceof CreateMatView))) {
             return 'public.' . $diff->name;
         }
         if ($diff instanceof DropPolicy || $diff instanceof AlterPolicy
-            || $diff instanceof DropTrigger || $diff instanceof AlterTrigger) {
+            || $diff instanceof DropTrigger || $diff instanceof AlterTrigger
+            || ($create && ($diff instanceof CreatePolicy || $diff instanceof CreateTrigger))) {
             return 'public.' . $diff->table . '.' . $diff->name;
         }
         return null;
+    }
+
+    private static function isDrop(object $diff): bool {
+        return $diff instanceof DropView || $diff instanceof DropMatView
+            || $diff instanceof DropPolicy || $diff instanceof DropTrigger;
     }
 }

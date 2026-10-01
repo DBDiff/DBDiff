@@ -1,5 +1,7 @@
 <?php namespace DBDiff\SQLGen\DiffToSQL;
 
+use DBDiff\DB\Support\EnumLabels;
+
 
 /**
  * Changing the labels of an enum.
@@ -16,12 +18,13 @@
  * either direction (issue #228). Adding a value in development and promoting
  * it is ordinary work.
  *
- * Removing a label has no equivalent. There is no `DROP VALUE`, and doing it
- * properly means migrating every dependent column to a new type — a
- * multi-statement rewrite that touches data and cannot be generated blind. For
- * that case the type is still replaced, which is what the reverse of an
- * addition needs too, and the statement carries a note saying why it may not
- * apply.
+ * Removing or reordering a label has no equivalent. There is no `DROP VALUE`;
+ * the columns move to a new type with the new labels, which then takes the
+ * old one's name — see EnumSwapSQL, and EnumSwapPlan for what it carries
+ * (issue #237). Where something uses the type that a swap cannot carry — a
+ * routine taking it, a domain over it — or there is no plan (a definition
+ * that could not be read), the type is replaced as before, with a note saying
+ * why it may not apply; PostgreSQL then refuses it naming what is in the way.
  *
  * Each direction is decided on its own: the UP may be additive while the DOWN
  * is not, which is exactly what reverting an added label looks like.
@@ -33,30 +36,49 @@ class AlterEnumSQL extends AbstractRecreateSQL {
     }
 
     public function getUp(): string {
-        return $this->transition($this->obj->targetDefinition, $this->obj->sourceDefinition);
+        return $this->transition($this->obj->targetDefinition, $this->obj->sourceDefinition, 'up');
     }
 
     public function getDown(): string {
-        return $this->transition($this->obj->sourceDefinition, $this->obj->targetDefinition);
+        return $this->transition($this->obj->sourceDefinition, $this->obj->targetDefinition, 'down');
     }
 
     /**
      * SQL that turns the enum described by `$from` into the one in `$to`.
      *
      * `ALTER TYPE ... ADD VALUE` when every existing label survives in the same
-     * relative order; otherwise the type is replaced, as before.
+     * relative order; otherwise a swap to a new type, or failing that the type
+     * is replaced, as before.
      */
-    private function transition(string $from, string $to): string {
+    private function transition(string $from, string $to, string $direction): string {
         $additions = self::plannedAdditions($from, $to);
-
-        if ($additions === []) {
-            return $this->replace($to);
+        if ($additions !== []) {
+            return implode("\n", array_map(
+                fn(array $addition) => $this->addValueStatement($addition),
+                $additions
+            ));
         }
 
-        return implode("\n", array_map(
-            fn(array $addition) => $this->addValueStatement($addition),
-            $additions
-        ));
+        $swap = $this->obj->swaps[$direction] ?? null;
+        if ($swap !== null && $swap['blockers'] === []) {
+            return implode("\n", (new EnumSwapSQL($this->obj->name, EnumLabels::of($to), $swap, $this->dialect))->statements());
+        }
+        return $this->replace($to, $swap['blockers'] ?? []);
+    }
+
+    /**
+     * Whether a statement is a label addition this writes — which a runner
+     * applying a migration in one transaction has to commit first, before
+     * anything uses the label (see MigrationRunner).
+     */
+    public static function isValueAddition(string $statement): bool {
+        $code = trim(preg_replace('/--[^\n]*/', '', $statement));
+        return (bool) preg_match('/^ALTER\s+TYPE\s+.+\s+ADD\s+VALUE\b/is', $code);
+    }
+
+    /** Whether `$to` only adds labels to `$from`, which ADD VALUE can do. */
+    public static function isAddition(string $from, string $to): bool {
+        return self::plannedAdditions($from, $to) !== [];
     }
 
     /**
@@ -69,8 +91,8 @@ class AlterEnumSQL extends AbstractRecreateSQL {
      * @return array<int, array{0: string, 1: ?string, 2: ?string}>
      */
     private static function plannedAdditions(string $from, string $to): array {
-        $fromLabels = self::labelsOf($from);
-        $toLabels   = self::labelsOf($to);
+        $fromLabels = EnumLabels::of($from);
+        $toLabels   = EnumLabels::of($to);
 
         if ($fromLabels === null || $toLabels === null) {
             return [];
@@ -83,83 +105,28 @@ class AlterEnumSQL extends AbstractRecreateSQL {
     private function addValueStatement(array $addition): string {
         [$label, $position, $neighbour] = $addition;
 
-        $at = $position === null ? '' : " $position " . self::quoteLabel($neighbour);
+        $at = $position === null ? '' : " $position " . EnumLabels::quote($neighbour);
 
         return 'ALTER TYPE ' . $this->dialect->quote($this->obj->name)
-            . ' ADD VALUE IF NOT EXISTS ' . self::quoteLabel($label) . $at . ';';
+            . ' ADD VALUE IF NOT EXISTS ' . EnumLabels::quote($label) . $at . ';';
     }
 
-    /** Drop and recreate, with a note about why it may not apply. */
-    private function replace(string $definition): string {
+    /**
+     * Drop and recreate, with a note about why it may not apply — naming what
+     * is in the way, when that is known.
+     */
+    private function replace(string $definition, array $blockers): string {
         $quoted = $this->dialect->quote($this->obj->name);
+        $note = $blockers === []
+            ? "-- Removing or reordering enum labels needs the type replaced, which\n"
+              . "-- PostgreSQL refuses while any column still uses it. Migrate the\n"
+              . "-- dependent columns to a new type first, or apply this by hand.\n"
+            : "-- Removing or reordering enum labels moves its users to a new type,\n"
+              . "-- but these cannot be moved automatically:\n"
+              . implode('', array_map(fn($b) => "--   $b\n", $blockers))
+              . "-- Migrate them first, or apply this by hand.\n";
 
-        return "-- Removing or reordering enum labels needs the type replaced, which\n"
-            . "-- PostgreSQL refuses while any column still uses it. Migrate the\n"
-            . "-- dependent columns to a new type first, or apply this by hand.\n"
-            . 'DROP TYPE IF EXISTS ' . $quoted . ";\n" . $definition . ';';
-    }
-
-    /**
-     * The labels of a `CREATE TYPE ... AS ENUM (...)` definition, in order.
-     *
-     * Returns null when the definition is not that shape, so an unexpected
-     * rendering falls back to replacement rather than producing nonsense.
-     *
-     * @return string[]|null
-     */
-    public static function labelsOf(string $definition): ?array {
-        if (!preg_match('/\bAS\s+ENUM\s*\((.*)\)\s*;?\s*$/is', $definition, $m)) {
-            return null;
-        }
-
-        $body   = $m[1];
-        $labels = [];
-        $i      = 0;
-        $length = strlen($body);
-
-        while ($i < $length) {
-            if ($body[$i] === "'") {
-                [$label, $i] = self::readQuotedLabel($body, $i + 1);
-                $labels[] = $label;
-                continue;
-            }
-            // Only separators and whitespace belong between labels; anything
-            // else means this is not a plain label list.
-            if ($body[$i] !== ',' && trim($body[$i]) !== '') {
-                return null;
-            }
-            $i++;
-        }
-
-        return $labels === [] ? null : $labels;
-    }
-
-    /**
-     * One quoted label, starting just past its opening quote.
-     *
-     * @return array{0: string, 1: int} the label, and where the scan resumes
-     */
-    private static function readQuotedLabel(string $body, int $i): array {
-        $length = strlen($body);
-        $label  = '';
-
-        while ($i < $length) {
-            if ($body[$i] !== "'") {
-                $label .= $body[$i];
-                $i++;
-                continue;
-            }
-            // A doubled quote is an escaped one, not the end.
-            if (($body[$i + 1] ?? '') === "'") {
-                $label .= "'";
-                $i += 2;
-                continue;
-            }
-            $i++;
-            break;
-        }
-
-        return [$label, $i];
+        return $note . 'DROP TYPE IF EXISTS ' . $quoted . ";\n" . $definition . ';';
     }
 
     /**
@@ -247,9 +214,5 @@ class AlterEnumSQL extends AbstractRecreateSQL {
         }
 
         return $position === 'AFTER' ? $at + 1 : $at;
-    }
-
-    private static function quoteLabel(string $label): string {
-        return "'" . str_replace("'", "''", $label) . "'";
     }
 }

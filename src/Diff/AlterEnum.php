@@ -14,6 +14,12 @@ class AlterEnum {
     public $sourceDefinition;
     public $targetDefinition;
 
+    /**
+     * Per direction ('up', 'down'), what a label removal or reorder carries
+     * across to the new type; see EnumSwapPlan. None for an addition.
+     */
+    public array $swaps = [];
+
     public function __construct(string $name, string $sourceDefinition, string $targetDefinition) {
         $this->name             = $name;
         $this->sourceDefinition = $sourceDefinition;

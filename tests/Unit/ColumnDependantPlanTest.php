@@ -130,4 +130,18 @@ class ColumnDependantPlanTest extends TestCase
             DialectRegistry::set($previous);
         }
     }
+
+    public function testWhatAnotherDiffRecreatesDependsOnTheDirection(): void
+    {
+        $diffs = [
+            new DropView('gone', 'CREATE VIEW "gone" AS SELECT 1'),
+            new CreateView('added', 'CREATE VIEW "added" AS SELECT 1'),
+            new AlterView('changed', 'CREATE VIEW "changed" AS SELECT 1', 'CREATE VIEW "changed" AS SELECT 2'),
+        ];
+
+        // The UP drops `gone` and changes `changed`; the DOWN drops `added`
+        // and changes `changed` back.
+        $this->assertSame(['public.gone', 'public.changed'], array_keys(ColumnDependantPlan::handledByOwnDiff($diffs)));
+        $this->assertSame(['public.added', 'public.changed'], array_keys(ColumnDependantPlan::handledByOwnDiff($diffs, 'down')));
+    }
 }
