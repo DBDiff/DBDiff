@@ -59,7 +59,6 @@
   "unmodelled_kind": [],
   "wrong_output": [],
   "builtin_renderer_only": [
-    "hard_fk_match_full",
     "hard_fk_set_null_cols",
     "hard_inherits",
     "hard_inherits_multiple_parents",
