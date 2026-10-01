@@ -41,7 +41,7 @@ class ColumnAttributesRoundTripPostgresTest extends PostgresRoundTripTestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('identityChanges')]
+    /** @dataProvider identityChanges */
     public function testAnIdentityChangeKeepsTheSequenceWhereItIs(string $source, string $target): void
     {
         $case = 'id' . substr(md5($source . $target), 0, 6);
@@ -129,7 +129,7 @@ class ColumnAttributesRoundTripPostgresTest extends PostgresRoundTripTestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('generatedDirections')]
+    /** @dataProvider generatedDirections */
     public function testAColumnBecomingOrCeasingToBeGenerated(string $source, string $target): void
     {
         $case = 'gen' . substr(md5($source . $target), 0, 6);

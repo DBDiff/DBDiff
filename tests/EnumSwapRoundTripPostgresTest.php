@@ -1,7 +1,5 @@
 <?php
 
-use PHPUnit\Framework\Attributes\DataProvider;
-
 /**
  * Removing or reordering an enum's labels (issue #237), against a live server.
  *
@@ -150,8 +148,9 @@ class EnumSwapRoundTripPostgresTest extends PostgresRoundTripTestCase
     /**
      * What a swap cannot carry is named in the migration, and PostgreSQL then
      * refuses it rather than anything being dropped.
+     *
+     * @dataProvider blockers
      */
-    #[DataProvider('blockers')]
     public function testWhatASwapCannotCarryIsNamedAndStopsTheMigration(string $case, string $extra, string $named): void
     {
         $source = $this->db("{$case}_s", self::TWO . self::TABLE . $extra);

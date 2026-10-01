@@ -1,7 +1,5 @@
 <?php
 
-use PHPUnit\Framework\Attributes\DataProvider;
-
 /**
  * Objects a migration creates before what uses them, and drops after it, in
  * both directions (issue #238), against a live server. See
@@ -37,7 +35,7 @@ class CreationOrderRoundTripPostgresTest extends PostgresRoundTripTestCase
         ];
     }
 
-    #[DataProvider('cases')]
+    /** @dataProvider cases */
     public function testCreatedBeforeUseAndDroppedAfter(string $source, string $target): void
     {
         $this->assertRoundTrip('c' . substr(md5($source . $target), 0, 8), $source, $target);
@@ -72,7 +70,7 @@ class CreationOrderRoundTripPostgresTest extends PostgresRoundTripTestCase
         ];
     }
 
-    #[DataProvider('removals')]
+    /** @dataProvider removals */
     public function testDroppedAfterUseAndRecreatedBefore(string $target): void
     {
         $this->assertRoundTrip('r' . substr(md5($target), 0, 8), 'CREATE TABLE t (id int);', $target);

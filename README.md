@@ -802,7 +802,8 @@ Comparisons run in this order:
 - Removing or reordering a label moves the columns to a new type and renames
   it into place, keeping their data and everything that reads them — see
   "Migrations that run, not just SQL that parses" above
-- Enum diffs are ordered before table diffs (tables may reference enum types)
+- A new or changed enum is ordered before table diffs, and an enum the source
+  no longer has after them — tables, views and routines may use it
 - MySQL and SQLite do not have standalone enum types — skipped automatically
 
 ### Composite Types and Domains (PostgreSQL)
@@ -811,7 +812,8 @@ Comparisons run in this order:
   nullability and named CHECK constraints
 - ALTER = DROP + CREATE: neither a composite's attributes nor a domain's base
   type can be changed in place
-- Ordered before table diffs, since a column may be typed by either
+- Created before table diffs, since a column may be typed by either, and
+  dropped after them
 - Every relation also owns a composite type describing its row shape; those
   belong to the table and are not reported separately
 

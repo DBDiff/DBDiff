@@ -11,8 +11,8 @@ Supports MySQL 8.0–9.6, PostgreSQL 14–18, SQLite 3, plus MySQL-compatible va
 ```
 src/
   DB/          — Adapters (MySQL, Postgres, SQLite), schema introspection, data diffing
-  Diff/        — 30 diff object models (AddTable, AlterTableChangeColumn, InsertData, CreateView, CreateTrigger, CreateRoutine, CreateEnum, etc.)
-  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (30 generators)
+  Diff/        — one diff object model per kind of change (AddTable, AlterTableChangeColumn, InsertData, CreateView, CreateTrigger, CreateRoutine, CreateEnum, etc.)
+  SQLGen/      — SQL generation: Dialect/ (MySQL, Postgres, SQLite), DiffToSQL/ (one generator per diff model, plus shared helpers)
   Migration/   — Commands (Symfony Console), Runner, Config, Format/ (Native, Flyway, Liquibase, Laravel)
   Params/      — CLI parameter parsing (CLI flags → config file → defaults)
   Exceptions/  — Exception hierarchy
@@ -67,7 +67,9 @@ podman run --rm -v "$(pwd):/app:Z" -w /app php:8.4-cli vendor/bin/phpunit ...
 - PostgreSQL `DROP TRIGGER` requires `ON table` — handled by `PostgresDialect::dropTrigger()`.
 - SQLite has no stored procedures/functions — `getRoutines()` returns `[]`.
 - Enum types (`CREATE TYPE ... AS ENUM`) are PostgreSQL-only. MySQL/SQLite adapters return `[]` from `getEnums()`.
-- DiffSorter places DROP enum/view/trigger/routine BEFORE table ops, CREATE/ALTER AFTER data ops. Enum drops come before view drops; enum creates come before view creates (tables/views may reference enum types).
+- DiffSorter (UP): views, triggers and policies the source lacks are dropped before table ops; types, domains, sequences and routines a table calls are created before them; other routines, views, triggers and policies are created after; routines and types the source lacks are dropped last, once nothing uses them. The DOWN mirrors it. Every diff class needs a slot in both `$up_order` and `$down_order` (DiffClassRegistrationTest enforces it); `SUB_SLOTS` declares extra slots such as `CreateRoutineEarly`.
+- PostgreSQL column definitions are read with `PostgresColumnDefinition::parse()`, not ad-hoc regexes.
+- A change of several statements that only work together (enum swap, column type change with dependants) is one diff object; `--units` marks each diff's output for tools such as SupaForge.
 
 ## Docs
 
