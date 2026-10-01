@@ -124,7 +124,28 @@ final class PostgresObjectKinds {
      */
     public static function domains(Connection $connection): array {
         $result = $connection->select(
-            "SELECT t.typname AS name,
+            self::DOMAIN_SELECT . "
+             WHERE n.nspname = 'public' AND t.typtype = 'd'
+               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
+             ORDER BY t.typname"
+        );
+        $domains = [];
+        foreach ($result as $row) {
+            $domains[$row['name']] = self::renderDomain($row, $row['name']);
+        }
+        return $domains;
+    }
+
+    /**
+     * One domain, read by its regtype and rendered under `$name` — for a
+     * temporary copy re-rendered as the original (PostgresExpressionEquivalence).
+     */
+    public static function domainDefinition(Connection $connection, string $regtype, string $name): ?string {
+        $row = $connection->selectOne(self::DOMAIN_SELECT . " WHERE t.oid = ?::regtype", [$regtype]);
+        return $row === null ? null : self::renderDomain($row, $name);
+    }
+
+    private const DOMAIN_SELECT = "SELECT t.typname AS name,
                     format_type(t.typbasetype, t.typtypmod) AS base_type,
                     t.typnotnull AS not_null,
                     pg_get_expr(t.typdefaultbin, 0) AS default_expr,
@@ -138,29 +159,23 @@ final class PostgresObjectKinds {
              FROM pg_type t
              JOIN pg_namespace n ON n.oid = t.typnamespace
              LEFT JOIN pg_collation co ON co.oid = t.typcollation
-                                     AND co.collname <> 'default'
-             WHERE n.nspname = 'public' AND t.typtype = 'd'
-               AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
-             ORDER BY t.typname"
-        );
-        $domains = [];
-        foreach ($result as $row) {
-            $sql = 'CREATE DOMAIN "' . $row['name'] . '" AS ' . $row['base_type'];
-            if (!empty($row['collation'])) {
-                $sql .= ' COLLATE "' . $row['collation'] . '"';
-            }
-            if ($row['default_expr'] !== null && $row['default_expr'] !== '') {
-                $sql .= ' DEFAULT ' . $row['default_expr'];
-            }
-            if ($row['not_null']) {
-                $sql .= ' NOT NULL';
-            }
-            if (!empty($row['constraints'])) {
-                $sql .= ' ' . $row['constraints'];
-            }
-            $domains[$row['name']] = $sql;
+                                     AND co.collname <> 'default'";
+
+    private static function renderDomain(array $row, string $name): string {
+        $sql = 'CREATE DOMAIN "' . $name . '" AS ' . $row['base_type'];
+        if (!empty($row['collation'])) {
+            $sql .= ' COLLATE "' . $row['collation'] . '"';
         }
-        return $domains;
+        if ($row['default_expr'] !== null && $row['default_expr'] !== '') {
+            $sql .= ' DEFAULT ' . $row['default_expr'];
+        }
+        if ($row['not_null']) {
+            $sql .= ' NOT NULL';
+        }
+        if (!empty($row['constraints'])) {
+            $sql .= ' ' . $row['constraints'];
+        }
+        return $sql;
     }
 
     /**
