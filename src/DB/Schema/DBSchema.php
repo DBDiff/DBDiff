@@ -150,6 +150,8 @@ class DBSchema {
                 $this->manager->getDB('target')
             );
             ColumnDependantPlan::apply($diffs);
+            EnumSwapPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
+            CreationOrderPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
         }
 
         return $diffs;

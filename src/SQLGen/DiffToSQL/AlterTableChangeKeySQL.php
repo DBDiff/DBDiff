@@ -16,7 +16,7 @@ class AlterTableChangeKeySQL implements SQLGenInterface {
     }
 
     private function buildChange(string $table, string $key, string $schema): string {
-        $drop = $this->dialect->dropIndex($table, $key);
+        $drop = DropIfExists::apply($this->obj, $this->dialect->dropIndex($table, $key));
         if ($this->dialect->getDriver() === 'mysql') {
             $t = $this->dialect->quote($table);
             return "$drop\nALTER TABLE $t ADD $schema;";

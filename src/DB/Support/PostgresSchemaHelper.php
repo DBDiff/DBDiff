@@ -275,20 +275,36 @@ class PostgresSchemaHelper {
      */
     public static function storageStatements(string $table, array $attrByCol): array {
         $out = [];
-        foreach ($attrByCol as $column => $attr) {
-            $actual  = $attr['att_storage'] ?? null;
-            $default = $attr['type_storage'] ?? null;
-            if ($actual === null || $default === null || $actual === $default) {
-                continue;
-            }
-            $word = match ($actual) {
-                'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED',
-                default => null,
-            };
-            if ($word !== null) {
-                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE $word";
+        foreach (self::columnStorage($attrByCol) as $column => $storage) {
+            if ($storage['actual'] !== $storage['default']) {
+                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE {$storage['actual']}";
             }
         }
+        return $out;
+    }
+
+    /**
+     * Each column's storage strategy, and its type's default, as the keywords
+     * `SET STORAGE` takes — what the comparison reads for a table that
+     * exists on both sides (issue #225).
+     *
+     * @return array<string, array{actual: string, default: string}>
+     */
+    public static function columnStorage(array $attrByCol): array {
+        $word = fn(?string $code) => match ($code) {
+            'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED', default => null,
+        };
+        $out = [];
+        foreach ($attrByCol as $column => $attr) {
+            $actual  = $word($attr['att_storage'] ?? null);
+            $default = $word($attr['type_storage'] ?? null);
+            if ($actual !== null && $default !== null) {
+                $out[$column] = ['actual' => $actual, 'default' => $default];
+            }
+        }
+        // By name: the bulk and per-table fetches read columns in different
+        // orders, and the schema has to be the same either way.
+        ksort($out);
         return $out;
     }
 
@@ -360,6 +376,56 @@ class PostgresSchemaHelper {
         return $ascending
             ? ['min' => '1',    'max' => $ceiling]
             : ['min' => $floor, 'max' => '-1'];
+    }
+
+    /**
+     * Durability and storage parameters of public tables, by name.
+     *
+     * Both were already read for rendering a *new* table and never compared
+     * for one that exists on both sides, so switching a table between LOGGED
+     * and UNLOGGED, or changing its fillfactor, was reported as "Databases are
+     * identical" (issue #229). UNLOGGED is not decoration: an unlogged table is
+     * not crash-safe and is emptied on recovery.
+     *
+     * @param string[] $tables
+     * @return array<string, array{unlogged: bool, reloptions: ?string}>
+     */
+    public static function relationMeta(Connection $connection, array $tables): array {
+        $ph = QueryHelper::placeholders($tables);
+        $rows = $connection->select(
+            "SELECT c.relname AS table_name,
+                    c.relpersistence,
+                    " . self::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
+               FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname IN ($ph)",
+            $tables
+        );
+        $meta = [];
+        foreach ($rows as $row) {
+            $meta[$row['table_name']] = [
+                'unlogged'   => ($row['relpersistence'] ?? 'p') === 'u',
+                'reloptions' => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+            ];
+        }
+        return $meta;
+    }
+
+    /**
+     * The sequence a public table's serial column defaults to — its name as
+     * `pg_get_serial_sequence` gives it (`public.t_id_seq`) and its type — or
+     * null when the column has none.
+     *
+     * @return array{name: string, type: string}|null
+     */
+    public static function serialSequence(Connection $connection, string $table, string $column): ?array {
+        $rows = $connection->select(
+            "SELECT s.seq AS name, q.seqtypid::regtype::text AS type
+               FROM (SELECT pg_get_serial_sequence(?, ?) AS seq) s
+               JOIN pg_sequence q ON q.seqrelid = s.seq::regclass",
+            ['public.' . '"' . str_replace('"', '""', $table) . '"', $column]
+        );
+        return isset($rows[0]['name']) ? ['name' => $rows[0]['name'], 'type' => $rows[0]['type']] : null;
     }
 
     /**

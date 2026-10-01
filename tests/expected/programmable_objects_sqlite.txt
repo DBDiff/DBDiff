@@ -12,15 +12,15 @@ CREATE TRIGGER "trg_products_updated" BEFORE UPDATE ON "products"
     UPDATE "products" SET "updated_at" = datetime('now') WHERE "id" = NEW."id";
   END;
 #---------- DOWN ----------
+DROP TRIGGER IF EXISTS "trg_products_updated";
+DROP VIEW IF EXISTS "expensive_products";
+CREATE VIEW "expensive_products" AS
+  SELECT "id", "name" FROM "products" WHERE "price" > 50;
+DROP VIEW IF EXISTS "product_names";
+CREATE VIEW "old_report" AS
+  SELECT "id", "name" FROM "products" WHERE "price" < 5;
 CREATE TRIGGER "trg_old_audit" AFTER DELETE ON "products"
   FOR EACH ROW
   BEGIN
     SELECT 1;
   END;
-DROP TRIGGER IF EXISTS "trg_products_updated";
-CREATE VIEW "old_report" AS
-  SELECT "id", "name" FROM "products" WHERE "price" < 5;
-DROP VIEW IF EXISTS "expensive_products";
-CREATE VIEW "expensive_products" AS
-  SELECT "id", "name" FROM "products" WHERE "price" > 50;
-DROP VIEW IF EXISTS "product_names";

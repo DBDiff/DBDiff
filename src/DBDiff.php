@@ -78,7 +78,7 @@ class DBDiff {
             throw new DestructiveChangeException($lintResult);
         }
 
-        $sqlGenerator = new SQLGenerator($diff);
+        $sqlGenerator = new SQLGenerator($diff, (bool) ($params->units ?? false));
         $up   = ($params->include !== 'down') ? $sqlGenerator->getUp()   : '';
         $down = ($params->include !== 'up')   ? $sqlGenerator->getDown() : '';
 

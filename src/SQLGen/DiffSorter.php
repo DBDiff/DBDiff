@@ -3,17 +3,24 @@
 
 class DiffSorter {
 
+    /**
+     * Order slots that are not diff classes: a diff of the class on the right
+     * sorts in the slot on the left when orderClass() says so.
+     */
+    public const SUB_SLOTS = [
+        'CreateRoutineEarly' => 'CreateRoutine',
+        'DropRoutineEarly'   => 'DropRoutine',
+    ];
+
     private $up_order = [
         "SetDBCharset",
         "SetDBCollation",
 
-        "DropEnum",
         "DropView",
         // Both depend on tables, so they go before any table is touched.
         "DropMatView",
         "DropPolicy",
         "DropTrigger",
-        "DropRoutine",
 
         "AlterTableDropConstraint",
 
@@ -31,18 +38,17 @@ class DiffSorter {
         "CreateDomain",
         "AlterDomain",
         "CreateSequence",
+        // A routine a new table's or column's default, generated column,
+        // constraint or index calls has to exist first (issue #238) — see
+        // CreationOrderPlan. Any other routine stays with the programmable
+        // objects below, after the tables its body may read.
+        "CreateRoutineEarly",
         "AlterSequence",
 
         "AddTable",
 
         "DeleteData",
         "DropTable",
-
-        // After DropTable: a table column may still be typed by the composite
-        // or domain, or default to the sequence, being dropped here.
-        "DropSequence",
-        "DropDomain",
-        "DropCompositeType",
 
         "AlterTableEngine",
         "AlterTablePersistence",
@@ -51,6 +57,8 @@ class DiffSorter {
 
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
+        // After a column is added or retyped: a type change resets storage.
+        "AlterTableColumnStorage",
         "AlterTableDropColumn",
 
         "AlterTableAddKey",
@@ -82,47 +90,55 @@ class DiffSorter {
         "AlterRowSecurity",
         "CreatePolicy",
         "AlterPolicy",
+
+        // Very last: what the source no longer has, once nothing uses it. The
+        // tables, columns, defaults, constraints, views, triggers and policies
+        // that called a routine or were typed by a type have been dropped or
+        // changed above; dropping these first failed with "cannot drop ...
+        // because other objects depend on it" (issue #238). Dependants first:
+        // a routine can take a type, a composite can hold a domain, and a
+        // domain or a composite can be built on an enum.
+        "DropRoutine",
+        "DropRoutineEarly",
+        "DropSequence",
+        "DropCompositeType",
+        "DropDomain",
+        "DropEnum",
     ];
 
     private $down_order = [
         "SetDBCharset",
         "SetDBCollation",
 
-        "DropRoutine",
+        // Before the routines, views, policies and triggers the DOWN puts
+        // back: they may name a label it restores, and a label swap takes
+        // their current versions aside and back (EnumSwapPlan).
+        "AlterEnum",
+
+        // What the UP dropped is recreated in the order the UP would create
+        // it (issue #238): the types first, and a routine a table's default,
+        // constraint or index calls, so the tables and columns below can use
+        // them...
+        "DropEnum",
+        "DropDomain",
+        "DropCompositeType",
+        "DropSequence",
+        "DropRoutineEarly",
+
         "AlterRoutine",
         // Policies and the RLS flags come off before the tables they sit on.
-        "DropPolicy",
         "AlterPolicy",
         "CreatePolicy",
         "AlterRowSecurity",
-        "DropTrigger",
         "AlterTrigger",
         "CreateTrigger",
-        "DropMatView",
         "AlterMatView",
         "CreateMatView",
-        "DropView",
         "AlterView",
         "CreateView",
-        // A routine the UP created is dropped only once the policies,
-        // triggers and views that call it have been reverted: dropping it
-        // first failed with "cannot drop function ... because other objects
-        // depend on it" — the DOWN of every new trigger with its own new
-        // trigger function. Still ahead of the types, which a routine's
-        // signature can use.
-        "CreateRoutine",
-        "DropEnum",
-        "AlterEnum",
-        "CreateEnum",
-        "DropCompositeType",
         "AlterCompositeType",
-        "CreateCompositeType",
-        "DropDomain",
         "AlterDomain",
-        "CreateDomain",
-        "DropSequence",
         "AlterSequence",
-        "CreateSequence",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
@@ -139,6 +155,8 @@ class DiffSorter {
 
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
+        // After a column is added or retyped: a type change resets storage.
+        "AlterTableColumnStorage",
         "AlterTableDropColumn",
 
         "AlterTableAddKey",
@@ -148,7 +166,30 @@ class DiffSorter {
         "AlterTableDropConstraint",
 
         "DeleteData",
-        "UpdateData"
+        "UpdateData",
+
+        // ...and, once the tables are back, the routines whose bodies may read
+        // them, then the views, triggers and policies that read or call them.
+        "DropRoutine",
+        "DropView",
+        "DropMatView",
+        "DropTrigger",
+        "DropPolicy",
+
+        // What the UP created goes last, once nothing reverted above still
+        // uses it: a routine after the triggers, policies, views, defaults and
+        // columns that call it; then the types, dependants first — a composite
+        // or a domain can be built on an enum. Dropping them earlier failed
+        // with "cannot drop ... because other objects depend on it" — the
+        // DOWN of any new type, domain or sequence with a new column using it,
+        // and of any new routine a reverted view or default still called
+        // (issue #238).
+        "CreateRoutine",
+        "CreateRoutineEarly",
+        "CreateCompositeType",
+        "CreateDomain",
+        "CreateEnum",
+        "CreateSequence"
     ];
 
     public function sort($diff, $type) {
@@ -166,8 +207,8 @@ class DiffSorter {
 
     private function compare($order, $a, $b, string $direction = 'up'): int {
         $orderMap     = array_flip($order);
-        $sqlGenClassA = (new \ReflectionClass($a))->getShortName();
-        $sqlGenClassB = (new \ReflectionClass($b))->getShortName();
+        $sqlGenClassA = self::orderClass($a);
+        $sqlGenClassB = self::orderClass($b);
         $indexA = $orderMap[$sqlGenClassA];
         $indexB = $orderMap[$sqlGenClassB];
         if ($indexA !== $indexB) {
@@ -175,6 +216,14 @@ class DiffSorter {
             return $override ?? ($indexA <=> $indexB);
         }
         return $this->compareSamePriority($a, $b, $direction, $sqlGenClassA);
+    }
+
+    /** The class name a diff sorts as; an early routine has its own slot (SUB_SLOTS). */
+    private static function orderClass(object $diff): string {
+        $class = (new \ReflectionClass($diff))->getShortName();
+        return in_array($class, ['CreateRoutine', 'DropRoutine'], true) && !empty($diff->early)
+            ? $class . 'Early'
+            : $class;
     }
 
     private function generatedColumnOrdering($a, $b, string $classA, string $classB, string $direction): ?int {

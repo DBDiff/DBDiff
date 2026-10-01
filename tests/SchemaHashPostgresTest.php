@@ -222,8 +222,16 @@ class SchemaHashPostgresTest extends TestCase
                 'CREATE TABLE t (a integer, b integer);',
                 'CREATE TABLE t (a integer, b integer GENERATED ALWAYS AS (a * 2) STORED);',
             ],
-            // Deliberately no 'storage' or 'compression' case. See
-            // testTheHashIgnoresWhatTheComparisonCannotSee below.
+            // Compared since #225, so hashed: without them a table that
+            // differed only here was skipped and never compared at all.
+            'column storage'     => [
+                'CREATE TABLE t (c text);',
+                'CREATE TABLE t (c text); ALTER TABLE t ALTER COLUMN c SET STORAGE EXTERNAL;',
+            ],
+            'column compression' => [
+                'CREATE TABLE t (c text);',
+                'CREATE TABLE t (c text COMPRESSION lz4);',
+            ],
             'unlogged'           => [
                 'CREATE TABLE t (c text);',
                 'CREATE UNLOGGED TABLE t (c text);',
@@ -231,43 +239,6 @@ class SchemaHashPostgresTest extends TestCase
             'storage parameter'  => [
                 'CREATE TABLE t (c text);',
                 'CREATE TABLE t (c text) WITH (fillfactor = 70);',
-            ],
-        ];
-    }
-
-    /**
-     * Changes the comparison does not look at, which the hash must not either.
-     *
-     * The invariant this suite is built around is that the hash changes for
-     * anything the comparison can detect. The converse matters too: hashing
-     * something the comparison ignores defeats the skip for that table and then
-     * produces no migration, so the table is re-read in full for an answer of
-     * "identical" (issue #225).
-     *
-     * Column storage and compression are rendered for a *new* table and never
-     * compared for one that exists on both sides. If that changes — as it did
-     * for UNLOGGED in #229 — this test moves to the provider above.
-     *
-     * @dataProvider undetectableChangeProvider
-     */
-    public function testTheHashIgnoresWhatTheComparisonCannotSee(string $sqlA, string $sqlB): void
-    {
-        [$a, $b] = $this->hashes($sqlA, $sqlB);
-
-        $this->assertSame(
-            $a['t'],
-            $b['t'],
-            'the hash changed for something the comparison does not report, so the '
-            . 'table is re-read in full only to be called identical'
-        );
-    }
-
-    public static function undetectableChangeProvider(): array
-    {
-        return [
-            'column storage' => [
-                'CREATE TABLE t (c text);',
-                'CREATE TABLE t (c text); ALTER TABLE t ALTER COLUMN c SET STORAGE EXTERNAL;',
             ],
         ];
     }

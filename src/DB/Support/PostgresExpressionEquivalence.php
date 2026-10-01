@@ -6,6 +6,8 @@ use DBDiff\Diff\AlterTableChangeConstraint;
 use DBDiff\Diff\AlterTableChangeKey;
 use DBDiff\Diff\AlterTrigger;
 use DBDiff\Diff\AlterView;
+use DBDiff\Diff\AlterDomain;
+use DBDiff\Diff\AlterTableChangeColumn;
 use Illuminate\Database\Connection;
 
 /**
@@ -71,6 +73,10 @@ final class PostgresExpressionEquivalence {
             AlterTrigger::class               => fn($d) => ['trigger', $d->table, $d->sourceDefinition, $d->targetDefinition],
             AlterView::class                  => fn($d) => ['view', null, $d->sourceDefinition, $d->targetDefinition],
             AlterMatView::class               => fn($d) => ['view', null, $d->sourceDefinition, $d->targetDefinition],
+            AlterDomain::class                => fn($d) => ['domain', $d->name, $d->sourceDefinition, $d->targetDefinition],
+            AlterTableChangeColumn::class     => fn($d) => self::generatedExpressionOnly($d)
+                ? ['generated', $d->table, $d->diff->getNewValue(), $d->diff->getOldValue()]
+                : null,
         ];
         $read = $readers[get_class($diff)] ?? null;
         return $read === null ? null : $read($diff);
@@ -90,6 +96,8 @@ final class PostgresExpressionEquivalence {
                 'policy'  => self::policy($connection, $table, $definition),
                 'trigger' => self::trigger($connection, $table, $definition),
                 'view'    => self::view($connection, $definition),
+                'domain'  => self::domain($connection, $table, $definition),
+                'generated' => self::generated($connection, $table, $definition),
                 default   => null,
             };
         } catch (\Throwable $e) {
@@ -186,6 +194,47 @@ final class PostgresExpressionEquivalence {
             return null;
         }
         return $m[1] . ' AS ' . rtrim(trim($row['def']), ';') . (isset($parts[1]) ? ";\n" . $parts[1] : '');
+    }
+
+    /**
+     * A regenerated column whose only difference is its expression's text —
+     * the one case where equivalence decides whether to drop and re-add it.
+     */
+    private static function generatedExpressionOnly(AlterTableChangeColumn $diff): bool {
+        if (!$diff->regenerated) {
+            return false;
+        }
+        $old = PostgresColumnDefinition::parse($diff->diff->getOldValue());
+        $new = PostgresColumnDefinition::parse($diff->diff->getNewValue());
+        return $old->isGenerated() && $new->isGenerated()
+            && $old->generated !== $new->generated
+            && $old->typeWithCollation() === $new->typeWithCollation()
+            && $old->notNull === $new->notNull
+            && $old->compression === $new->compression;
+    }
+
+    /** A stored generated column's definition with its expression re-rendered. */
+    private static function generated(Connection $connection, string $table, string $definition): ?string {
+        $column = PostgresColumnDefinition::parse($definition);
+        self::tempTable($connection, $table);
+        $connection->statement('ALTER TABLE ' . self::TEMP_TABLE . ' ADD COLUMN dbdiff_canon_g '
+            . $column->typeWithCollation() . " GENERATED ALWAYS AS ({$column->generated}) STORED");
+        $row = $connection->selectOne(
+            "SELECT pg_get_expr(ad.adbin, ad.adrelid) AS expr
+               FROM pg_attrdef ad
+               JOIN pg_attribute a ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+              WHERE ad.adrelid = 'pg_temp." . self::TEMP_TABLE . "'::regclass AND a.attname = 'dbdiff_canon_g'"
+        );
+        return $row === null ? null : $column->typeWithCollation() . ' AS (' . $row['expr'] . ')';
+    }
+
+    /** `CREATE DOMAIN "d" AS ...` re-rendered through a temporary domain. */
+    private static function domain(Connection $connection, string $name, string $definition): ?string {
+        if (!preg_match('/^CREATE\s+DOMAIN\s+"(?:[^"]|"")+"\s+(AS\b.*)$/s', $definition, $m)) {
+            return null;
+        }
+        $connection->statement('CREATE DOMAIN pg_temp.dbdiff_canon_d ' . $m[1]);
+        return PostgresObjectKinds::domainDefinition($connection, 'pg_temp.dbdiff_canon_d', $name);
     }
 
     /** The temporary table's session-specific schema, taken out so both sides compare. */

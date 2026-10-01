@@ -28,7 +28,7 @@ class AlterTableAddKeySQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        return $this->dialect->dropIndex($this->obj->table, $this->obj->key);
+        return DropIfExists::apply($this->obj, $this->dialect->dropIndex($this->obj->table, $this->obj->key));
     }
 
 }

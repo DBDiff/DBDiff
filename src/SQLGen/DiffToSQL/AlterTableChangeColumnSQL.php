@@ -2,7 +2,9 @@
 
 use DBDiff\SQLGen\SQLGenInterface;
 use DBDiff\DB\Support\PostgresColumnDependants;
+use DBDiff\DB\Support\PostgresColumnDefinition;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\SQLGen\Dialect\PostgresDialect;
 use DBDiff\SQLGen\Dialect\SQLDialectInterface;
 
 
@@ -36,10 +38,28 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
      * and re-adding it is the change, and ColumnDependantsSQL does both.
      */
     private function statements(string $toDef, string $fromDef): string {
-        if (!empty($this->obj->regenerated)) {
+        if ($this->regenerates($toDef, $fromDef)) {
             return '';
         }
-        return $this->dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
+        $direction = $toDef === $this->obj->diff->getNewValue() ? 'up' : 'down';
+        $dialect = $this->dialect instanceof PostgresDialect && !empty($this->obj->serialSequence)
+            ? $this->dialect->withSerialSequence(
+                $this->obj->serialSequence,
+                $this->obj->serialSequenceTypes[$direction] ?? null
+            )
+            : $this->dialect;
+        return $dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
+    }
+
+    /**
+     * Whether this direction drops and re-adds the column. Decided per
+     * direction: a plain column becoming a generated one is regenerated on
+     * the way up, but on the way down it only needs DROP EXPRESSION, which
+     * keeps the values.
+     */
+    private function regenerates(string $toDef, string $fromDef): bool {
+        return !empty($this->obj->regenerated)
+            && PostgresColumnDefinition::needsRegenerating($fromDef, $toDef);
     }
 
     /**
@@ -80,7 +100,10 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
             return self::withoutTypeChange($statements);
         }
         $dependants = $this->obj->dependants ?? null;
-        $regenerated = !empty($this->obj->regenerated);
+        [$to, $from] = $direction === 'up'
+            ? [$this->obj->diff->getNewValue(), $this->obj->diff->getOldValue()]
+            : [$this->obj->diff->getOldValue(), $this->obj->diff->getNewValue()];
+        $regenerated = $this->regenerates($to, $from);
         if ($dependants === null
             || PostgresColumnDependants::isEmpty($dependants)
             || (!$regenerated && !self::changesType($statements))) {

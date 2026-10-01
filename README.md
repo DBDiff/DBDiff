@@ -135,12 +135,37 @@ DOWN. The cases where that takes more than one statement:
   the parent, so its type changes once, on the parent.
 - **Generated columns** whose expression changes are dropped and re-added with
   the new expression, together with their indexes, constraints, comments and
-  grants.
+  grants. A plain column becoming generated is re-added the same way; a
+  generated column becoming plain is `DROP EXPRESSION`, which keeps its values.
+- **Identity columns** are changed in place — `SET GENERATED`, `SET INCREMENT
+  BY ...`, a plain `TYPE` change — so the sequence carries on where it was. A
+  column becoming an identity, or a `serial` one becoming an identity or back,
+  gets a sequence started past the values already in the column, and a serial
+  column's old sequence is dropped rather than left behind.
+- **Column storage and compression** (`SET STORAGE`, `SET COMPRESSION`) are
+  compared, and set again after a type change, which resets both to the new
+  type's defaults.
 - **Enums.** Adding a label is `ALTER TYPE ... ADD VALUE ... BEFORE/AFTER`,
   positioned where the source has it. A label added this way cannot be *used*
-  in the same transaction until it commits (`unsafe use of new value`), so a
-  runner that applies a whole migration in one transaction should apply label
-  additions first.
+  in the same transaction until it commits (`unsafe use of new value`), so
+  `dbdiff migration:up` applies label additions first, each committed, and
+  then the rest of the migration in one transaction; another runner applying a
+  whole migration in one transaction should do the same.
+- **Removing or reordering enum labels** moves everything to a new type with
+  the new labels, which then takes the old one's name. Each column of the
+  type, or an array of it, is retyped with `USING col::text::new`, keeping its
+  data — a row holding a removed label fails the cast, loudly, before anything
+  has changed. Defaults, CHECK constraints and partial or expression indexes
+  that name a label, foreign keys between two tables' columns of the type, and
+  the views, policies, triggers and generated columns reading them stand aside
+  and come back; so do the type's comment and grants.
+- **Creation order.** A function a column default, CHECK constraint or
+  expression index calls is created before the tables. Types, domains,
+  sequences and routines the source no longer has are dropped last, once the
+  tables, columns, views, triggers and policies using them are gone. The DOWN
+  mirrors both: it recreates dropped types and table-called functions first,
+  other functions, views, triggers and policies after the tables, and drops
+  what the UP created only once nothing uses it.
 - **Storage.** `UNLOGGED` / `LOGGED` is compared and ordered by foreign keys,
   and storage parameters (`fillfactor`, `autovacuum_*`) are compared regardless
   of the order they were set in or how a boolean was spelled.
@@ -152,17 +177,17 @@ What is deliberately **not** reported as a difference:
 - The same expression rendered two ways. `status IN ('draft', 'active')` on a
   `varchar` column renders differently once recreated from its own rendering, as
   a dump or a migration does. CHECK constraints, partial indexes, policies,
-  views and trigger conditions are compared by what PostgreSQL makes of them,
-  not by their text.
+  views, trigger conditions, domain CHECKs and generated-column expressions are
+  compared by what PostgreSQL makes of them, not by their text.
 
 Known limitations:
 
-- Removing or reordering enum labels replaces the type, which PostgreSQL
-  refuses while a column uses it; the migration says so in a comment.
-- Changing an identity column's identity drops and re-adds it, which restarts
-  its sequence.
-- Column `STORAGE` and `COMPRESSION` are not yet compared for a table that
-  exists on both sides (#225).
+- An enum label removal or reorder cannot move a routine taking or returning
+  the type, a domain, composite or range type over it, a partition key of the
+  type, or a view using a literal of it without reading a column of it. The
+  migration names them in a comment and falls back to replacing the type,
+  which PostgreSQL then refuses rather than dropping anything; migrate those
+  first, or apply the change by hand.
 
 ### SQLite
 
@@ -416,6 +441,7 @@ _Flags always override settings in `.dbdiff`._
 | `--type=schema\|data\|all` | What to diff. Defaults to `schema`. |
 | `--include=up\|down\|both` | Directions to include. Defaults to `up`. (`all` is accepted as an alias for `both`.) |
 | `--nocomments` | Strip comment headers from output. |
+| `--units` | Mark each change's statements as one unit: `-- dbdiff:unit <Kind> <object>` before them, `-- dbdiff:end` after. For tools that review or apply changes one at a time — an enum label swap, a column type change with its views stood aside or a serial column turned into an identity is several statements that only work together and in order. The markers are SQL comments; the migration runs the same with or without them. |
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Where to write. A **file path** for `native`, `liquibase-xml` and `liquibase-yaml`; a **directory** for `flyway` and `laravel`, which name their own files. Defaults to `migration.sql` in the current directory. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
@@ -773,9 +799,11 @@ Comparisons run in this order:
   `AFTER` so the new label lands where the source has it. Replacing the type
   instead could not be applied at all: `DROP TYPE` fails while any column is
   typed by it, which is every reason the type exists
-- Removing or reordering a label falls back to DROP + CREATE, since `ADD VALUE`
-  cannot express either
-- Enum diffs are ordered before table diffs (tables may reference enum types)
+- Removing or reordering a label moves the columns to a new type and renames
+  it into place, keeping their data and everything that reads them — see
+  "Migrations that run, not just SQL that parses" above
+- A new or changed enum is ordered before table diffs, and an enum the source
+  no longer has after them — tables, views and routines may use it
 - MySQL and SQLite do not have standalone enum types — skipped automatically
 
 ### Composite Types and Domains (PostgreSQL)
@@ -784,7 +812,8 @@ Comparisons run in this order:
   nullability and named CHECK constraints
 - ALTER = DROP + CREATE: neither a composite's attributes nor a domain's base
   type can be changed in place
-- Ordered before table diffs, since a column may be typed by either
+- Created before table diffs, since a column may be typed by either, and
+  dropped after them
 - Every relation also owns a composite type describing its row shape; those
   belong to the table and are not reported separately
 

@@ -23,7 +23,7 @@ class AlterTableDropConstraintSQL implements SQLGenInterface {
             );
         }
         $schema = $this->obj->diff->getOldValue();
-        return $this->dialect->dropConstraint($this->obj->table, $this->obj->name, $schema);
+        return DropIfExists::apply($this->obj, $this->dialect->dropConstraint($this->obj->table, $this->obj->name, $schema));
     }
 
     public function getDown(): string {

@@ -113,7 +113,7 @@ final class ColumnDependantsSQL {
         if (($generated['comment'] ?? null) !== null) {
             $lines[] = "COMMENT ON COLUMN $table.$name IS {$generated['comment']};";
         }
-        return array_merge($lines, self::grantStatements($generated['grants'] ?? [], "($name) ON $table"));
+        return array_merge($lines, GrantSQL::statements($generated['grants'] ?? [], "($name) ON $table"));
     }
 
     /**
@@ -129,30 +129,6 @@ final class ColumnDependantsSQL {
         $notNull = $generated['notNull'] ? ' NOT NULL' : '';
         return "ALTER TABLE $table ADD COLUMN $name {$generated['type']}$collate"
             . " GENERATED ALWAYS AS ({$generated['expression']}) STORED$notNull;";
-    }
-
-    /**
-     * GRANT statements for `[grantee, privilege, grantable]` rows on `$target`
-     * (`ON "v"`, or `("col") ON "t"` for column grants): one per grantee, and
-     * a second where some privileges carry the grant option and others do not.
-     *
-     * @return string[]
-     */
-    private static function grantStatements(array $grants, string $target): array {
-        $grouped = [];
-        foreach ($grants as $g) {
-            $grouped[$g['grantee']][$g['grantable'] ? 1 : 0][] = $g['privilege'];
-        }
-        $lines = [];
-        foreach ($grouped as $grantee => $byOption) {
-            foreach ([0, 1] as $withOption) {
-                if (!empty($byOption[$withOption])) {
-                    $lines[] = 'GRANT ' . implode(', ', $byOption[$withOption]) . " $target TO $grantee"
-                        . ($withOption ? ' WITH GRANT OPTION' : '') . ';';
-                }
-            }
-        }
-        return $lines;
     }
 
     /** @return string[] */
@@ -215,7 +191,7 @@ final class ColumnDependantsSQL {
             $lines[] = "GRANT ALL ON $name TO CURRENT_USER;";
         }
 
-        return array_merge($lines, self::grantStatements($view['grants'] ?? [], "ON $name"));
+        return array_merge($lines, GrantSQL::statements($view['grants'] ?? [], "ON $name"));
     }
 
     /** @return array<int, array<string, mixed>> */

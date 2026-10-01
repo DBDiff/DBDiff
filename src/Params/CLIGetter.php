@@ -11,7 +11,7 @@ class CLIGetter implements ParamsGetter {
         $getopt = ArgvOptions::fromArgv($GLOBALS['argv'] ?? [], [
             'server1', 'server2', 'format',
             'template', 'type', 'include',
-            'nocomments', 'config', 'output', 'debug',
+            'nocomments', 'units', 'config', 'output', 'debug',
             'driver', 'supabase', 'allow-destructive'
         ]);
     
@@ -40,6 +40,9 @@ class CLIGetter implements ParamsGetter {
         }
         if ($getopt->get('--nocomments')) {
             $params->nocomments = $getopt->get('--nocomments');
+        }
+        if ($getopt->get('--units')) {
+            $params->units = (bool) $getopt->get('--units');
         }
         if ($getopt->get('--config')) {
             $params->config = $getopt->get('--config');

@@ -12,6 +12,12 @@ class DropRoutine {
     public ?int $sortOrder = null;
 
     public $definition;
+    /**
+     * A table's default, generated column, constraint or index on the target
+     * calls it, so the DOWN recreates it before the tables — see
+     * CreationOrderPlan.
+     */
+    public bool $early = false;
 
     public function __construct(string $name, string $definition) {
         $this->name       = $name;

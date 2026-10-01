@@ -16,7 +16,7 @@ class AlterTableDropKeySQL implements SQLGenInterface {
     }
 
     public function getUp(): string {
-        return $this->dialect->dropIndex($this->obj->table, $this->obj->key);
+        return DropIfExists::apply($this->obj, $this->dialect->dropIndex($this->obj->table, $this->obj->key));
     }
 
     public function getDown(): string {

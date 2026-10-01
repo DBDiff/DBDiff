@@ -44,6 +44,15 @@ class DiffClassRegistrationTest extends TestCase
         return $reflected->getValue(new DiffSorter());
     }
 
+    public function testSubSlotsBelongToRealDiffClassesAndAppearInBothOrders(): void
+    {
+        foreach (DiffSorter::SUB_SLOTS as $slot => $class) {
+            $this->assertContains($class, $this->diffClassNames());
+            $this->assertContains($slot, $this->order('up_order'));
+            $this->assertContains($slot, $this->order('down_order'));
+        }
+    }
+
     public function testThereAreDiffClassesToCheck(): void
     {
         // Guards the assertions below against a glob that silently finds none.
@@ -91,7 +100,7 @@ class DiffClassRegistrationTest extends TestCase
 
     public function testOrderListsNameOnlyRealDiffClasses(): void
     {
-        $known = $this->diffClassNames();
+        $known = array_merge($this->diffClassNames(), array_keys(DiffSorter::SUB_SLOTS));
         foreach (['up_order', 'down_order'] as $property) {
             $unknown = array_diff($this->order($property), $known);
             $this->assertSame(

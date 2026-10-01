@@ -26,6 +26,13 @@ class DefaultParams {
     */
     public $nocomments = false;
 
+    /*
+     Marks each change's statements as one unit with `-- dbdiff:unit` /
+     `-- dbdiff:end` comment lines, for tools that apply changes one at a time
+     (see MigrationGenerator::UNIT_BEGIN).
+    */
+    public $units = false;
+
     /* 
      By default, DBDiff will look for a .dbdiff file in the current directory
      which is valid YAML, which may also be overridden with a config file that

@@ -68,6 +68,9 @@ class DiffCommand extends Command
             ->addOption('type',        null, InputOption::VALUE_REQUIRED, 'Diff type: schema (default), data, all', 'schema')
             ->addOption('include',     null, InputOption::VALUE_REQUIRED, 'Include: up (default), down, both', 'up')
             ->addOption('nocomments',  null, InputOption::VALUE_NONE,     'Suppress auto-generated comment headers')
+            ->addOption('units',       null, InputOption::VALUE_NONE,
+                'Mark each change\'s statements as one unit (-- dbdiff:unit <Kind> <object> ... -- dbdiff:end), '
+                . 'for tools that apply changes one at a time')
             ->addOption('config',      null, InputOption::VALUE_REQUIRED, 'Path to a .dbdiff config file (YAML)')
             ->addOption('output',      null, InputOption::VALUE_REQUIRED,
                 'Output file path (default: migration.<ext> in cwd). '
@@ -136,6 +139,7 @@ class DiffCommand extends Command
         $params->type        = $input->getOption('type');
         $params->include     = $this->normaliseInclude($input->getOption('include'));
         $params->nocomments  = (bool) $input->getOption('nocomments');
+        $params->units       = (bool) $input->getOption('units');
         $params->debug       = (bool) $input->getOption('debug');
         $params->template    = $input->getOption('template') ?? '';
         $params->config      = $input->getOption('config');
