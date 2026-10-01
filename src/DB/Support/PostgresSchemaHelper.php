@@ -275,20 +275,36 @@ class PostgresSchemaHelper {
      */
     public static function storageStatements(string $table, array $attrByCol): array {
         $out = [];
-        foreach ($attrByCol as $column => $attr) {
-            $actual  = $attr['att_storage'] ?? null;
-            $default = $attr['type_storage'] ?? null;
-            if ($actual === null || $default === null || $actual === $default) {
-                continue;
-            }
-            $word = match ($actual) {
-                'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED',
-                default => null,
-            };
-            if ($word !== null) {
-                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE $word";
+        foreach (self::columnStorage($attrByCol) as $column => $storage) {
+            if ($storage['actual'] !== $storage['default']) {
+                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE {$storage['actual']}";
             }
         }
+        return $out;
+    }
+
+    /**
+     * Each column's storage strategy, and its type's default, as the keywords
+     * `SET STORAGE` takes — what the comparison reads for a table that
+     * exists on both sides (issue #225).
+     *
+     * @return array<string, array{actual: string, default: string}>
+     */
+    public static function columnStorage(array $attrByCol): array {
+        $word = fn(?string $code) => match ($code) {
+            'p' => 'PLAIN', 'e' => 'EXTERNAL', 'm' => 'MAIN', 'x' => 'EXTENDED', default => null,
+        };
+        $out = [];
+        foreach ($attrByCol as $column => $attr) {
+            $actual  = $word($attr['att_storage'] ?? null);
+            $default = $word($attr['type_storage'] ?? null);
+            if ($actual !== null && $default !== null) {
+                $out[$column] = ['actual' => $actual, 'default' => $default];
+            }
+        }
+        // By name: the bulk and per-table fetches read columns in different
+        // orders, and the schema has to be the same either way.
+        ksort($out);
         return $out;
     }
 
@@ -360,6 +376,18 @@ class PostgresSchemaHelper {
         return $ascending
             ? ['min' => '1',    'max' => $ceiling]
             : ['min' => $floor, 'max' => '-1'];
+    }
+
+    /**
+     * The sequence a public table's serial column defaults to, as
+     * `pg_get_serial_sequence` names it (`public.t_id_seq`), or null.
+     */
+    public static function serialSequence(Connection $connection, string $table, string $column): ?string {
+        $rows = $connection->select(
+            'SELECT pg_get_serial_sequence(?, ?) AS name',
+            ['public.' . '"' . str_replace('"', '""', $table) . '"', $column]
+        );
+        return $rows[0]['name'] ?? null;
     }
 
     /**

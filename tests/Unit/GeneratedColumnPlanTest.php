@@ -41,6 +41,32 @@ class GeneratedColumnPlanTest extends TestCase
         $this->assertSame(['g' => true], $plan['regenerate']);
     }
 
+    public function testAColumnCeasingToBeGeneratedIsPlannedForItsDown(): void
+    {
+        // The UP is a DROP EXPRESSION; the DOWN gives a plain column an
+        // expression, which only a drop and re-add can.
+        $plan = GeneratedColumnPlan::plan([
+            'g' => new DiffOpChange('"g" numeric GENERATED ALWAYS AS ((a * 2)) STORED', '"g" numeric'),
+        ]);
+
+        $this->assertSame(['g' => true], $plan['regenerate']);
+    }
+
+    public function testEachDirectionDecidesWhetherItRegenerates(): void
+    {
+        $diff = new AlterTableChangeColumn('t', 'g', new DiffOpChange('"g" numeric GENERATED ALWAYS AS ((a * 2)) STORED', '"g" numeric'));
+        $diff->regenerated = true;
+        $diff->dependants = ['views' => [], 'policies' => [], 'triggers' => [], 'defaultGrantees' => [], 'generated' => [[
+            'schema' => 'public', 'table' => 't', 'name' => 'g', 'type' => 'numeric', 'collation' => null,
+            'expression' => '(a * 2)', 'notNull' => false,
+        ]]];
+        $sql = new AlterTableChangeColumnSQL($diff, new PostgresDialect());
+
+        $this->assertSame('ALTER TABLE "t" ALTER COLUMN "g" DROP EXPRESSION;', $sql->getUp());
+        $this->assertStringContainsString('ALTER TABLE "t" DROP COLUMN "g";', $sql->getDown());
+        $this->assertStringContainsString('GENERATED ALWAYS AS ((a * 2)) STORED', $sql->getDown());
+    }
+
     public function testANullabilityChangeAloneIsNotRegenerated(): void
     {
         $plan = GeneratedColumnPlan::plan([

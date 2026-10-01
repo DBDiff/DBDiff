@@ -6,8 +6,11 @@ use Diff\Differ\ListDiffer;
 use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
+use DBDiff\Diff\AlterTableColumnStorage;
 use DBDiff\Diff\AlterTableCollation;
 use DBDiff\SQLGen\Dialect\PostgresDialect;
+use DBDiff\DB\Support\PostgresColumnDefinition;
+use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Schema\GeneratedColumnPlan;
 
 use DBDiff\Diff\AlterTableAddColumn;
@@ -147,6 +150,12 @@ class TableSchema {
                     || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
                     $changeCol->isGenerated = true;
                 }
+                if ($driver === 'pgsql' && PostgresColumnDefinition::switchesSerial($oldDef, $diff->getNewValue())) {
+                    $serialSide = PostgresColumnDefinition::parse($oldDef)->serial ? 'target' : 'source';
+                    $changeCol->serialSequence = PostgresSchemaHelper::serialSequence(
+                        $this->manager->getDB($serialSide), $table, $column
+                    );
+                }
                 // Read from the target: that is the database the migration
                 // runs against, and its views, policies and triggers are the
                 // ones in the way of a column type change (issue #226). Asked
@@ -181,6 +190,13 @@ class TableSchema {
         }
 
         $this->attachGeneratedColumns($table, $diffs, $generatedPlan, $changes, $diffSequence);
+
+        if ($driver === 'pgsql') {
+            $diffSequence = array_merge(
+                $diffSequence,
+                self::storageDiffs($table, $sourceSchema, $targetSchema, $diffs, array_keys($sourceColumns))
+            );
+        }
 
         // Keys
         $sourceKeys = $sourceSchema['keys'];
@@ -337,6 +353,48 @@ class TableSchema {
             }
         }
         return $dependants;
+    }
+
+    /**
+     * Column storage strategies — PostgreSQL only (issue #225).
+     *
+     * For a column on both sides, its storage is set when it differs — and
+     * also whenever its type changes and the source's storage is not its
+     * type's default, because `ALTER COLUMN ... TYPE` resets storage. For a
+     * column the migration adds, it is set when it is not the default.
+     *
+     * @param array<string, object> $columnDiffs the column diffs, target → source
+     * @param string[]              $columns     the source's compared columns
+     * @return AlterTableColumnStorage[]
+     */
+    private static function storageDiffs(
+        string $table,
+        array $sourceSchema,
+        array $targetSchema,
+        array $columnDiffs,
+        array $columns
+    ): array {
+        $diffs = [];
+        foreach ($columns as $column) {
+            $source = $sourceSchema['storage'][$column] ?? null;
+            if ($source === null) {
+                continue;
+            }
+            $target = $targetSchema['storage'][$column] ?? null;
+            $diff   = $columnDiffs[$column] ?? null;
+            if ($target === null) {
+                if ($source['actual'] !== $source['default']) {
+                    $diffs[] = new AlterTableColumnStorage($table, $column, $source['actual'], $source['default'], true);
+                }
+                continue;
+            }
+            $retyped = $diff instanceof \Diff\DiffOp\DiffOpChange
+                && PostgresDialect::changesColumnType($diff->getOldValue(), $diff->getNewValue());
+            if ($source['actual'] !== $target['actual'] || ($retyped && $source['actual'] !== $source['default'])) {
+                $diffs[] = new AlterTableColumnStorage($table, $column, $source['actual'], $target['actual']);
+            }
+        }
+        return $diffs;
     }
 
     /**

@@ -67,6 +67,12 @@ class AlterTableChangeColumn {
      */
     public array $upSkip = [];
 
+    /**
+     * The serial sequence, for a column becoming or ceasing to be serial: it
+     * is created, or dropped, by name. Read from whichever side is serial.
+     */
+    public ?string $serialSequence = null;
+
     function __construct($table, $column, $diff) {
         $this->table = $table;
         $this->column = $column;

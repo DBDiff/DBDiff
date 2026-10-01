@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DB\Support\PostgresColumnDefinition as Column;
 use DBDiff\SQLGen\Dialect\PostgresDialect;
 
 /**
@@ -30,8 +31,6 @@ use DBDiff\SQLGen\Dialect\PostgresDialect;
  * finds it from the catalog.
  */
 final class GeneratedColumnPlan {
-
-    private const GENERATED = '/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+STORED/i';
 
     /**
      * @param array<string, object> $diffs  column name => DiffOp, target → source
@@ -73,35 +72,30 @@ final class GeneratedColumnPlan {
     }
 
     public static function isGenerated(string $def): bool {
-        return (bool) preg_match(self::GENERATED, $def);
+        return Column::parse($def)->isGenerated();
     }
 
     /**
-     * A generated column staying generated whose expression or type differs —
-     * not merely its nullability, which ALTER can change.
+     * A change PostgreSQL can only make, in one direction or the other, by
+     * dropping and re-adding the column. Both directions count: a generated
+     * column becoming a plain one is a DROP EXPRESSION on the way up, but its
+     * DOWN gives a plain column an expression, which only a drop and re-add
+     * can. Which direction regenerates is decided when the SQL is written.
      */
     private static function definitionChanges(object $diff): bool {
-        if (!($diff instanceof \Diff\DiffOp\DiffOpChange)) {
-            return false;
-        }
-        $old = $diff->getOldValue();
-        $new = $diff->getNewValue();
-        if (!self::isGenerated($old) || !self::isGenerated($new)) {
-            return false;
-        }
-        preg_match(self::GENERATED, $old, $a);
-        preg_match(self::GENERATED, $new, $b);
-        return ($a[1] ?? null) !== ($b[1] ?? null)
-            || PostgresDialect::changesColumnType($old, $new);
+        return $diff instanceof \Diff\DiffOp\DiffOpChange
+            && (Column::needsRegenerating($diff->getOldValue(), $diff->getNewValue())
+                || Column::needsRegenerating($diff->getNewValue(), $diff->getOldValue()));
     }
 
     /** The first of `$columns` the generated definition `$def` reads, if any. */
     private static function readsAny(string $def, array $columns, string $self): ?string {
-        if (!preg_match(self::GENERATED, $def, $m)) {
+        $expression = Column::parse($def)->generated;
+        if ($expression === null) {
             return null;
         }
         foreach ($columns as $column => $_) {
-            if ($column !== $self && preg_match('/\b' . preg_quote($column, '/') . '\b/', $m[1])) {
+            if ($column !== $self && preg_match('/\b' . preg_quote($column, '/') . '\b/', $expression)) {
                 return $column;
             }
         }

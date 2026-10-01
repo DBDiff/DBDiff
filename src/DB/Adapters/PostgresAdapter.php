@@ -90,7 +90,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $bulk = $this->getBulkTableSchema($connection, [$table]);
         return $bulk[$table] ?? [
             'engine' => null, 'collation' => null,
-            'unlogged' => false, 'reloptions' => null, 'inheritedColumns' => [],
+            'unlogged' => false, 'reloptions' => null, 'inheritedColumns' => [], 'storage' => [],
             'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
@@ -388,19 +388,14 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                             --                now distinguishes (issue #215).
                             --   collation    a column's explicit COLLATE.
                             --
-                            -- Storage and compression are deliberately absent.
-                            -- They are rendered for a *new* table and never
-                            -- compared for one that exists on both sides, so
-                            -- hashing them only defeated the skip for such a
-                            -- table and then produced nothing — the diff went
-                            -- on to report the two databases identical, which
-                            -- they are as far as the comparison is concerned
-                            -- (issue #225). The hash covers what the
-                            -- comparison can detect; anything more is work for
-                            -- no answer. Comparing them is a separate change,
-                            -- of the shape #229 took for UNLOGGED.
+                            -- Storage and compression are compared for a table
+                            -- that exists on both sides (issue #225), so they are
+                            -- hashed: without them a table differing only there
+                            -- was skipped by the pre-scan and never compared.
                             format_type(a.atttypid, a.atttypmod)                 || '|' ||
-                            COALESCE(NULLIF(co.collname, 'default'), ''),
+                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
+                            a.attstorage::text                                   || '|' ||
+                            COALESCE(NULLIF(a.attcompression::text, ''), ''),
                             ';' ORDER BY ordinal_position
                         ) AS col_str
                  FROM information_schema.columns isc
@@ -692,6 +687,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             $result[$t] = [
                 'engine'      => null,
                 'collation'   => null,
+                'storage'     => PostgresSchemaHelper::columnStorage($attrByCol[$t] ?? []),
                 'inheritedColumns' => array_keys(array_filter(
                     $attrByCol[$t] ?? [],
                     fn(array $attr) => !empty($attr['inherited'])
