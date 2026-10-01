@@ -47,16 +47,19 @@ class PostgresDialect extends AbstractAnsiDialect {
 
     /** See withSerialSequence(). */
     private ?string $serialSequence = null;
+    private ?string $serialSequenceType = null;
 
     /**
      * This dialect, naming the sequence of a column becoming or ceasing to be
      * serial for changeColumn() — read from the database by the schema diff
      * (AlterTableChangeColumn::$serialSequence), since the definitions do
-     * not carry it.
+     * not carry it — and, for a serial column on both sides, the type its
+     * sequence must end with, when that is not what it has.
      */
-    public function withSerialSequence(?string $sequence): static {
+    public function withSerialSequence(?string $sequence, ?string $type = null): static {
         $copy = clone $this;
-        $copy->serialSequence = $sequence;
+        $copy->serialSequence     = $sequence;
+        $copy->serialSequenceType = $type;
         return $copy;
     }
 
@@ -129,14 +132,16 @@ class PostgresDialect extends AbstractAnsiDialect {
      * started past the values already there; one ceasing to be serial loses
      * its sequence once the default no longer reads it. Before an identity is
      * added, so that `pg_get_serial_sequence` then finds only the identity's.
-     * A serial column retyped takes its sequence with it — `serial` to
-     * `bigserial` otherwise still stops at 2^31.
+     * A serial column on both sides has its sequence retyped when the two
+     * sequences' types differ — `serial` to `bigserial` otherwise still stops
+     * at 2^31. That is read, not assumed: ALTER COLUMN TYPE leaves a
+     * sequence's type alone, so a retyped column's may not have followed.
      *
      * @return string[]
      */
     private function serialChange(string $t, string $c, Column $old, Column $new, string $sequence): array {
         if ($old->serial && $new->serial) {
-            return ["ALTER SEQUENCE $sequence AS {$new->type};"];
+            return $this->serialSequenceType !== null ? ["ALTER SEQUENCE $sequence AS {$this->serialSequenceType};"] : [];
         }
         if (!$new->serial) {
             return ["DROP SEQUENCE IF EXISTS $sequence;"];

@@ -146,7 +146,17 @@ class PostgresDialectTest extends TestCase
         $this->assertSame(
             "ALTER TABLE \"t\" ALTER COLUMN \"id\" TYPE bigint;\n"
             . 'ALTER SEQUENCE public.t_id_seq AS bigint;',
-            $this->dialect->withSerialSequence('public.t_id_seq')->changeColumn('t', 'id', '"id" bigserial', '"id" serial')
+            $this->dialect->withSerialSequence('public.t_id_seq', 'bigint')->changeColumn('t', 'id', '"id" bigserial', '"id" serial')
+        );
+    }
+
+    public function testARetypedSerialLeavesASequenceAlreadyOfTheRightType(): void
+    {
+        // ALTER COLUMN TYPE does not retype the sequence, so the source's
+        // may well still be bigint: nothing to do then.
+        $this->assertSame(
+            'ALTER TABLE "t" ALTER COLUMN "id" TYPE integer;',
+            $this->dialect->withSerialSequence('public.t_id_seq')->changeColumn('t', 'id', '"id" serial', '"id" bigserial')
         );
     }
 

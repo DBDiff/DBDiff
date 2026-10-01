@@ -151,10 +151,7 @@ class TableSchema {
                     $changeCol->isGenerated = true;
                 }
                 if ($driver === 'pgsql' && PostgresColumnDefinition::needsSerialSequence($oldDef, $diff->getNewValue())) {
-                    $serialSide = PostgresColumnDefinition::parse($oldDef)->serial ? 'target' : 'source';
-                    $changeCol->serialSequence = PostgresSchemaHelper::serialSequence(
-                        $this->manager->getDB($serialSide), $table, $column
-                    );
+                    $this->attachSerialSequence($changeCol, $table, $column);
                 }
                 // Read from the target: that is the database the migration
                 // runs against, and its views, policies and triggers are the
@@ -353,6 +350,24 @@ class TableSchema {
             }
         }
         return $dependants;
+    }
+
+    /**
+     * The serial sequence a column change needs by name — read from whichever
+     * side is serial — and, when both are and their sequences' types differ,
+     * the type each direction leaves it with (issue #239).
+     */
+    private function attachSerialSequence(AlterTableChangeColumn $change, string $table, string $column): void {
+        $read = fn(string $side, string $def) => PostgresColumnDefinition::parse($def)->serial
+            ? PostgresSchemaHelper::serialSequence($this->manager->getDB($side), $table, $column)
+            : null;
+        $atTarget = $read('target', $change->diff->getOldValue());
+        $atSource = $read('source', $change->diff->getNewValue());
+
+        $change->serialSequence = ($atTarget ?? $atSource)['name'] ?? null;
+        if ($atTarget !== null && $atSource !== null && $atTarget['type'] !== $atSource['type']) {
+            $change->serialSequenceTypes = ['up' => $atSource['type'], 'down' => $atTarget['type']];
+        }
     }
 
     /**

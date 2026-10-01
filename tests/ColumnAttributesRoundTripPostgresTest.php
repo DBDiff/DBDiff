@@ -78,6 +78,22 @@ class ColumnAttributesRoundTripPostgresTest extends PostgresRoundTripTestCase
         );
     }
 
+    public function testARetypedSerialWhoseSequenceStayedPutIsLeftAlone(): void
+    {
+        // ALTER COLUMN TYPE does not retype a sequence: the source's is still
+        // bigint, as the target's is, and must stay so.
+        $this->assertRoundTrip(
+            'serialint',
+            'CREATE TABLE t (id bigserial, v int); ALTER TABLE t ALTER COLUMN id TYPE integer;' . self::ROWS,
+            'CREATE TABLE t (id bigserial, v int);' . self::ROWS,
+            fn(string $db) => $this->rows(
+                $db,
+                "SELECT seqtypid::regtype::text AS type FROM pg_sequence
+                  WHERE seqrelid = pg_get_serial_sequence('t', 'id')::regclass"
+            )
+        );
+    }
+
     public function testStorageAndCompressionAreApplied(): void
     {
         $up = $this->assertRoundTrip(

@@ -432,15 +432,20 @@ class PostgresSchemaHelper {
     }
 
     /**
-     * The sequence a public table's serial column defaults to, as
-     * `pg_get_serial_sequence` names it (`public.t_id_seq`), or null.
+     * The sequence a public table's serial column defaults to — its name as
+     * `pg_get_serial_sequence` gives it (`public.t_id_seq`) and its type — or
+     * null when the column has none.
+     *
+     * @return array{name: string, type: string}|null
      */
-    public static function serialSequence(Connection $connection, string $table, string $column): ?string {
+    public static function serialSequence(Connection $connection, string $table, string $column): ?array {
         $rows = $connection->select(
-            'SELECT pg_get_serial_sequence(?, ?) AS name',
+            "SELECT s.seq AS name, q.seqtypid::regtype::text AS type
+               FROM (SELECT pg_get_serial_sequence(?, ?) AS seq) s
+               JOIN pg_sequence q ON q.seqrelid = s.seq::regclass",
             ['public.' . '"' . str_replace('"', '""', $table) . '"', $column]
         );
-        return $rows[0]['name'] ?? null;
+        return isset($rows[0]['name']) ? ['name' => $rows[0]['name'], 'type' => $rows[0]['type']] : null;
     }
 
     /**

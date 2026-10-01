@@ -73,6 +73,14 @@ class AlterTableChangeColumn {
      */
     public ?string $serialSequence = null;
 
+    /**
+     * For a serial column on both sides whose sequences' types differ, the
+     * type the sequence ends with in each direction ('up', 'down'). A column
+     * retyped with ALTER COLUMN TYPE keeps its sequence's type, so it is read,
+     * not assumed to follow the column.
+     */
+    public array $serialSequenceTypes = [];
+
     function __construct($table, $column, $diff) {
         $this->table = $table;
         $this->column = $column;
