@@ -10,6 +10,26 @@ use DBDiff\DB\Support\PostgresColumnDependants;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
+    /**
+     * An index as created: a partitioned table's index renders `ON ONLY`, which
+     * makes an index that stays invalid and never reaches a partition. Without
+     * ONLY, PostgreSQL builds or attaches one on every partition, existing or
+     * created later.
+     */
+    private const INDEX_DEF = "regexp_replace(indexdef, ' ON ONLY ', ' ON ')";
+
+    /**
+     * Not a partition's copy of its parent's index — PostgreSQL makes and drops
+     * that with the parent's. Listed, it was created again on its own and left
+     * unattached, the new partitions got none, and the DOWN dropped it after
+     * the parent's index had already taken it.
+     */
+    private const NOT_A_PARTITIONS_COPY = "NOT EXISTS (
+        SELECT 1 FROM pg_inherits inh
+          JOIN pg_class ic ON ic.oid = inh.inhrelid
+          JOIN pg_namespace ns ON ns.oid = ic.relnamespace
+         WHERE ns.nspname = pg_indexes.schemaname AND ic.relname = pg_indexes.indexname)";
+
     public function buildConnectionConfig(array $server, string $db): array {
         return [
             'driver'   => 'pgsql',
@@ -437,9 +457,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              ),
              idx_data AS (
                  SELECT tablename AS table_name,
-                        string_agg(indexname || '|' || indexdef, ';' ORDER BY indexname) AS idx_str
+                        string_agg(indexname || '|' || " . self::INDEX_DEF . ", ';' ORDER BY indexname) AS idx_str
                  FROM pg_indexes
-                 WHERE schemaname = 'public'
+                 WHERE schemaname = 'public' AND " . self::NOT_A_PARTITIONS_COPY . "
                  GROUP BY tablename
              ),
              -- Read from pg_constraint, not information_schema.table_constraints,
@@ -608,9 +628,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         }
 
         $idxRows = $connection->select(
-            "SELECT tablename AS table_name, indexname, indexdef
+            "SELECT tablename AS table_name, indexname, " . self::INDEX_DEF . " AS indexdef
              FROM pg_indexes
              WHERE schemaname = 'public' AND tablename IN ($ph)
+               AND " . self::NOT_A_PARTITIONS_COPY . "
              ORDER BY tablename, indexname",
             $tables
         );
