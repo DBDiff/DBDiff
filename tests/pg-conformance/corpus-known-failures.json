@@ -8,11 +8,9 @@
     "objects_in_quoted_schema (before → after)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
     "objects_in_another_schema (before → after)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
     "partitions_added_with_default_and_index (before → after)": "A new index on a partitioned table is created before the new partitions, and does not reach them.",
-    "trigger_with_condition_and_indexed_matview (before → after)": "A trigger with a WHEN condition, with its function and an indexed materialized view, does not round-trip.",
     "objects_in_quoted_schema (after → before)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
     "objects_in_another_schema (after → before)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
-    "partitions_added_with_default_and_index (after → before)": "A new index on a partitioned table is created before the new partitions, and does not reach them.",
-    "trigger_with_condition_and_indexed_matview (after → before)": "A trigger with a WHEN condition, with its function and an indexed materialized view, does not round-trip."
+    "partitions_added_with_default_and_index (after → before)": "A new index on a partitioned table is created before the new partitions, and does not reach them."
   },
   "data": {}
 }

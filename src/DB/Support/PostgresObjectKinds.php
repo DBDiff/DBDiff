@@ -211,7 +211,7 @@ final class PostgresObjectKinds {
      * PostgresAdapter::getViews() reads pg_views, which holds only ordinary views, so these are
      * a separate kind rather than a filter on that result.
      *
-     * A matview's indexes are carried in its definition rather than through the
+     * A matview's indexes, and its comment, are carried in its definition rather than through the
      * table index path: that path takes its relations from getTables(), which
      * reads pg_tables and so never lists a matview — leaving a unique index on
      * one invisible. Keeping them here also means a changed index shows up as a
@@ -221,7 +221,8 @@ final class PostgresObjectKinds {
         $result = $connection->select(
             "SELECT c.relname AS name,
                     pg_get_viewdef(c.oid, true) AS definition,
-                    array_to_string(c.reloptions, ', ') AS options
+                    array_to_string(c.reloptions, ', ') AS options,
+                    quote_literal(obj_description(c.oid, 'pg_class')) AS comment
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public' AND c.relkind = 'm'
@@ -251,6 +252,12 @@ final class PostgresObjectKinds {
                 . ' AS ' . rtrim(trim($row['definition']), ';');
             foreach ($indexes[$row['name']] ?? [] as $indexDef) {
                 $sql .= ";\n" . $indexDef;
+            }
+            // Its comment too, for the same reason as its indexes: nothing else
+            // reads a matview, so a new one was created without its comment,
+            // and a changed one went unnoticed.
+            if ($row['comment'] !== null) {
+                $sql .= ";\nCOMMENT ON MATERIALIZED VIEW \"" . $row['name'] . '" IS ' . $row['comment'];
             }
             $matviews[$row['name']] = $sql;
         }
