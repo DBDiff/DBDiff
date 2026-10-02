@@ -457,26 +457,6 @@ class PostgresSchemaHelper {
     }
 
     /**
-     * The table a foreign key references, qualified when it is outside
-     * public: a key onto `auth.users` rendered as `REFERENCES "users"`, which
-     * does not exist anywhere the migration runs.
-     */
-    private static function referencedTable(array $c): string {
-        $table  = '"' . str_replace('"', '""', $c['foreign_table']) . '"';
-        $schema = $c['foreign_schema'] ?? 'public';
-        return $schema === 'public' ? $table : '"' . str_replace('"', '""', $schema) . '".' . $table;
-    }
-
-    /** The referenced columns, all of them, in key order. */
-    private static function referencedColumns(array $c): string {
-        $columns = isset($c['foreign_columns']) ? json_decode((string) $c['foreign_columns'], true) : null;
-        if (!is_array($columns) || $columns === []) {
-            $columns = isset($c['foreign_column']) ? [$c['foreign_column']] : [];
-        }
-        return implode(', ', array_map(fn($col) => '"' . str_replace('"', '""', $col) . '"', $columns));
-    }
-
-    /**
      * A table constraint rendered as `CONSTRAINT "name" ...`.
      *
      * Moved off PostgresAdapter, which had grown past the 20-method ceiling the
@@ -507,7 +487,7 @@ class PostgresSchemaHelper {
             $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
             $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
             return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                ' REFERENCES ' . self::referencedTable($c) . ' (' . self::referencedColumns($c) . ')' .
+                ' REFERENCES ' . PostgresForeignKey::references($c) .
                 $match .
                 " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
                 $defer . $notValid;
