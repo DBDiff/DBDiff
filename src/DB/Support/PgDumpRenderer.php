@@ -299,6 +299,7 @@ final class PgDumpRenderer
         $listing     = self::listingFor($connection);
         $schema      = (string) ($connection->getConfig('schema') ?: 'public');
         $names       = self::relatedNames($connection, $table);
+        $standalone  = self::standaloneOwnedSequences($connection, $table);
 
         $wanted = [];
         foreach ($listing as $line) {
@@ -316,7 +317,15 @@ final class PgDumpRenderer
 
             // Everything before the schema is the entry type, which can be more
             // than one word ("FK CONSTRAINT", "MATERIALIZED VIEW").
-            if (!self::wantsType(implode(' ', array_slice($fields, 0, (int) $schemaIndex)))) {
+            $type = implode(' ', array_slice($fields, 0, (int) $schemaIndex));
+            if (!self::wantsType($type)) {
+                continue;
+            }
+            // A sequence the table owns but which is a sequence in its own
+            // right is created by DBDiff's sequence diff, before the table:
+            // creating it here too failed with "relation already exists". Its
+            // ownership still comes from here, once the table exists.
+            if ($type === 'SEQUENCE' && isset($standalone[$fields[$schemaIndex + 1] ?? ''])) {
                 continue;
             }
 
@@ -369,6 +378,32 @@ final class PgDumpRenderer
             ],
             true
         );
+    }
+
+    /**
+     * Sequences owned by a column of this table that are not the column's own
+     * serial — see PostgresSchemaHelper::serialShapedSequence().
+     *
+     * @return array<string, true>
+     */
+    private static function standaloneOwnedSequences(Connection $connection, string $table): array
+    {
+        $rows = $connection->select(
+            "SELECT s.relname AS name
+               FROM pg_depend d
+               JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
+               JOIN pg_sequence sq ON sq.seqrelid = s.oid
+               JOIN pg_class t ON t.oid = d.refobjid
+               JOIN pg_namespace n ON n.oid = t.relnamespace
+              WHERE n.nspname = 'public' AND t.relname = ? AND d.deptype = 'a'
+                AND NOT (" . PostgresSchemaHelper::serialShapedSequence('sq', 's.oid') . ")",
+            [$table]
+        );
+        $names = [];
+        foreach ($rows as $row) {
+            $names[((array) $row)['name']] = true;
+        }
+        return $names;
     }
 
     /**
