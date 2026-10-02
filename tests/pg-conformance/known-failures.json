@@ -16,7 +16,8 @@
     "the target schema. These are defects in existing behaviour.",
     "alter_path: failures on ALTER patterns, invisible until the regression source was fixed. The suite had been fetching 404s and testing object creation only. The identity ones went once identity changes were made in place (#236).",
     "hard_cases: the renderer corpus from @akalforge/pg-conformance, now run in CI. These are DDL shapes the renderer cannot yet reproduce \u2014 exclusion constraints, NULLS NOT DISTINCT, NOT VALID, foreign key variants and several partitioning forms. Recorded so the count can only go down.",
-    "hard_table_like_including_all fails only on PostgreSQL 18, which named NOT NULL constraints. LIKE ... INCLUDING ALL copies them, and the renderer re-emits the source table's constraint names on the new table rather than letting the server derive them."
+    "hard_table_like_including_all fails only on PostgreSQL 18, which named NOT NULL constraints. LIKE ... INCLUDING ALL copies them, and the renderer re-emits the source table's constraint names on the new table rather than letting the server derive them.",
+    "builtin_renderer_only: cases pg_dump reproduces on PostgreSQL 16-18 and the built-in renderer does not yet. Known failures only on a run that never used pg_dump (none on PATH, too old, or DBDIFF_PG_DUMP_RENDERER=off); CI installs a matching pg_dump, so there they must pass."
   ],
   "alter_path": [
     "alter_table_drop_default_139",
@@ -49,21 +50,22 @@
     "hard_exclusion_gist",
     "hard_exclusion_with_where",
     "hard_fk_circular_deferred",
-    "hard_fk_match_full",
-    "hard_fk_set_null_cols",
-    "hard_inherits",
-    "hard_inherits_multiple_parents",
     "hard_multiple_comments",
-    "hard_nulls_not_distinct",
     "hard_part_child_own_constraint",
-    "hard_part_fk_to_partitioned",
     "hard_part_list_subpart",
-    "hard_seq_owned_options",
     "hard_table_like_including_all",
-    "hard_type_bit_varbit",
-    "hard_unique_multicolumn_nulls",
     "identity_drop_default_37"
   ],
   "unmodelled_kind": [],
-  "wrong_output": []
+  "wrong_output": [],
+  "builtin_renderer_only": [
+    "hard_fk_set_null_cols",
+    "hard_inherits",
+    "hard_inherits_multiple_parents",
+    "hard_nulls_not_distinct",
+    "hard_part_fk_to_partitioned",
+    "hard_seq_owned_options",
+    "hard_type_bit_varbit",
+    "hard_unique_multicolumn_nulls"
+  ]
 }

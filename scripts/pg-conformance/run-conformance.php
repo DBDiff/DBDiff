@@ -179,10 +179,18 @@ function schemasMatch(array $a, array $b): bool {
 // list cannot quietly rot.
 $knownFile = __DIR__ . '/../../tests/pg-conformance/known-failures.json';
 $known = [];
+$builtinOnly = [];
 if (file_exists($knownFile)) {
     $decoded = json_decode(file_get_contents($knownFile), true);
     $known = array_flip($decoded['known_failures'] ?? []);
+    // Cases the pg_dump renderer reproduces and the built-in one cannot yet.
+    // Known failures only on a run that never used pg_dump, so CI — which
+    // installs a matching pg_dump — still fails if pg_dump stops reproducing
+    // them, while a run without pg_dump on PATH does not report them as new.
+    $builtinOnly = array_flip($decoded['builtin_renderer_only'] ?? []);
 }
+// Whether any case's DDL came from pg_dump; decides which baseline applies.
+$pgDumpUsed = false;
 
 // ── Run tests ───────────────────────────────────────────────────────────
 $results = [
@@ -295,6 +303,7 @@ foreach ($patterns as $i => $pattern) {
         // Catch any error from DBDiff
     }
     ob_end_clean();
+    $pgDumpUsed = $pgDumpUsed || \DBDiff\DB\Support\PgDumpRenderer::wasUsed();
 
     $rawDiff = file_exists($outputFile) ? trim(file_get_contents($outputFile)) : '';
     @unlink($outputFile);
@@ -432,6 +441,11 @@ echo "  Skipped (SQL err): {$results['skip']}\n";
 echo "  Skipped (PG ver):  {$results['skip_version']}\n";
 echo "  Excluded:          {$results['skip_excluded']}\n";
 echo "======================================\n";
+
+echo "  Renderer: " . ($pgDumpUsed ? 'pg_dump' : 'built-in') . "\n";
+if (!$pgDumpUsed) {
+    $known += $builtinOnly;
+}
 
 $unexpected = [];
 $fixed = [];

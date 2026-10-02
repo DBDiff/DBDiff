@@ -616,7 +616,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                     att.attname  AS column_name,
                     cols.ord     AS ordinal_position,
                     frel.relname AS foreign_table,
-                    fatt.attname AS foreign_column,
+                    fnsp.nspname AS foreign_schema,
+                    -- Every referenced column, in key order: reading only
+                    -- confkey[1] rendered a two-column key as REFERENCES p (a).
+                    (SELECT json_agg(fa.attname ORDER BY fk.ord)
+                       FROM unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord)
+                       JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = fk.attnum
+                    ) AS foreign_columns,
                     CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
                                          WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
                                          WHEN 'a' THEN 'NO ACTION' END AS update_rule,
@@ -633,8 +639,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              LEFT JOIN pg_attribute att  ON att.attrelid  = con.conrelid
                                         AND att.attnum    = cols.attnum
              LEFT JOIN pg_class frel     ON con.confrelid = frel.oid
-             LEFT JOIN pg_attribute fatt ON fatt.attrelid = con.confrelid
-                                        AND fatt.attnum   = con.confkey[1]
+             LEFT JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
              WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
                AND con.contype IN ('f', 'u', 'p')
              ORDER BY rel.relname, con.conname, cols.ord",

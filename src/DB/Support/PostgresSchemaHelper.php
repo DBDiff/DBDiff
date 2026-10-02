@@ -487,7 +487,7 @@ class PostgresSchemaHelper {
             $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
             $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
             return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
-                " REFERENCES \"{$c['foreign_table']}\" (\"{$c['foreign_column']}\")" .
+                ' REFERENCES ' . PostgresForeignKey::references($c) .
                 $match .
                 " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
                 $defer . $notValid;

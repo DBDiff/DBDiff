@@ -23,8 +23,8 @@ use Illuminate\Database\Connection;
  * and routines are touched (DiffSorter). The views, policies and triggers
  * another diff of that direction drops or changes are left to that diff, as
  * for a column type change (ColumnDependantPlan): it runs later, once the
- * labels it may name exist. The constraints the UP has already dropped by
- * then are left out.
+ * labels it may name exist. A constraint the UP drops anyway is dropped by
+ * the swap as well and not put back, so the swap stands on its own.
  *
  * A constraint or index whose definition names a removed label cannot come
  * back. The destination cannot have it either, so another diff drops or
@@ -44,7 +44,7 @@ final class EnumSwapPlan {
             if (self::needsSwap($diff->targetDefinition, $diff->sourceDefinition)) {
                 $diff->swaps['up'] = self::direction(
                     $diff->name, $diff->targetDefinition, $diff->sourceDefinition, $diffs,
-                    $target, ColumnDependantPlan::handledByOwnDiff($diffs, 'up'), self::droppedBefore($diffs)
+                    $target, ColumnDependantPlan::handledByOwnDiff($diffs, 'up'), self::droppedByTheUp($diffs)
                 );
             }
             if (self::needsSwap($diff->sourceDefinition, $diff->targetDefinition)) {
@@ -66,7 +66,7 @@ final class EnumSwapPlan {
     /**
      * @param Connection          $here  the database this direction runs against
      * @param array<string, true> $skip  readers another diff of this direction recreates
-     * @param array<string, true> $gone  constraints already dropped when the swap runs
+     * @param array<string, true> $gone  constraints the UP drops anyway
      */
     private static function direction(
         string $type, string $from, string $to, array $diffs,
@@ -89,13 +89,14 @@ final class EnumSwapPlan {
         }
         unset($column);
 
-        $usage['constraints'] = array_values(array_filter(
-            $usage['constraints'],
-            fn($c) => !isset($gone[$c['table'] . '.' . $c['name']])
-        ));
         foreach (['constraints', 'indexes'] as $kind) {
             foreach ($usage[$kind] as &$object) {
-                $object['recreate'] = !EnumLabels::mentioned($object['definition'], $type, $removed);
+                // One the UP drops before it swaps is dropped here too, IF
+                // EXISTS: the swap then works whatever runs first — a tool
+                // applying changes one at a time may well reorder them.
+                $droppedAnyway = $kind === 'constraints' && isset($gone[$object['table'] . '.' . $object['name']]);
+                $object['recreate'] = !$droppedAnyway
+                    && !EnumLabels::mentioned($object['definition'], $type, $removed);
                 if (!$object['recreate']) {
                     self::markDropIfExists($diffs, $object['table'], $object['name']);
                 }
@@ -111,8 +112,8 @@ final class EnumSwapPlan {
         ];
     }
 
-    /** `table.name` of each constraint the UP drops before it swaps. */
-    private static function droppedBefore(array $diffs): array {
+    /** `table.name` of each constraint the UP drops. */
+    private static function droppedByTheUp(array $diffs): array {
         $keys = [];
         foreach ($diffs as $diff) {
             if ($diff instanceof AlterTableDropConstraint) {
