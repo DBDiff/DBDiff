@@ -47,37 +47,6 @@ class PostgresSchemaHelper {
      * @param string $oidExpr  SQL expression for the object's oid in the caller's
      *                         query, e.g. `p.oid`.
      */
-    /**
-     * SQL true when the sequence `$seq` (a pg_sequence alias, its relation's
-     * oid in `$oid`) is a serial column's own: owned by its column, every
-     * option at what `serial` gives it, and feeding no other default.
-     *
-     * A sequence owned by a column but with options of its own, or shared by
-     * several defaults, is a sequence in its own right: modelled standalone and
-     * created with all its options, its ownership set once the column exists.
-     * Shared by the sequence kind and the pg_dump renderer, which must agree on
-     * which sequences a table's DDL creates.
-     */
-    public static function serialShapedSequence(string $seq, string $oid): string {
-        return "EXISTS (
-                    SELECT 1 FROM pg_depend own
-                     WHERE own.objid = $oid
-                       AND own.classid = 'pg_class'::regclass
-                       AND own.refclassid = 'pg_class'::regclass
-                       AND own.refobjsubid > 0
-                       AND own.deptype = 'a')
-                AND $seq.seqstart = 1 AND $seq.seqincrement = 1 AND $seq.seqmin = 1
-                AND $seq.seqcache = 1 AND NOT $seq.seqcycle
-                AND $seq.seqmax = CASE $seq.seqtypid
-                      WHEN 'int2'::regtype THEN 32767
-                      WHEN 'int4'::regtype THEN 2147483647
-                      ELSE 9223372036854775807 END
-                AND (SELECT count(*) FROM pg_depend uses
-                      WHERE uses.refobjid = $oid
-                        AND uses.refclassid = 'pg_class'::regclass
-                        AND uses.classid = 'pg_attrdef'::regclass) <= 1";
-    }
-
     public static function notExtensionMember(string $classid, string $oidExpr): string {
         return "NOT EXISTS (
                     SELECT 1 FROM pg_depend ext_dep

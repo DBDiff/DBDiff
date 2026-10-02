@@ -64,7 +64,7 @@ final class PostgresObjectKinds {
                -- right, and was lost as one: recreated as the column's serial,
                -- its type taken from the column and its START, CACHE and
                -- bounds dropped, and created after a table already using it.
-               AND NOT (" . PostgresSchemaHelper::serialShapedSequence('sq', 'c.oid') . ")
+               AND NOT (" . OwnedSequences::serialShaped('sq', 'c.oid') . ")
              ORDER BY c.relname"
         );
         $sequences = [];

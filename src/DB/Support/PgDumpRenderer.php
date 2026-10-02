@@ -296,48 +296,44 @@ final class PgDumpRenderer
      */
     private static function entriesFor(Connection $connection, string $table): array
     {
-        $listing     = self::listingFor($connection);
-        $schema      = (string) ($connection->getConfig('schema') ?: 'public');
-        $names       = self::relatedNames($connection, $table);
-        $standalone  = self::standaloneOwnedSequences($connection, $table);
+        $schema     = (string) ($connection->getConfig('schema') ?: 'public');
+        $names      = self::relatedNames($connection, $table);
+        $standalone = OwnedSequences::standaloneOf($connection, $table);
 
-        $wanted = [];
-        foreach ($listing as $line) {
-            if (!preg_match('/^\s*\d+;\s+\d+\s+\d+\s+(.*)$/', $line, $m)) {
-                continue;
-            }
-            $fields = preg_split('/\s+/', trim($m[1])) ?: [];
+        return array_values(array_filter(
+            self::listingFor($connection),
+            fn(string $line) => self::belongsToTable($line, $schema, $names, $standalone)
+        ));
+    }
 
-            // The schema must appear, so an identically named object in another
-            // schema cannot be pulled in.
-            $schemaIndex = array_search($schema, $fields, true);
-            if ($schemaIndex === false) {
-                continue;
-            }
-
-            // Everything before the schema is the entry type, which can be more
-            // than one word ("FK CONSTRAINT", "MATERIALIZED VIEW").
-            $type = implode(' ', array_slice($fields, 0, (int) $schemaIndex));
-            if (!self::wantsType($type)) {
-                continue;
-            }
-            // A sequence the table owns but which is a sequence in its own
-            // right is created by DBDiff's sequence diff, before the table:
-            // creating it here too failed with "relation already exists". Its
-            // ownership still comes from here, once the table exists.
-            if ($type === 'SEQUENCE' && isset($standalone[$fields[$schemaIndex + 1] ?? ''])) {
-                continue;
-            }
-
-            foreach ($fields as $field) {
-                if (isset($names[$field])) {
-                    $wanted[] = $line;
-                    break;
-                }
-            }
+    /**
+     * Whether one listing line is an entry of the table's DDL.
+     *
+     * @param array<string, true> $names      objects whose DDL belongs with the table
+     * @param array<string, true> $standalone sequences it owns that are not its serial's
+     */
+    private static function belongsToTable(string $line, string $schema, array $names, array $standalone): bool
+    {
+        if (!preg_match('/^\s*\d+;\s+\d+\s+\d+\s+(.*)$/', $line, $m)) {
+            return false;
         }
+        $fields = preg_split('/\s+/', trim($m[1])) ?: [];
 
-        return $wanted;
+        // The schema must appear, so an identically named object in another
+        // schema cannot be pulled in. Everything before it is the entry type,
+        // which can be more than one word ("FK CONSTRAINT", "MATERIALIZED VIEW").
+        $schemaIndex = array_search($schema, $fields, true);
+        $type = $schemaIndex === false ? '' : implode(' ', array_slice($fields, 0, (int) $schemaIndex));
+
+        // A sequence the table owns but which is a sequence in its own right is
+        // created by DBDiff's sequence diff, before the table: creating it here
+        // too failed with "relation already exists". Its ownership still comes
+        // from here, once the table exists.
+        $standaloneSequence = $type === 'SEQUENCE' && isset($standalone[$fields[(int) $schemaIndex + 1] ?? '']);
+
+        return self::wantsType($type)
+            && !$standaloneSequence
+            && array_intersect_key($names, array_flip($fields)) !== [];
     }
 
     /**
@@ -378,32 +374,6 @@ final class PgDumpRenderer
             ],
             true
         );
-    }
-
-    /**
-     * Sequences owned by a column of this table that are not the column's own
-     * serial — see PostgresSchemaHelper::serialShapedSequence().
-     *
-     * @return array<string, true>
-     */
-    private static function standaloneOwnedSequences(Connection $connection, string $table): array
-    {
-        $rows = $connection->select(
-            "SELECT s.relname AS name
-               FROM pg_depend d
-               JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
-               JOIN pg_sequence sq ON sq.seqrelid = s.oid
-               JOIN pg_class t ON t.oid = d.refobjid
-               JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ? AND d.deptype = 'a'
-                AND NOT (" . PostgresSchemaHelper::serialShapedSequence('sq', 's.oid') . ")",
-            [$table]
-        );
-        $names = [];
-        foreach ($rows as $row) {
-            $names[((array) $row)['name']] = true;
-        }
-        return $names;
     }
 
     /**
