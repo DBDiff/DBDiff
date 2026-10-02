@@ -55,7 +55,7 @@ final class OwnedSequences
                JOIN pg_sequence sq ON sq.seqrelid = s.oid
                JOIN pg_class t ON t.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ? AND d.deptype = 'a'
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ? AND d.deptype = 'a'
                 AND NOT (" . self::serialShaped('sq', 's.oid') . ")",
             [$table]
         );

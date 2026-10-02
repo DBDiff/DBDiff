@@ -88,7 +88,7 @@ class PostgresSchemaHelper {
                JOIN pg_namespace n ON n.oid = c.relnamespace
                LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
                LEFT JOIN pg_class parent ON parent.oid = i.inhparent
-              WHERE n.nspname = 'public' AND c.relname = ?",
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?",
             [$table]
         );
         $row = $rows[0] ?? null;
@@ -186,7 +186,7 @@ class PostgresSchemaHelper {
             "SELECT t.typname, t.typnotnull
              FROM pg_type t
              JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public' AND t.typtype = 'd'"
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.typtype = 'd'"
         );
 
         $out = [];
@@ -237,7 +237,7 @@ class PostgresSchemaHelper {
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid
              LEFT JOIN pg_collation co ON co.oid = a.attcollation
-             WHERE c.relnamespace = 'public'::regnamespace
+             WHERE c.relnamespace = " . SchemaScope::literal($connection) . "::regnamespace
                AND c.relname IN (" . QueryHelper::placeholders($tables) . ")
                AND a.attnum > 0 AND NOT a.attisdropped",
             $tables
@@ -398,7 +398,7 @@ class PostgresSchemaHelper {
                     " . self::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = 'public' AND c.relname IN ($ph)",
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname IN ($ph)",
             $tables
         );
         $meta = [];
@@ -423,7 +423,8 @@ class PostgresSchemaHelper {
             "SELECT s.seq AS name, q.seqtypid::regtype::text AS type
                FROM (SELECT pg_get_serial_sequence(?, ?) AS seq) s
                JOIN pg_sequence q ON q.seqrelid = s.seq::regclass",
-            ['public.' . '"' . str_replace('"', '""', $table) . '"', $column]
+            // Always qualified: an unqualified name would depend on search_path.
+            ['"' . str_replace('"', '""', SchemaScope::of($connection)) . '"."' . str_replace('"', '""', $table) . '"', $column]
         );
         return isset($rows[0]['name']) ? ['name' => $rows[0]['name'], 'type' => $rows[0]['type']] : null;
     }

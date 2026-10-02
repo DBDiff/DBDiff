@@ -108,13 +108,13 @@ final class PostgresColumnDependants {
      *     re-added around the change, so whatever reads *them* has to stand
      *     aside too (issue #233).
      */
-    private static function targetColumnCte(): string {
+    private static function targetColumnCte(Connection $connection): string {
         return "target_col AS (
                  WITH RECURSIVE rels AS (
                      SELECT c.oid
                      FROM pg_class c
                      JOIN pg_namespace n ON n.oid = c.relnamespace
-                     WHERE n.nspname = 'public' AND c.relname = ?
+                     WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?
                      UNION
                      SELECT i.inhrelid FROM pg_inherits i JOIN rels ON i.inhparent = rels.oid
                  ),
@@ -139,7 +139,7 @@ final class PostgresColumnDependants {
      */
     private static function views(Connection $connection, string $table, string $column): array {
         $rows = $connection->select(
-            "WITH RECURSIVE " . self::targetColumnCte() . ",
+            "WITH RECURSIVE " . self::targetColumnCte($connection) . ",
              deps AS (
                  SELECT DISTINCT dependent.oid AS view_oid, 1 AS depth
                  FROM pg_depend d
@@ -234,7 +234,7 @@ final class PostgresColumnDependants {
         $viewList = $viewOids === [] ? '0' : implode(',', array_map('intval', $viewOids));
 
         $rows = $connection->select(
-            "WITH " . self::targetColumnCte() . "
+            "WITH " . self::targetColumnCte($connection) . "
              SELECT DISTINCT n.nspname AS schema, c.relname AS table_name, p.polname AS name,
                     p.polpermissive AS permissive,
                     CASE p.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
@@ -275,7 +275,7 @@ final class PostgresColumnDependants {
     /** Triggers whose WHEN condition or column list names the column. */
     private static function triggers(Connection $connection, string $table, string $column): array {
         $rows = $connection->select(
-            "WITH " . self::targetColumnCte() . "
+            "WITH " . self::targetColumnCte($connection) . "
              SELECT DISTINCT n.nspname AS schema, c.relname AS table_name, t.tgname AS name,
                     pg_get_triggerdef(t.oid) AS definition
              FROM pg_depend d
@@ -357,7 +357,7 @@ final class PostgresColumnDependants {
                                 AND (g.attgenerated = 's' OR $itselfSql)
              LEFT JOIN pg_attrdef ad ON ad.adrelid = c.oid AND ad.adnum = g.attnum
              LEFT JOIN pg_collation co ON co.oid = g.attcollation
-             WHERE n.nspname = 'public' AND c.relname = ? AND g.attinhcount = 0
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ? AND g.attinhcount = 0
                AND $which
              ORDER BY g.attnum",
             [$column, $table]

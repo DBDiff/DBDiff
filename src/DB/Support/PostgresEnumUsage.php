@@ -32,11 +32,14 @@ use Illuminate\Database\Connection;
  */
 final class PostgresEnumUsage {
 
-    private const TYPE_CTE = "WITH ty AS (
+    /** The enum type itself, in the connection's schema, as `ty`. */
+    private static function typeCte(Connection $connection): string {
+        return "WITH ty AS (
         SELECT t.oid, t.typarray
           FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
-         WHERE n.nspname = 'public' AND t.typname = ?
+         WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.typname = ?
     )";
+    }
 
     /**
      * @return array{
@@ -111,7 +114,7 @@ final class PostgresEnumUsage {
      * parent's DROP DEFAULT also clears; parents come first.
      */
     private static function columns(Connection $connection, string $type): array {
-        $rows = $connection->select(self::TYPE_CTE . "
+        $rows = $connection->select(self::typeCte($connection) . "
             SELECT c.relname AS table_name, a.attname AS column_name,
                    a.atttypid = ty.typarray AS is_array,
                    a.attinhcount > 0 AS inherited,
@@ -124,7 +127,7 @@ final class PostgresEnumUsage {
               LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
               LEFT JOIN pg_partitioned_table pk ON pk.partrelid = c.oid
                                                AND a.attnum = ANY (pk.partattrs::int2[])
-             WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relkind IN ('r', 'p')
                AND NOT a.attisdropped AND a.attnum > 0
                AND a.attgenerated = ''
              ORDER BY a.attinhcount > 0, c.relname, a.attnum",
@@ -147,14 +150,14 @@ final class PostgresEnumUsage {
      * child inherits from its parent's.
      */
     private static function constraints(Connection $connection, string $type): array {
-        $rows = $connection->select(self::TYPE_CTE . "
+        $rows = $connection->select(self::typeCte($connection) . "
             SELECT c.relname AS table_name, k.conname AS name,
                    pg_get_constraintdef(k.oid) AS definition,
                    quote_literal(obj_description(k.oid, 'pg_constraint')) AS comment
               FROM ty, pg_constraint k
               JOIN pg_class c ON c.oid = k.conrelid
               JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public' AND k.conislocal AND k.conparentid = 0
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND k.conislocal AND k.conparentid = 0
                AND (EXISTS (SELECT 1 FROM pg_depend d
                              WHERE d.classid = 'pg_constraint'::regclass AND d.objid = k.oid
                                AND d.refobjid IN (ty.oid, ty.typarray))
@@ -177,7 +180,7 @@ final class PostgresEnumUsage {
      * copy of its parent's.
      */
     private static function indexes(Connection $connection, string $type): array {
-        $rows = $connection->select(self::TYPE_CTE . "
+        $rows = $connection->select(self::typeCte($connection) . "
             SELECT t.relname AS table_name, i.relname AS name,
                    -- A partitioned table's index renders ON ONLY, which would
                    -- come back without its partitions' indexes.
@@ -189,7 +192,7 @@ final class PostgresEnumUsage {
               JOIN pg_class i ON i.oid = x.indexrelid
               JOIN pg_class t ON t.oid = x.indrelid
               JOIN pg_namespace n ON n.oid = t.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND EXISTS (SELECT 1 FROM pg_depend d
                             WHERE d.classid = 'pg_class'::regclass AND d.objid = i.oid
                               AND d.refobjid IN (ty.oid, ty.typarray))
@@ -226,11 +229,11 @@ final class PostgresEnumUsage {
      * @return list<array{kind: string, key: string, description: string}>
      */
     private static function users(Connection $connection, string $type): array {
-        return $connection->select(self::TYPE_CTE . "
+        return $connection->select(self::typeCte($connection) . "
             SELECT CASE
                      WHEN d.classid = 'pg_class'::regclass AND c.relkind IN ('i', 'I') THEN 'index'
                      WHEN d.classid = 'pg_class'::regclass AND c.relkind IN ('v', 'm') THEN 'view'
-                     WHEN d.classid = 'pg_class'::regclass AND n.nspname <> 'public' THEN 'other'
+                     WHEN d.classid = 'pg_class'::regclass AND n.nspname <> " . SchemaScope::literal($connection) . " THEN 'other'
                      WHEN d.classid = 'pg_class'::regclass AND c.relkind IN ('r', 'p') AND d.objsubid > 0
                           AND a.attgenerated = 's' THEN 'generated'
                      -- objsubid 0 on a table is its partition key, which no
@@ -288,7 +291,7 @@ final class PostgresEnumUsage {
 
     /** The type's comment and grants, which DROP TYPE takes with it. */
     private static function typeMetadata(Connection $connection, string $type): array {
-        $rows = $connection->select(self::TYPE_CTE . "
+        $rows = $connection->select(self::typeCte($connection) . "
             SELECT quote_literal(obj_description(t.oid, 'pg_type')) AS comment,
                    t.typacl IS NOT NULL
                      AND NOT EXISTS (SELECT 1 FROM aclexplode(t.typacl) a WHERE a.grantee = 0) AS public_revoked,
