@@ -7,6 +7,7 @@ use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use DBDiff\Params\ParamsFactory;
 use DBDiff\Params\TableFilter;
+use DBDiff\DB\Support\ComputedColumns;
 use Illuminate\Support\Arr;
 
 
@@ -69,7 +70,7 @@ class TableData {
      * `$into` is the database the rows are inserted into.
      */
     private function withOverriding(array $diffs, string $into, string $table): array {
-        $identity = $this->manager->getIdentityAlwaysColumns($into, $table);
+        $identity = ComputedColumns::identityAlways($this->manager->getDB($into), $this->manager->getDriver(), $table);
         if (empty($identity)) {
             return $diffs;
         }

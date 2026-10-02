@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB;
 
+use DBDiff\DB\Support\ComputedColumns;
+
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Events\StatementPrepared;
 use Illuminate\Events\Dispatcher;
@@ -113,12 +115,8 @@ class DBManager {
         $db = $this->getDB($connection);
         return array_values(array_diff(
             $this->adapter->getColumns($db, $table),
-            $this->adapter->getGeneratedColumns($db, $table)
+            ComputedColumns::generated($db, $this->getDriver(), $table)
         ));
-    }
-
-    public function getIdentityAlwaysColumns(string $connection, string $table): array {
-        return $this->adapter->getIdentityAlwaysColumns($this->getDB($connection), $table);
     }
 
     public function getKey(string $connection, string $table): array {

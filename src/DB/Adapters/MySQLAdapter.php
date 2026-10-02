@@ -106,24 +106,7 @@ class MySQLAdapter implements DBAdapterInterface {
         return $binary;
     }
 
-    public function getGeneratedColumns(Connection $connection, string $table): array {
-        // Filtered here rather than with LIKE on information_schema, whose
-        // collation can clash with the connection's (error 1267). Only VIRTUAL
-        // or STORED GENERATED: MySQL 8 also writes DEFAULT_GENERATED for a
-        // column whose default is an expression, which is an ordinary column.
-        $generated = [];
-        foreach ($connection->select("SHOW COLUMNS FROM `$table`") as $row) {
-            if (preg_match('/\b(?:VIRTUAL|STORED) GENERATED\b/i', (string) ($row['Extra'] ?? ''))) {
-                $generated[] = $row['Field'];
-            }
-        }
-        return $generated;
-    }
 
-    public function getIdentityAlwaysColumns(Connection $connection, string $table): array {
-        // MySQL has no identity column a value cannot be given for.
-        return [];
-    }
 
     public function getForeignKeyMap(Connection $connection): array {
         $db = $connection->getDatabaseName();

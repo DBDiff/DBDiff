@@ -30,16 +30,12 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
      * ordinary character. Binary data is a hex literal.
      */
     public function literal(mixed $value): string {
-        if ($value === null) {
-            return 'NULL';
-        }
-        if ($value instanceof BinaryValue) {
-            return "X'" . $value->hex . "'";
-        }
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
-        }
-        return "'" . str_replace("'", "''", ScalarText::of($value)) . "'";
+        return match (true) {
+            $value === null               => 'NULL',
+            $value instanceof BinaryValue => "X'" . $value->hex . "'",
+            is_bool($value)               => $value ? '1' : '0',
+            default                       => "'" . str_replace("'", "''", ScalarText::of($value)) . "'",
+        };
     }
 
     public function insertRow(string $table, array $columns, array $literals, bool $overriding = false): string {

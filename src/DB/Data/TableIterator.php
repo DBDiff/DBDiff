@@ -3,13 +3,22 @@
 
 class TableIterator {
 
+    private $connection;
+    private string $table;
+    /** @var string[] */
+    private array $order;
+    /** @var string[] */
+    private array $columns;
+    private int $offset;
+    private int $size;
+
     /**
      * @param string[] $order   Columns to page in order of: the key, or every
      *                          column of a table without one.
      * @param string[] $columns Columns to read; all of them when empty. The
      *                          data diff leaves out generated columns.
      */
-    function __construct($connection, $table, array $order = [], array $columns = []) {
+    public function __construct($connection, $table, array $order = [], array $columns = []) {
         $this->connection = $connection;
         $this->table = $table;
         $this->order = $order;

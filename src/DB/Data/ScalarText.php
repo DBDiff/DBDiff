@@ -12,15 +12,13 @@ final class ScalarText
 {
     public static function of(mixed $value): string
     {
-        if (is_float($value)) {
-            if (is_nan($value)) {
-                return 'NaN';
-            }
-            if (is_infinite($value)) {
-                return $value > 0 ? 'Infinity' : '-Infinity';
-            }
-            return var_export($value, true);
+        if (!is_float($value)) {
+            return (string) $value;
         }
-        return (string) $value;
+        return match (true) {
+            is_nan($value)      => 'NaN',
+            is_infinite($value) => $value > 0 ? 'Infinity' : '-Infinity',
+            default             => var_export($value, true),
+        };
     }
 }

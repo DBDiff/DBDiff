@@ -23,16 +23,12 @@ class MySQLDialect implements SQLDialectInterface {
     }
 
     public function literal(mixed $value): string {
-        if ($value === null) {
-            return 'NULL';
-        }
-        if ($value instanceof BinaryValue) {
-            return "UNHEX('" . $value->hex . "')";
-        }
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
-        }
-        return "'" . addslashes(ScalarText::of($value)) . "'";
+        return match (true) {
+            $value === null               => 'NULL',
+            $value instanceof BinaryValue => "UNHEX('" . $value->hex . "')",
+            is_bool($value)               => $value ? '1' : '0',
+            default                       => "'" . addslashes(ScalarText::of($value)) . "'",
+        };
     }
 
     public function isMySQLOnly(): bool {

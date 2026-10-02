@@ -40,20 +40,19 @@ class PostgresDialect extends AbstractAnsiDialect {
      * literal would not. Binary data is bytea's hex form.
      */
     public function literal(mixed $value): string {
-        if ($value === null) {
-            return 'NULL';
-        }
-        if ($value instanceof BinaryValue) {
-            return "'\\x" . strtolower($value->hex) . "'::bytea";
-        }
-        if (is_bool($value)) {
-            return $value ? 'true' : 'false';
-        }
-        $text = ScalarText::of($value);
-        if (str_contains($text, '\\')) {
-            return "E'" . str_replace(['\\', "'"], ['\\\\', "''"], $text) . "'";
-        }
-        return "'" . str_replace("'", "''", $text) . "'";
+        return match (true) {
+            $value === null               => 'NULL',
+            $value instanceof BinaryValue => "'\\x" . strtolower($value->hex) . "'::bytea",
+            is_bool($value)               => $value ? 'true' : 'false',
+            default                       => self::stringLiteral(ScalarText::of($value)),
+        };
+    }
+
+    /** A quoted string, as an escape string when it holds a backslash. */
+    private static function stringLiteral(string $text): string {
+        return str_contains($text, '\\')
+            ? "E'" . str_replace(['\\', "'"], ['\\\\', "''"], $text) . "'"
+            : "'" . str_replace("'", "''", $text) . "'";
     }
 
     /**
