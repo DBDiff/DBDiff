@@ -741,4 +741,8 @@ jobs:
       env:
         SUPAFORGE_DBDIFF_BIN: ${{ github.workspace }}/dbdiff
         SCENARIO_REQUIRE_PROOF: '1'
+        # SupaForge's known gaps describe the DBDiff it has released against.
+        # One this change fixes is reported rather than failed: clearing it is
+        # SupaForge's to do when it takes the release.
+        SCENARIO_FIXED_GAPS: report
       run: npx vitest run --config vitest.scenarios.config.ts
