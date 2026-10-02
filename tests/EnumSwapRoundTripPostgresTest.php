@@ -6,6 +6,10 @@
  * There is no `DROP VALUE`: the columns move to a new type with the new
  * labels, which then takes the old one's name. Each case checks the round
  * trip (see PostgresRoundTripTestCase) and that the rows themselves survive.
+ *
+ * Reordering labels, a plain round trip, is in the shared corpus
+ * (CorpusMigrationsRoundTripTest) with the other enum changes. These check
+ * what is specific to DBDiff: the SQL it writes, and what it must carry along.
  */
 class EnumSwapRoundTripPostgresTest extends PostgresRoundTripTestCase
 {
@@ -44,16 +48,6 @@ class EnumSwapRoundTripPostgresTest extends PostgresRoundTripTestCase
         $this->assertStringContainsString('USING "arr"::text[]::"st__new"[]', $up);
         $this->assertStringContainsString('ALTER TYPE "st__new" RENAME TO "st";', $up);
         $this->assertStringNotContainsString('DROP TYPE IF EXISTS', $up);
-    }
-
-    public function testReorderingLabels(): void
-    {
-        $this->assertRoundTrip(
-            'reorder',
-            "CREATE TYPE st AS ENUM ('shipped', 'paid', 'new');" . self::TABLE,
-            self::THREE . self::TABLE,
-            $this->data()
-        );
     }
 
     public function testAddingALabelSwapsOnlyOnTheWayDown(): void

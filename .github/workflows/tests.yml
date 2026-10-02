@@ -629,3 +629,116 @@ jobs:
       with:
         name: pg-conformance-report-pg${{ matrix.postgres-version }}
         path: tests/pg-conformance/report.json
+
+  # ── Shared corpus ───────────────────────────────────────────────────────────
+  # Every case in @akalforge/pg-conformance's migrations corpus, round-tripped
+  # in both directions. Shared with SupaForge, which runs the same cases
+  # through its CLI, so a case is written once and tested by both. Once per
+  # PostgreSQL version: the result depends on the server, not on PHP.
+  corpus:
+    name: Corpus / PostgreSQL ${{ matrix.postgres-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ['14', '15', '16', '17', '18']
+
+    env:
+      DB_HOST_POSTGRES: 127.0.0.1
+      DB_PORT_POSTGRES: 5432
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: dbdiff
+          POSTGRES_DB: diff1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dbdiff"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.3'
+        extensions: pdo, pdo_pgsql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    - name: Install shared conformance data
+      run: npm ci
+
+    - name: Round-trip the corpus
+      run: vendor/bin/phpunit -c tests/phpunit.xml --testsuite Corpus
+
+  # ── SupaForge, on this change ───────────────────────────────────────────────
+  # SupaForge drives DBDiff for every schema diff it makes. Its scenario suite
+  # — the shared corpus through its CLI, judged by convergence against the
+  # servers' own catalogs — runs here against this checkout's dbdiff, so a
+  # change that breaks SupaForge is found before it is released rather than
+  # when SupaForge next bumps its pin.
+  supaforge-scenarios:
+    name: SupaForge scenarios
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.3'
+        extensions: pdo, pdo_pgsql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Checkout SupaForge
+      uses: actions/checkout@v4
+      with:
+        repository: akalforge/supaforge
+        path: supaforge
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    # --prove needs a pg_dump at least as new as the server; the scenarios
+    # require it to run rather than let it step aside.
+    - name: Install PostgreSQL client 18
+      run: |
+        set -euo pipefail
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+          https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends postgresql-client-18
+
+    - name: Install SupaForge
+      working-directory: supaforge/packages/cli
+      run: npm ci
+
+    - name: Run SupaForge's scenarios against this dbdiff
+      working-directory: supaforge/packages/cli
+      env:
+        SUPAFORGE_DBDIFF_BIN: ${{ github.workspace }}/dbdiff
+        SCENARIO_REQUIRE_PROOF: '1'
+      run: npx vitest run --config vitest.scenarios.config.ts
