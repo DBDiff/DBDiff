@@ -49,13 +49,40 @@ final class PostgresObjectKinds {
              JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public'
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
+               -- An identity column's sequence is the column's own.
                AND NOT EXISTS (
                    SELECT 1 FROM pg_depend dep
                    WHERE dep.objid = c.oid
                      AND dep.classid = 'pg_class'::regclass
                      AND dep.refclassid = 'pg_class'::regclass
                      AND dep.refobjsubid > 0
-                     AND dep.deptype IN ('a', 'i')
+                     AND dep.deptype = 'i'
+               )
+               -- So is a serial's: owned by its column and exactly what `serial`
+               -- creates. A sequence owned by a column but with options of its
+               -- own, or feeding more than one default, is a sequence in its own
+               -- right, and was lost as one: recreated as the column's serial,
+               -- its type taken from the column and its START, CACHE and
+               -- bounds dropped, and created after a table already using it.
+               AND NOT (
+                   EXISTS (
+                       SELECT 1 FROM pg_depend dep
+                       WHERE dep.objid = c.oid
+                         AND dep.classid = 'pg_class'::regclass
+                         AND dep.refclassid = 'pg_class'::regclass
+                         AND dep.refobjsubid > 0
+                         AND dep.deptype = 'a'
+                   )
+                   AND sq.seqstart = 1 AND sq.seqincrement = 1 AND sq.seqmin = 1
+                   AND sq.seqcache = 1 AND NOT sq.seqcycle
+                   AND sq.seqmax = CASE sq.seqtypid
+                         WHEN 'int2'::regtype THEN 32767
+                         WHEN 'int4'::regtype THEN 2147483647
+                         ELSE 9223372036854775807 END
+                   AND (SELECT count(*) FROM pg_depend d2
+                         WHERE d2.refobjid = c.oid
+                           AND d2.refclassid = 'pg_class'::regclass
+                           AND d2.classid = 'pg_attrdef'::regclass) <= 1
                )
              ORDER BY c.relname"
         );

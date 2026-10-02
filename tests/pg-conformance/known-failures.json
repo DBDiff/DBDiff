@@ -38,7 +38,6 @@
     "hard_part_child_own_constraint",
     "hard_part_fk_to_partitioned",
     "hard_part_list_subpart",
-    "hard_seq_owned_options",
     "hard_table_like_including_all",
     "hard_type_bit_varbit",
     "hard_unique_multicolumn_nulls"
@@ -64,7 +63,6 @@
     "hard_inherits_multiple_parents",
     "hard_nulls_not_distinct",
     "hard_part_fk_to_partitioned",
-    "hard_seq_owned_options",
     "hard_type_bit_varbit",
     "hard_unique_multicolumn_nulls"
   ]
