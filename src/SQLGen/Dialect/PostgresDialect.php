@@ -2,6 +2,8 @@
 
 use DBDiff\DB\Support\PostgresColumnDefinition as Column;
 use DBDiff\DB\Support\IdentityOptions;
+use DBDiff\DB\Data\BinaryValue;
+use DBDiff\DB\Data\ScalarText;
 
 /**
  * PostgreSQL dialect.
@@ -13,6 +15,45 @@ class PostgresDialect extends AbstractAnsiDialect {
 
     public function getDriver(): string {
         return 'pgsql';
+    }
+
+    /**
+     * With OVERRIDING SYSTEM VALUE when the row gives a value for a column that
+     * is GENERATED ALWAYS AS IDENTITY — refused otherwise, with "cannot insert
+     * a non-DEFAULT value".
+     */
+    public function insertRow(string $table, array $columns, array $literals, bool $overriding = false): string {
+        $override = $overriding ? ' OVERRIDING SYSTEM VALUE' : '';
+        return "INSERT INTO $table (" . implode(',', $columns) . ")$override VALUES(" . implode(',', $literals) . ");";
+    }
+
+    /** The row's ctid picks one of several identical rows. */
+    public function deleteOneRow(string $table, array $conditions): string {
+        $where = implode(' AND ', $conditions);
+        return "DELETE FROM $table WHERE ctid = (SELECT ctid FROM $table WHERE $where LIMIT 1);";
+    }
+
+    /**
+     * A doubled quote, as the standard has it. A value holding a backslash is
+     * written as an escape string (E'...') with the backslash doubled, which
+     * reads the same whether standard_conforming_strings is on or off — a plain
+     * literal would not. Binary data is bytea's hex form.
+     */
+    public function literal(mixed $value): string {
+        if ($value === null) {
+            return 'NULL';
+        }
+        if ($value instanceof BinaryValue) {
+            return "'\\x" . strtolower($value->hex) . "'::bytea";
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        $text = ScalarText::of($value);
+        if (str_contains($text, '\\')) {
+            return "E'" . str_replace(['\\', "'"], ['\\\\', "''"], $text) . "'";
+        }
+        return "'" . str_replace("'", "''", $text) . "'";
     }
 
     /**

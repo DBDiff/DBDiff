@@ -29,12 +29,12 @@ class UpdateDataSQL implements SQLGenInterface {
             } elseif (!method_exists($diff, 'getNewValue') || is_null($diff->getNewValue())) {
                 $diff = "$q = NULL";
             } else {
-                $diff = "$q = " . BinaryValue::formatSQL($diff->getNewValue());
+                $diff = "$q = " . BinaryValue::formatSQL($diff->getNewValue(), $d);
             }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
-            $value = BinaryValue::formatCondition($d->quote($column), $value);
+            $value = BinaryValue::formatCondition($d->quote($column), $value, $d);
         });
         return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }
@@ -50,12 +50,12 @@ class UpdateDataSQL implements SQLGenInterface {
             } elseif (!method_exists($diff, 'getOldValue') || is_null($diff->getOldValue())) {
                 $diff = "$q = NULL";
             } else {
-                $diff = "$q = " . BinaryValue::formatSQL($diff->getOldValue());
+                $diff = "$q = " . BinaryValue::formatSQL($diff->getOldValue(), $d);
             }
         });
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
-            $value = BinaryValue::formatCondition($d->quote($column), $value);
+            $value = BinaryValue::formatCondition($d->quote($column), $value, $d);
         });
         return "UPDATE $t SET " . implode(', ', $values) . ' WHERE ' . implode(' AND ', $keys) . ';';
     }

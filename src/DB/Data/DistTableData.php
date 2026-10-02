@@ -22,8 +22,8 @@ class DistTableData {
 
         $params   = ParamsFactory::get();
         $driver   = $this->manager->getDriver();
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns1 = $this->manager->getDataColumns('source', $table);
+        $columns2 = $this->manager->getDataColumns('target', $table);
 
         $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 

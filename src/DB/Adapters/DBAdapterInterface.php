@@ -70,6 +70,19 @@ interface DBAdapterInterface {
     public function getBinaryColumns(Connection $connection, string $table): array;
 
     /**
+     * Generated columns of a table, whose values the server computes. A data
+     * migration leaves them out: writing one is an error on every engine, and
+     * its value follows from the columns that are written.
+     */
+    public function getGeneratedColumns(Connection $connection, string $table): array;
+
+    /**
+     * Columns that are GENERATED ALWAYS AS IDENTITY: a row keeps its value in
+     * one only if the INSERT overrides the system value.
+     */
+    public function getIdentityAlwaysColumns(Connection $connection, string $table): array;
+
+    /**
      * Return the FK dependency map for all tables in the database.
      *
      * Returns [childTable => [parentTable1, parentTable2, …], …]

@@ -1,5 +1,8 @@
 <?php namespace DBDiff\SQLGen\Dialect;
 
+use DBDiff\DB\Data\BinaryValue;
+use DBDiff\DB\Data\ScalarText;
+
 
 class MySQLDialect implements SQLDialectInterface {
 
@@ -9,6 +12,27 @@ class MySQLDialect implements SQLDialectInterface {
 
     public function getDriver(): string {
         return 'mysql';
+    }
+
+    public function insertRow(string $table, array $columns, array $literals, bool $overriding = false): string {
+        return "INSERT INTO $table (" . implode(',', $columns) . ") VALUES(" . implode(',', $literals) . ");";
+    }
+
+    public function deleteOneRow(string $table, array $conditions): string {
+        return "DELETE FROM $table WHERE " . implode(' AND ', $conditions) . ' LIMIT 1;';
+    }
+
+    public function literal(mixed $value): string {
+        if ($value === null) {
+            return 'NULL';
+        }
+        if ($value instanceof BinaryValue) {
+            return "UNHEX('" . $value->hex . "')";
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        return "'" . addslashes(ScalarText::of($value)) . "'";
     }
 
     public function isMySQLOnly(): bool {

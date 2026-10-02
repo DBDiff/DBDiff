@@ -156,7 +156,7 @@ class StreamingMergeDiff
             if (in_array($col, $key)) {
                 $keys[$col] = $srcRow[$col];
             }
-            if ((string) ($srcRow[$col] ?? '') !== (string) ($tgtRow[$col] ?? '')) {
+            if (!self::sameValue($srcRow[$col] ?? null, $tgtRow[$col] ?? null)) {
                 $diff[$col] = new \Diff\DiffOp\DiffOpChange($tgtRow[$col], $srcRow[$col]);
             }
         }
@@ -166,6 +166,18 @@ class StreamingMergeDiff
             }
         }
         return empty($diff) ? null : new UpdateData($table, ['keys' => $keys, 'diff' => $diff]);
+    }
+
+    /**
+     * Whether two fetched values are the same. NULL equals only NULL: compared
+     * as strings, it read the same as an empty string.
+     */
+    private static function sameValue(mixed $a, mixed $b): bool
+    {
+        if ($a === null || $b === null) {
+            return $a === $b;
+        }
+        return ScalarText::of($a) === ScalarText::of($b);
     }
 
     /**
@@ -235,11 +247,14 @@ class StreamingMergeDiff
     /**
      * Build a driver-appropriate SQL hash expression for the given columns.
      *
-     * MySQL:    SHA2(CONCAT(COALESCE(CAST(col AS CHAR CHARACTER SET utf8), ''), CHAR(31), …), 256)
-     *           CHAR(31) is the unit-separator (0x1f); COALESCE ensures NULL columns
-     *           do not propagate NULL through CONCAT (which would mask real changes).
-     * Postgres: md5(COALESCE(col::text, '') || E'\x1f' || …)
-     * SQLite:   hex(COALESCE(CAST(col AS TEXT), '') || X'1f' || …)
+     * Each value is tagged: N for NULL, V followed by its text otherwise, and
+     * joined with the unit separator (0x1f). Writing NULL as an empty string
+     * instead, as this once did, hashed NULL and '' alike, so a column changed
+     * from one to the other was reported as no change at all.
+     *
+     * MySQL:    SHA2(CONCAT(IF(col IS NULL, 'N', CONCAT('V', CAST(col AS CHAR …))), CHAR(31), …), 256)
+     * Postgres: md5(CASE WHEN col IS NULL THEN 'N' ELSE 'V' || col::text END || E'\x1f' || …)
+     * SQLite:   hex(CASE WHEN col IS NULL THEN 'N' ELSE 'V' || CAST(col AS TEXT) END || X'1f' || …)
      */
     public function buildHashExpression(array $columns): string
     {
@@ -248,9 +263,9 @@ class StreamingMergeDiff
         }
 
         return match ($this->driver) {
-            'mysql'  => 'SHA2(CONCAT(' . implode(", CHAR(31), ", array_map(fn($c) => "COALESCE(CAST(`$c` AS CHAR CHARACTER SET utf8), '')", $columns)) . '), 256)',
-            'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "COALESCE(\"$c\"::text, '')", $columns)) . ")",
-            'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "COALESCE(CAST(\"$c\" AS TEXT), '')", $columns)) . ")",
+            'mysql'  => 'SHA2(CONCAT(' . implode(", CHAR(31), ", array_map(fn($c) => "IF(`$c` IS NULL, 'N', CONCAT('V', CAST(`$c` AS CHAR CHARACTER SET utf8)))", $columns)) . '), 256)',
+            'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "CASE WHEN \"$c\" IS NULL THEN 'N' ELSE 'V' || \"$c\"::text END", $columns)) . ")",
+            'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "CASE WHEN \"$c\" IS NULL THEN 'N' ELSE 'V' || CAST(\"$c\" AS TEXT) END", $columns)) . ")",
             default  => throw new DataException("Unsupported driver: {$this->driver}"),
         };
     }
@@ -325,7 +340,7 @@ class StreamingMergeDiff
      */
     private function normaliseRows(array $rows): array
     {
-        return array_map(fn($row) => is_array($row) ? $row : (array) $row, $rows);
+        return array_map(fn($row) => BinaryValue::fromStreams(is_array($row) ? $row : (array) $row), $rows);
     }
 
     /**

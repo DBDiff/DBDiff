@@ -81,6 +81,20 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
+    public function getGeneratedColumns(Connection $connection, string $table): array {
+        // table_xinfo marks a generated column hidden = 2 (virtual) or 3 (stored).
+        $result = $connection->select("PRAGMA table_xinfo(\"$table\")");
+        return array_values(array_map(
+            fn($row) => $row['name'],
+            array_filter($result, fn($row) => in_array((int) $row['hidden'], [2, 3], true))
+        ));
+    }
+
+    public function getIdentityAlwaysColumns(Connection $connection, string $table): array {
+        // SQLite has no identity column a value cannot be given for.
+        return [];
+    }
+
     public function getForeignKeyMap(Connection $connection): array {
         $tables = $this->getTables($connection);
         $map = [];

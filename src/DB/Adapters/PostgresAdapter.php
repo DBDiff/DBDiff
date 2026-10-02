@@ -188,6 +188,31 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         return [];
     }
 
+    public function getGeneratedColumns(Connection $connection, string $table): array {
+        $result = $connection->select(
+            "SELECT a.attname FROM pg_attribute a
+               JOIN pg_class c ON c.oid = a.attrelid
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname = ?
+                AND a.attnum > 0 AND NOT a.attisdropped AND a.attgenerated <> ''
+              ORDER BY a.attnum",
+            [$table]
+        );
+        return Arr::pluck($result, 'attname');
+    }
+
+    public function getIdentityAlwaysColumns(Connection $connection, string $table): array {
+        $result = $connection->select(
+            "SELECT a.attname FROM pg_attribute a
+               JOIN pg_class c ON c.oid = a.attrelid
+               JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public' AND c.relname = ?
+                AND a.attnum > 0 AND NOT a.attisdropped AND a.attidentity = 'a'",
+            [$table]
+        );
+        return Arr::pluck($result, 'attname');
+    }
+
     public function getForeignKeyMap(Connection $connection): array {
         $result = $connection->select(
             "SELECT tc.table_name, ccu.table_name AS referenced_table

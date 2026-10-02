@@ -100,16 +100,16 @@ abstract class PostgresRoundTripTestCase extends TestCase
 
     /**
      * The migration from `$source` to `$target` as [up, down], or null when
-     * the CLI reports the two identical.
+     * the CLI reports the two identical. `$type` is the CLI's --type.
      *
      * Run as a separate process: the CLI keeps process-wide state (the
      * dialect, the parsed parameters), and each case needs a clean one.
      */
-    protected function diff(string $source, string $target): ?array
+    protected function diff(string $source, string $target, string $type = 'schema'): ?array
     {
         $out = tempnam(sys_get_temp_dir(), $this->prefix . '_') . '.sql';
         $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__, 2) . '/dbdiff.php')
-            . ' diff --type=schema --nocomments --include=both --allow-destructive'
+            . ' diff --type=' . escapeshellarg($type) . ' --nocomments --include=both --allow-destructive'
             . ' --server1-url=' . escapeshellarg($this->url($source))
             . ' --server2-url=' . escapeshellarg($this->url($target))
             . ' --output=' . escapeshellarg($out) . ' 2>&1';

@@ -109,8 +109,8 @@ class LocalTableData {
 
     private function runSQLiteDiff(string $table, array $key, string $alias): array
     {
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns1 = $this->manager->getDataColumns('source', $table);
+        $columns2 = $this->manager->getDataColumns('target', $table);
 
         $keyCols  = implode(self::SQL_AND, array_map(
             fn($el) => "\"a\".\"$el\" = \"b\".\"$el\"",
@@ -184,12 +184,14 @@ class LocalTableData {
 
     /**
      * Build a sha3() hash expression over the given columns for a table alias.
-     * Example: sha3(COALESCE(CAST("a"."col1" AS TEXT), '') || X'1f' || ..., 256)
+     * Example: sha3(CASE WHEN "a"."col1" IS NULL THEN 'N' ELSE 'V' || CAST("a"."col1" AS TEXT) END || X'1f' || ..., 256)
      */
     private function buildSQLiteSha3Expr(array $columns, string $alias): string
     {
         $parts = array_map(
-            fn($c) => "COALESCE(CAST(\"$alias\".\"$c\" AS TEXT), '')",
+            // N for NULL, V and the text otherwise: COALESCE to '' made NULL
+            // and an empty string hash alike — see StreamingMergeDiff.
+            fn($c) => "CASE WHEN \"$alias\".\"$c\" IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\".\"$c\" AS TEXT) END",
             $columns
         );
         return "sha3(" . implode(" || X'1f' || ", $parts) . ", 256)";
@@ -289,8 +291,8 @@ class LocalTableData {
     private function getDiffPgsql(string $table, array $key): array
     {
         $params   = ParamsFactory::get();
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns1 = $this->manager->getDataColumns('source', $table);
+        $columns2 = $this->manager->getDataColumns('target', $table);
 
         $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
@@ -306,8 +308,8 @@ class LocalTableData {
         $db1 = $this->source->getDatabaseName();
         $db2 = $this->target->getDatabaseName();
 
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns1 = $this->manager->getDataColumns('source', $table);
+        $columns2 = $this->manager->getDataColumns('target', $table);
 
         $binaryCols = $this->manager->getBinaryColumns('source', $table);
 
@@ -381,8 +383,8 @@ class LocalTableData {
         $db1 = $this->source->getDatabaseName();
         $db2 = $this->target->getDatabaseName();
 
-        $columns1 = $this->manager->getColumns('source', $table);
-        $columns2 = $this->manager->getColumns('target', $table);
+        $columns1 = $this->manager->getDataColumns('source', $table);
+        $columns2 = $this->manager->getDataColumns('target', $table);
 
         $ignoredFields = TableFilter::getFieldsToIgnore($table, $params);
         if (!empty($ignoredFields)) {

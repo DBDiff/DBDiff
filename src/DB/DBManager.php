@@ -105,6 +105,22 @@ class DBManager {
         return $this->adapter->getColumns($this->getDB($connection), $table);
     }
 
+    /**
+     * The columns a data diff reads and writes: every column but the generated
+     * ones, whose values the server computes and refuses to be given.
+     */
+    public function getDataColumns(string $connection, string $table): array {
+        $db = $this->getDB($connection);
+        return array_values(array_diff(
+            $this->adapter->getColumns($db, $table),
+            $this->adapter->getGeneratedColumns($db, $table)
+        ));
+    }
+
+    public function getIdentityAlwaysColumns(string $connection, string $table): array {
+        return $this->adapter->getIdentityAlwaysColumns($this->getDB($connection), $table);
+    }
+
     public function getKey(string $connection, string $table): array {
         return $this->adapter->getPrimaryKey($this->getDB($connection), $table);
     }
