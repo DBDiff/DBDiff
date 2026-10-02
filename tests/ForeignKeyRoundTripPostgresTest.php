@@ -8,6 +8,10 @@
  * another schema — every Supabase table referencing auth.users — rendered
  * without the schema, and a key over several columns rendered with only the
  * first referenced column.
+ *
+ * The plain round trips of these shapes, and of both on a new table, are in
+ * the shared corpus (CorpusMigrationsRoundTripTest). These check the SQL
+ * DBDiff writes for them.
  */
 class ForeignKeyRoundTripPostgresTest extends PostgresRoundTripTestCase
 {
@@ -34,15 +38,5 @@ class ForeignKeyRoundTripPostgresTest extends PostgresRoundTripTestCase
             self::PARENTS . 'CREATE TABLE c (x int, y int);'
         );
         $this->assertStringContainsString('REFERENCES "p" ("a", "b")', $up);
-    }
-
-    public function testBothOnANewTable(): void
-    {
-        $this->assertRoundTrip(
-            'newtable',
-            self::PARENTS . 'CREATE TABLE profiles (id int, user_id int REFERENCES app.users (id),
-                                                    x int, y int, FOREIGN KEY (x, y) REFERENCES p (a, b));',
-            self::PARENTS
-        );
     }
 }
