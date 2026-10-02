@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "Corpus cases DBDiff does not pass yet, keyed by data set name, with why.",
+    "A listed case must still fail, and one that passes fails the suite until it",
+    "is removed, so this can only shrink. See tests/Support/CorpusKnownFailures.php."
+  ],
+  "migrations": {
+    "objects_in_quoted_schema (before → after)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
+    "objects_in_another_schema (before → after)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
+    "sequence_shared_and_owned_with_options (before → after)": "A standalone sequence owned by a column is treated as that column's serial: its options are lost, and it is not dropped when the source has none.",
+    "partitions_added_with_default_and_index (before → after)": "A new index on a partitioned table is created before the new partitions, and does not reach them.",
+    "trigger_with_condition_and_indexed_matview (before → after)": "A trigger with a WHEN condition, with its function and an indexed materialized view, does not round-trip.",
+    "objects_in_quoted_schema (after → before)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
+    "objects_in_another_schema (after → before)": "DBDiff compares the public schema only; objects in any other schema are not seen, so the databases read as identical.",
+    "sequence_shared_and_owned_with_options (after → before)": "A standalone sequence owned by a column is treated as that column's serial: its options are lost, and it is not dropped when the source has none.",
+    "partitions_added_with_default_and_index (after → before)": "A new index on a partitioned table is created before the new partitions, and does not reach them.",
+    "trigger_with_condition_and_indexed_matview (after → before)": "A trigger with a WHEN condition, with its function and an indexed materialized view, does not round-trip."
+  },
+  "data": {}
+}

@@ -20,6 +20,8 @@
  */
 class CorpusMigrationsRoundTripTest extends PostgresRoundTripTestCase
 {
+    use CorpusKnownFailures;
+
     protected string $prefix = 'dbdiff_corpus';
 
     /** @return array<string, array{string, string, string, list<string>, int}> */
@@ -57,6 +59,12 @@ class CorpusMigrationsRoundTripTest extends PostgresRoundTripTestCase
         if ($minPgVersion && intdiv($this->serverVersion, 10000) < $minPgVersion) {
             $this->markTestSkipped("needs PostgreSQL $minPgVersion");
         }
+        $this->expectingKnownFailures('migrations', fn() => $this->roundTrip($key, $sourceSql, $targetSql, $preserve));
+    }
+
+    /** @param list<string> $preserve */
+    private function roundTrip(string $key, string $sourceSql, string $targetSql, array $preserve): void
+    {
         $rows = fn(string $db) => array_map(fn(string $q) => $this->rows($db, $q), $preserve);
 
         $source   = $this->db("{$key}_s", $sourceSql);
