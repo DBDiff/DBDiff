@@ -47,7 +47,7 @@ final class PostgresObjectKinds {
              FROM pg_sequence sq
              JOIN pg_class c ON c.oid = sq.seqrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
                -- An identity column's sequence is the column's own.
                AND NOT EXISTS (
@@ -100,7 +100,7 @@ final class PostgresObjectKinds {
                         AND a.attnum > 0 AND NOT a.attisdropped) AS attributes
              FROM pg_type t
              JOIN pg_namespace n ON n.oid = t.typnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND t.typtype = 'c'
                AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
                AND NOT EXISTS (
@@ -133,7 +133,7 @@ final class PostgresObjectKinds {
     public static function domains(Connection $connection): array {
         $result = $connection->select(
             self::DOMAIN_SELECT . "
-             WHERE n.nspname = 'public' AND t.typtype = 'd'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.typtype = 'd'
                AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
              ORDER BY t.typname"
         );
@@ -206,7 +206,7 @@ final class PostgresObjectKinds {
                     quote_literal(obj_description(c.oid, 'pg_class')) AS comment
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public' AND c.relkind = 'm'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relkind = 'm'
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY c.relname"
         );
@@ -257,7 +257,7 @@ final class PostgresObjectKinds {
              JOIN pg_class c ON c.relname = i.tablename
              JOIN pg_namespace n ON n.oid = c.relnamespace
                                AND n.nspname = i.schemaname
-             WHERE i.schemaname = 'public' AND c.relkind = 'm'
+             WHERE i.schemaname = " . SchemaScope::literal($connection) . " AND c.relkind = 'm'
              ORDER BY c.relname, i.indexname"
         );
         $byView = [];
@@ -289,7 +289,7 @@ final class PostgresObjectKinds {
              FROM pg_policy p
              JOIN pg_class c ON c.oid = p.polrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
              ORDER BY c.relname, p.polname"
         );
         $policies = [];
@@ -320,7 +320,7 @@ final class PostgresObjectKinds {
                     c.relforcerowsecurity AS forced
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+             WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relkind IN ('r', 'p')
              ORDER BY c.relname"
         );
         $settings = [];

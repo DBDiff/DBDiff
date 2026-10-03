@@ -7,6 +7,7 @@ use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Support\PostgresColumnDependants;
+use DBDiff\DB\Support\SchemaScope;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
@@ -72,7 +73,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             "SELECT c.relname AS tablename
              FROM pg_class c
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND c.relkind IN ('r', 'p')
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY c.relname"
@@ -83,7 +84,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
     public function getColumns(Connection $connection, string $table): array {
         $result = $connection->select(
             "SELECT column_name FROM information_schema.columns
-             WHERE table_schema = 'public' AND table_name = ?
+             WHERE table_schema = " . SchemaScope::literal($connection) . " AND table_name = ?
              ORDER BY ordinal_position",
             [$table]
         );
@@ -98,7 +99,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                ON tc.constraint_name = kcu.constraint_name
               AND tc.constraint_schema = kcu.constraint_schema
              WHERE tc.constraint_type = 'PRIMARY KEY'
-               AND tc.table_schema = 'public'
+               AND tc.table_schema = " . SchemaScope::literal($connection) . "
                AND tc.table_name = ?
              ORDER BY kcu.ordinal_position",
             [$table]
@@ -217,7 +218,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN information_schema.constraint_column_usage ccu
                ON tc.constraint_name = ccu.constraint_name
               AND tc.constraint_schema = ccu.constraint_schema
-             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'"
+             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = " . SchemaScope::literal($connection) . ""
         );
         $map = [];
         foreach ($result as $row) {
@@ -234,7 +235,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                JOIN pg_class c ON c.oid = i.inhrelid
                JOIN pg_class p ON p.oid = i.inhparent
                JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = 'public'"
+              WHERE n.nspname = " . SchemaScope::literal($connection) . ""
         ) as $row) {
             $map[$row['child']][] = $row['parent'];
         }
@@ -263,7 +264,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN pg_class c ON c.relname = v.viewname
                             AND c.relnamespace = n.oid
                             AND c.relkind = 'v'
-             WHERE v.schemaname = 'public'
+             WHERE v.schemaname = " . SchemaScope::literal($connection) . "
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY v.viewname"
         );
@@ -294,7 +295,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN pg_namespace n ON c.relnamespace = n.oid
              WHERE NOT t.tgisinternal
                AND t.tgparentid = 0
-               AND n.nspname = 'public'
+               AND n.nspname = " . SchemaScope::literal($connection) . "
              ORDER BY t.tgname"
         );
         // Keyed by table and name: trigger names are unique per table, not per
@@ -331,7 +332,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             "SELECT p.oid::regprocedure::text AS name, pg_get_functiondef(p.oid) AS definition
              FROM pg_proc p
              JOIN pg_namespace n ON p.pronamespace = n.oid
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND p.prokind IN ('f', 'p')
                AND " . PostgresSchemaHelper::notExtensionMember('pg_proc', 'p.oid') . "
              ORDER BY p.oid::regprocedure::text"
@@ -350,7 +351,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              FROM pg_type t
              JOIN pg_enum e ON t.oid = e.enumtypid
              JOIN pg_namespace n ON t.typnamespace = n.oid
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
              GROUP BY t.typname, t.oid
              ORDER BY t.typname"
@@ -423,20 +424,20 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                  FROM information_schema.columns isc
                  JOIN pg_class cls
                    ON cls.relname = isc.table_name
-                  AND cls.relnamespace = 'public'::regnamespace
+                  AND cls.relnamespace = " . SchemaScope::literal($connection) . "::regnamespace
                  JOIN pg_attribute a
                    ON a.attrelid = cls.oid
                   AND a.attname = isc.column_name
                   AND a.attnum > 0 AND NOT a.attisdropped
                  LEFT JOIN pg_collation co ON co.oid = a.attcollation
-                 WHERE isc.table_schema = 'public'
+                 WHERE isc.table_schema = " . SchemaScope::literal($connection) . "
                  GROUP BY table_name
              ),
              idx_data AS (
                  SELECT tablename AS table_name,
                         string_agg(indexname || '|' || " . self::INDEX_DEF . ", ';' ORDER BY indexname) AS idx_str
                  FROM pg_indexes
-                 WHERE schemaname = 'public' AND " . self::NOT_A_PARTITIONS_COPY . "
+                 WHERE schemaname = " . SchemaScope::literal($connection) . " AND " . self::NOT_A_PARTITIONS_COPY . "
                  GROUP BY tablename
              ),
              -- Read from pg_constraint, not information_schema.table_constraints,
@@ -464,7 +465,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                  FROM pg_constraint con
                  JOIN pg_class c     ON con.conrelid = c.oid
                  JOIN pg_namespace n ON c.relnamespace = n.oid
-                 WHERE n.nspname = 'public'
+                 WHERE n.nspname = " . SchemaScope::literal($connection) . "
                    AND con.contype IN ('p', 'u', 'f')
              ),
              pg_ext_data AS (
@@ -474,7 +475,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                  FROM pg_constraint con
                  JOIN pg_class c     ON con.conrelid = c.oid
                  JOIN pg_namespace n ON c.relnamespace = n.oid
-                 WHERE n.nspname = 'public'
+                 WHERE n.nspname = " . SchemaScope::literal($connection) . "
                    AND con.contype IN ('c', 'x', 'n')
              ),
              con_data AS (
@@ -496,7 +497,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                         COALESCE(" . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ',') . ", '') AS rel_sig
                  FROM pg_class c
                  JOIN pg_namespace n ON n.oid = c.relnamespace
-                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+                 WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relkind IN ('r', 'p')
              )
              SELECT c.table_name,
                     md5(
@@ -557,7 +558,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                     identity_minimum, identity_cycle,
                     is_generated, generation_expression, domain_name
              FROM information_schema.columns
-             WHERE table_schema = 'public' AND table_name IN ($ph)
+             WHERE table_schema = " . SchemaScope::literal($connection) . " AND table_name IN ($ph)
              ORDER BY table_name, ordinal_position",
             $tables
         );
@@ -577,7 +578,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
              JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = con.conkey[1]
-             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph) AND con.contype = 'n'",
+             WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph) AND con.contype = 'n'",
             $tables
         );
         $namedNotNull  = [];
@@ -595,7 +596,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              FROM pg_constraint con
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+             WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
                AND con.contype IN ('p', 'u', 'x')",
             $tables
         );
@@ -607,7 +608,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $idxRows = $connection->select(
             "SELECT tablename AS table_name, indexname, " . self::INDEX_DEF . " AS indexdef
              FROM pg_indexes
-             WHERE schemaname = 'public' AND tablename IN ($ph)
+             WHERE schemaname = " . SchemaScope::literal($connection) . " AND tablename IN ($ph)
                AND " . self::NOT_A_PARTITIONS_COPY . "
              ORDER BY tablename, indexname",
             $tables
@@ -663,7 +664,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                                         AND att.attnum    = cols.attnum
              LEFT JOIN pg_class frel     ON con.confrelid = frel.oid
              LEFT JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
-             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+             WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
                AND con.contype IN ('f', 'u', 'p')
              ORDER BY rel.relname, con.conname, cols.ord",
             $tables
@@ -675,7 +676,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              FROM pg_constraint con
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             WHERE nsp.nspname = 'public' AND rel.relname IN ($ph)
+             WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
                AND con.contype IN ('c', 'x')
              ORDER BY rel.relname, con.conname",
             $tables

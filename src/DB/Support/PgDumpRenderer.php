@@ -218,7 +218,7 @@ final class PgDumpRenderer
      */
     private static function dumpCommand(Connection $connection, string $archive): array
     {
-        $schema = (string) ($connection->getConfig('schema') ?: 'public');
+        $schema = SchemaScope::of($connection);
 
         return [
             self::binary('pg_dump'),
@@ -296,7 +296,7 @@ final class PgDumpRenderer
      */
     private static function entriesFor(Connection $connection, string $table): array
     {
-        $schema     = (string) ($connection->getConfig('schema') ?: 'public');
+        $schema     = SchemaScope::of($connection);
         $names      = self::relatedNames($connection, $table);
         $standalone = OwnedSequences::standaloneOf($connection, $table);
 
@@ -387,14 +387,14 @@ final class PgDumpRenderer
             "SELECT c.relname AS name
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = 'public' AND c.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?
              UNION
              SELECT i.relname
                FROM pg_index x
                JOIN pg_class i ON i.oid = x.indexrelid
                JOIN pg_class t ON t.oid = x.indrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
              UNION
              -- Sequences owned by a column carry that column's identity clause.
              SELECT s.relname
@@ -402,19 +402,19 @@ final class PgDumpRenderer
                JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
                JOIN pg_class t ON t.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ? AND d.deptype IN ('a','i')
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ? AND d.deptype IN ('a','i')
              UNION
              SELECT con.conname
                FROM pg_constraint con
                JOIN pg_class t ON t.oid = con.conrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
              UNION
              SELECT tg.tgname
                FROM pg_trigger tg
                JOIN pg_class t ON t.oid = tg.tgrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = 'public' AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
                 AND NOT tg.tgisinternal",
             [$table, $table, $table, $table, $table]
         );

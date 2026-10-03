@@ -5,6 +5,7 @@ use DBDiff\Diff\CreateRoutine;
 use DBDiff\Diff\DropRoutine;
 use DBDiff\Diff\DropTable;
 use Illuminate\Database\Connection;
+use DBDiff\DB\Support\SchemaScope;
 
 /**
  * Routines that a table's definition calls are created before the tables, in
@@ -56,7 +57,7 @@ final class CreationOrderPlan {
                JOIN pg_proc p ON p.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = p.pronamespace
               WHERE d.refclassid = 'pg_proc'::regclass
-                AND n.nspname = 'public'
+                AND n.nspname = " . SchemaScope::literal($side) . "
                 AND (d.classid IN ('pg_attrdef'::regclass, 'pg_constraint'::regclass)
                      OR (d.classid = 'pg_class'::regclass
                          AND (SELECT relkind FROM pg_class WHERE oid = d.objid) IN ('i', 'I')))"

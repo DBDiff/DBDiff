@@ -110,7 +110,7 @@ final class PostgresExpressionEquivalence {
     /** A temporary table with the same columns, to attach things to. */
     private static function tempTable(Connection $connection, string $table): void {
         $connection->statement(
-            'CREATE TEMP TABLE ' . self::TEMP_TABLE . ' (LIKE ' . PostgresSchemaHelper::qualifiedName('public', $table)
+            'CREATE TEMP TABLE ' . self::TEMP_TABLE . ' (LIKE ' . PostgresSchemaHelper::qualifiedName(SchemaScope::of($connection), $table)
             . ')'
         );
     }
