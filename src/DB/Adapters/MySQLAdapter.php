@@ -106,6 +106,8 @@ class MySQLAdapter implements DBAdapterInterface {
         return $binary;
     }
 
+
+
     public function getForeignKeyMap(Connection $connection): array {
         $db = $connection->getDatabaseName();
         $result = $connection->select(

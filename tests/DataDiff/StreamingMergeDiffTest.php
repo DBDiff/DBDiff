@@ -157,6 +157,25 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
 
     // ── Test: Mixed inserts + deletes + updates ───────────────────────────
 
+    // NULL and an empty string were written alike — COALESCE(col, '') in the
+    // hash, and both cast to '' when choosing what changed — so a column moving
+    // from one to the other was no change at all.
+    public function testANullBecomingAnEmptyStringIsAnUpdate(): void
+    {
+        $ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)';
+        $src = $this->createConnection('nul_src', $ddl, ["INSERT INTO t VALUES (1, '')", "INSERT INTO t VALUES (2, NULL)"]);
+        $tgt = $this->createConnection('nul_tgt', $ddl, ["INSERT INTO t VALUES (1, NULL)", "INSERT INTO t VALUES (2, '')"]);
+
+        $merge = new StreamingMergeDiff($src, $tgt, 'sqlite');
+        $updates = array_values(array_filter(
+            $merge->getDiff('t', ['id'], ['id', 'v'], ['id', 'v']),
+            fn($d) => $d instanceof UpdateData
+        ));
+
+        $this->assertCount(2, $updates);
+        $this->assertArrayHasKey('v', $updates[0]->diff['diff']);
+    }
+
     public function testMixedDiffs(): void
     {
         $ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)';
@@ -432,7 +451,7 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
 
         $expr = $merge->buildHashExpression(['col1', 'col2']);
         $this->assertStringContainsString('hex(', $expr);
-        $this->assertStringContainsString('COALESCE', $expr);
+        $this->assertStringContainsString("IS NULL THEN 'N'", $expr);
         $this->assertStringContainsString("X'1f'", $expr);
     }
 
@@ -446,7 +465,7 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
 
         $expr = $merge->buildHashExpression(['col1', 'col2']);
         $this->assertStringContainsString('md5(', $expr);
-        $this->assertStringContainsString('COALESCE', $expr);
+        $this->assertStringContainsString("IS NULL THEN 'N'", $expr);
     }
 
     public function testBuildHashExpressionMySQL(): void
@@ -460,10 +479,10 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
         $expr = $merge->buildHashExpression(['col1', 'col2']);
         $this->assertStringContainsString('SHA2(', $expr);
         $this->assertStringContainsString('CONCAT(', $expr);
-        // NULL-safety: each column must be wrapped in COALESCE so a single NULL
-        // column does not collapse the entire hash expression to NULL and cause
-        // changed rows to be silently skipped.
-        $this->assertStringContainsString('COALESCE(', $expr);
+        // NULL-safety: each column is tagged N for NULL, V and its text
+        // otherwise, so a single NULL does not collapse the hash to NULL, and
+        // NULL does not hash like an empty string.
+        $this->assertStringContainsString("IS NULL, 'N'", $expr);
         // Column separator: CHAR(31) (unit separator, 0x1f) prevents cross-column
         // hash collisions where different value distributions produce the same string.
         $this->assertStringContainsString('CHAR(31)', $expr);

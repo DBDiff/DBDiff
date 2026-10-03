@@ -3,9 +3,26 @@
 
 class TableIterator {
 
-    function __construct($connection, $table) {
+    private $connection;
+    private string $table;
+    /** @var string[] */
+    private array $order;
+    /** @var string[] */
+    private array $columns;
+    private int $offset;
+    private int $size;
+
+    /**
+     * @param string[] $order   Columns to page in order of: the key, or every
+     *                          column of a table without one.
+     * @param string[] $columns Columns to read; all of them when empty. The
+     *                          data diff leaves out generated columns.
+     */
+    public function __construct($connection, $table, array $order = [], array $columns = []) {
         $this->connection = $connection;
         $this->table = $table;
+        $this->order = $order;
+        $this->columns = $columns;
         $this->offset = 0;
         $this->size = $connection->table($table)->count();
     }
@@ -15,11 +32,20 @@ class TableIterator {
     }
 
     public function next($size) {
-        $data = $this->connection->table($this->table)
-                     ->skip($this->offset)->take($size)->get()->toArray();
+        // Pages need a fixed order. Without one PostgreSQL may return the rows
+        // in a different order for each query, so paging with OFFSET could
+        // repeat some rows and miss others once a table outgrew one page.
+        $query = $this->connection->table($this->table);
+        if ($this->columns) {
+            $query->select($this->columns);
+        }
+        foreach ($this->order as $column) {
+            $query->orderBy($column);
+        }
+        $data = $query->skip($this->offset)->take($size)->get()->toArray();
         $this->offset += $size;
-        // Normalise stdClass rows to associative arrays
-        return array_map(fn($row) => is_array($row) ? $row : (array) $row, $data);
+        // Normalise stdClass rows to associative arrays, and binary streams to values.
+        return array_map(fn($row) => BinaryValue::fromStreams(is_array($row) ? $row : (array) $row), $data);
     }
 
 }

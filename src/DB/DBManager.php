@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB;
 
+use DBDiff\DB\Support\ComputedColumns;
+
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Events\StatementPrepared;
 use Illuminate\Events\Dispatcher;
@@ -103,6 +105,18 @@ class DBManager {
 
     public function getColumns(string $connection, string $table): array {
         return $this->adapter->getColumns($this->getDB($connection), $table);
+    }
+
+    /**
+     * The columns a data diff reads and writes: every column but the generated
+     * ones, whose values the server computes and refuses to be given.
+     */
+    public function getDataColumns(string $connection, string $table): array {
+        $db = $this->getDB($connection);
+        return array_values(array_diff(
+            $this->adapter->getColumns($db, $table),
+            ComputedColumns::generated($db, $this->getDriver(), $table)
+        ));
     }
 
     public function getKey(string $connection, string $table): array {

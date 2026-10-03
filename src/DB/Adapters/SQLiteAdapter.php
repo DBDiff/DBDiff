@@ -81,6 +81,8 @@ class SQLiteAdapter implements DBAdapterInterface {
         return [];
     }
 
+
+
     public function getForeignKeyMap(Connection $connection): array {
         $tables = $this->getTables($connection);
         $map = [];

@@ -21,6 +21,7 @@
         </testsuite>
         <testsuite name="Corpus">
             <file>./CorpusMigrationsRoundTripTest.php</file>
+            <file>./CorpusDataRoundTripTest.php</file>
         </testsuite>
         <testsuite name="SQLite">
             <file>./End2EndSQLiteTest.php</file>

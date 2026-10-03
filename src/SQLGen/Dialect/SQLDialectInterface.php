@@ -10,6 +10,35 @@ interface SQLDialectInterface {
     public function getDriver(): string;
 
     /**
+     * A fetched value as an SQL literal: NULL, a quoted string, or binary data
+     * in the form this engine reads.
+     *
+     * Quoting is the engine's: MySQL escapes with backslashes, PostgreSQL and
+     * SQLite double the quote. One rule for all of them wrote PostgreSQL
+     * literals MySQL's way, so a JSON value failed to apply and a backslash
+     * came back doubled.
+     */
+    public function literal(mixed $value): string;
+
+    /**
+     * Delete exactly one row matching every condition, for a table with no
+     * key: two identical rows must stay two rows apart, and a plain DELETE
+     * would remove both.
+     *
+     * @param string[] $conditions "col = value" / "col IS NULL" terms
+     */
+    public function deleteOneRow(string $table, array $conditions): string;
+
+    /**
+     * INSERT of one row, its columns quoted and values already literals.
+     * `$overriding` when it gives a GENERATED ALWAYS identity column a value.
+     *
+     * @param string[] $columns
+     * @param string[] $literals
+     */
+    public function insertRow(string $table, array $columns, array $literals, bool $overriding = false): string;
+
+    /**
      * Whether this dialect is MySQL-only.
      * When true, MySQL-specific diff objects (Engine, Charset, Collation)
      * will be handled; when false those DiffToSQL classes return empty strings.

@@ -1,5 +1,8 @@
 <?php namespace DBDiff\SQLGen\Dialect;
 
+use DBDiff\DB\Data\BinaryValue;
+use DBDiff\DB\Data\ScalarText;
+
 /**
  * Shared implementation for SQL dialects that follow ANSI/ISO SQL
  * conventions:
@@ -18,6 +21,31 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
 
     public function quote(string $name): string {
         return '"' . str_replace('"', '""', $name) . '"';
+    }
+
+    // ── Literals ─────────────────────────────────────────────────────────────
+
+    /**
+     * Standard SQL: a quote inside a string is doubled, and a backslash is an
+     * ordinary character. Binary data is a hex literal.
+     */
+    public function literal(mixed $value): string {
+        return match (true) {
+            $value === null               => 'NULL',
+            $value instanceof BinaryValue => "X'" . $value->hex . "'",
+            is_bool($value)               => $value ? '1' : '0',
+            default                       => "'" . str_replace("'", "''", ScalarText::of($value)) . "'",
+        };
+    }
+
+    public function insertRow(string $table, array $columns, array $literals, bool $overriding = false): string {
+        return "INSERT INTO $table (" . implode(',', $columns) . ") VALUES(" . implode(',', $literals) . ");";
+    }
+
+    /** SQLite: the row's rowid picks one of several identical rows. */
+    public function deleteOneRow(string $table, array $conditions): string {
+        $where = implode(' AND ', $conditions);
+        return "DELETE FROM $table WHERE rowid = (SELECT rowid FROM $table WHERE $where LIMIT 1);";
     }
 
     // ── Dialect flags ────────────────────────────────────────────────────────
