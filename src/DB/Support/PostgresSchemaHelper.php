@@ -237,7 +237,7 @@ class PostgresSchemaHelper {
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid
              LEFT JOIN pg_collation co ON co.oid = a.attcollation
-             WHERE c.relnamespace = " . SchemaScope::literal($connection) . "::regnamespace
+             WHERE c.relnamespace = " . SchemaScope::oid($connection) . "
                AND c.relname IN (" . QueryHelper::placeholders($tables) . ")
                AND a.attnum > 0 AND NOT a.attisdropped",
             $tables
@@ -273,11 +273,12 @@ class PostgresSchemaHelper {
      *
      * @return list<string>
      */
+    /** `$table` arrives quoted, and qualified where it needs to be. */
     public static function storageStatements(string $table, array $attrByCol): array {
         $out = [];
         foreach (self::columnStorage($attrByCol) as $column => $storage) {
             if ($storage['actual'] !== $storage['default']) {
-                $out[] = "ALTER TABLE \"$table\" ALTER COLUMN \"$column\" SET STORAGE {$storage['actual']}";
+                $out[] = "ALTER TABLE $table ALTER COLUMN \"$column\" SET STORAGE {$storage['actual']}";
             }
         }
         return $out;

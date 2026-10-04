@@ -284,7 +284,7 @@ class PostgresBulkSchemaTest extends TestCase
 
     public function testStorageStatementsOnlyCoverColumnsThatDifferFromTheirType(): void
     {
-        $stmts = \DBDiff\DB\Support\PostgresSchemaHelper::storageStatements('t', [
+        $stmts = \DBDiff\DB\Support\PostgresSchemaHelper::storageStatements('"t"', [
             'a' => ['att_storage' => 'p', 'type_storage' => 'x'],
             'b' => ['att_storage' => 'x', 'type_storage' => 'x'],
             'c' => ['att_storage' => 'e', 'type_storage' => 'x'],

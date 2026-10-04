@@ -17,7 +17,7 @@ class DeleteDataSQL implements SQLGenInterface {
     }
     
     public function getUp(): string {
-        $t    = $this->dialect->quote($this->obj->table);
+        $t    = $this->dialect->qualify($this->obj->table);
         $d    = $this->dialect;
         $keys = $this->obj->diff['keys'];
         array_walk($keys, function (&$value, $column) use ($d) {
@@ -32,7 +32,7 @@ class DeleteDataSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        $t      = $this->dialect->quote($this->obj->table);
+        $t      = $this->dialect->qualify($this->obj->table);
         $d      = $this->dialect;
         $row    = $this->obj->diff['diff']->getOldValue();
         $cols   = array_map(fn($c) => $d->quote($c), array_keys($row));

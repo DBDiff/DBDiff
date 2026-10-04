@@ -19,6 +19,9 @@ class CorpusDataRoundTripTest extends PostgresRoundTripTestCase
 
     protected string $prefix = 'dbdiff_cdata';
 
+    /** Every schema: the corpus has cases outside `public`. */
+    protected string $schemas = '*';
+
     /** @return array<string, array{string, string, string, string, list<string>, int}> */
     public static function cases(): array
     {

@@ -59,7 +59,7 @@ class PostgresDialect extends AbstractAnsiDialect {
      * PostgreSQL requires ON "table" for DROP TRIGGER.
      */
     public function dropTrigger(string $trigger, string $table): string {
-        return "DROP TRIGGER IF EXISTS " . $this->quote($trigger) . " ON " . $this->quote($table) . ";";
+        return "DROP TRIGGER IF EXISTS " . $this->quote($trigger) . " ON " . $this->qualify($table) . ";";
     }
 
     /**
@@ -68,9 +68,11 @@ class PostgresDialect extends AbstractAnsiDialect {
      */
     public function addColumn(string $table, string $colDef): string {
         if (preg_match("/DEFAULT\s+nextval\('([^']+)'::regclass\)/i", $colDef, $m)) {
-            $seqName = $m[1];
-            $t = $this->quote($table);
-            $create = "CREATE SEQUENCE IF NOT EXISTS \"$seqName\";\n";
+            // The name as PostgreSQL printed it: quoted, and qualified outside
+            // the search path, as it needs to be.
+            $seqName = str_replace("''", "'", $m[1]);
+            $t = $this->qualify($table);
+            $create = "CREATE SEQUENCE IF NOT EXISTS $seqName;\n";
             return $create . "ALTER TABLE $t ADD COLUMN $colDef;";
         }
         return parent::addColumn($table, $colDef);
@@ -80,7 +82,7 @@ class PostgresDialect extends AbstractAnsiDialect {
      * Drop sequence when dropping a SERIAL column.
      */
     public function dropColumn(string $table, string $col): string {
-        $t = $this->quote($table);
+        $t = $this->qualify($table);
         $c = $this->quote($col);
         return "ALTER TABLE $t DROP COLUMN $c CASCADE;";
     }
@@ -112,7 +114,7 @@ class PostgresDialect extends AbstractAnsiDialect {
      * here — it is dropped and re-added (GeneratedColumnPlan).
      */
     public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string {
-        $t   = $this->quote($table);
+        $t   = $this->qualify($table);
         $c   = $this->quote($col);
         $new = Column::parse($newDef);
         $old = $oldDef !== '' ? Column::parse($oldDef) : null;
@@ -128,7 +130,7 @@ class PostgresDialect extends AbstractAnsiDialect {
             self::nullabilityAndDefault($old, $new)
         ));
         if ($old !== null && ($old->serial !== $new->serial || ($new->serial && $retyped))) {
-            array_push($stmts, ...$this->serialChange($t, $c, $old, $new, $this->serialSequence ?? self::serialSequenceName($table, $col)));
+            array_push($stmts, ...$this->serialChange($t, $c, $old, $new, $this->serialSequence ?? $this->serialSequenceName($table, $col)));
         }
         // A type change resets compression to the server default, so a
         // compressed column is set again after one, not only when the method
@@ -196,8 +198,8 @@ class PostgresDialect extends AbstractAnsiDialect {
     }
 
     /** PostgreSQL's own name for a serial column's sequence, where none was read. */
-    private static function serialSequenceName(string $table, string $col): string {
-        return '"' . str_replace('"', '""', "{$table}_{$col}_seq") . '"';
+    private function serialSequenceName(string $table, string $col): string {
+        return $this->qualify("{$table}_{$col}_seq");
     }
 
     /**

@@ -3,6 +3,7 @@
 require __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/Support/PostgresRoundTripTestCase.php';
 require_once __DIR__ . '/Support/CorpusKnownFailures.php';
+require_once __DIR__ . '/Support/CorpusState.php';
 
 /**
  * DBDiff Test Bootstrap

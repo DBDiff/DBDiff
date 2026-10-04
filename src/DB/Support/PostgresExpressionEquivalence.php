@@ -142,7 +142,7 @@ final class PostgresExpressionEquivalence {
 
     /** DBDiff's `CREATE POLICY "name" ON "table" ...`, re-rendered the same way. */
     private static function policy(Connection $connection, string $table, string $definition): ?string {
-        if (!preg_match('/^CREATE\s+POLICY\s+("(?:[^"]|"")+")\s+ON\s+(?:"(?:[^"]|"")+"|\S+)(.*)$/s', $definition, $m)) {
+        if (!preg_match('/^CREATE\s+POLICY\s+("(?:[^"]|"")+")\s+ON\s+(?:"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?|\S+)(.*)$/s', $definition, $m)) {
             return null;
         }
         self::tempTable($connection, $table);
@@ -183,7 +183,7 @@ final class PostgresExpressionEquivalence {
      * materialised view's body goes through.
      */
     private static function view(Connection $connection, string $definition): ?string {
-        if (!preg_match('/^(CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+"(?:[^"]|"")+"(?:\s+WITH\s+\([^)]*\))?)\s+AS\s+(.*)$/s', $definition, $m)) {
+        if (!preg_match('/^(CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?(?:\s+WITH\s+\([^)]*\))?)\s+AS\s+(.*)$/s', $definition, $m)) {
             return null;
         }
         // A materialised view carries its index definitions after the body.
@@ -230,7 +230,7 @@ final class PostgresExpressionEquivalence {
 
     /** `CREATE DOMAIN "d" AS ...` re-rendered through a temporary domain. */
     private static function domain(Connection $connection, string $name, string $definition): ?string {
-        if (!preg_match('/^CREATE\s+DOMAIN\s+"(?:[^"]|"")+"\s+(AS\b.*)$/s', $definition, $m)) {
+        if (!preg_match('/^CREATE\s+DOMAIN\s+"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?\s+(AS\b.*)$/s', $definition, $m)) {
             return null;
         }
         $connection->statement('CREATE DOMAIN pg_temp.dbdiff_canon_d ' . $m[1]);

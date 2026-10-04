@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\DB\Support\SchemaScope;
+
 
 class TableIterator {
 
@@ -24,7 +26,15 @@ class TableIterator {
         $this->order = $order;
         $this->columns = $columns;
         $this->offset = 0;
-        $this->size = $connection->table($table)->count();
+        $this->size = $this->query()->count();
+    }
+
+    /** The table, in PostgreSQL in the schema being compared. */
+    private function query() {
+        if ($this->connection->getDriverName() !== 'pgsql') {
+            return $this->connection->table($this->table);
+        }
+        return $this->connection->table($this->connection->raw(SchemaScope::name($this->connection, $this->table)));
     }
 
     public function hasNext() {
@@ -35,7 +45,7 @@ class TableIterator {
         // Pages need a fixed order. Without one PostgreSQL may return the rows
         // in a different order for each query, so paging with OFFSET could
         // repeat some rows and miss others once a table outgrew one page.
-        $query = $this->connection->table($this->table);
+        $query = $this->query();
         if ($this->columns) {
             $query->select($this->columns);
         }

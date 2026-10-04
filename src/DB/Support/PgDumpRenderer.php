@@ -165,6 +165,7 @@ final class PgDumpRenderer
             (string) $connection->getConfig('host'),
             (string) $connection->getConfig('port'),
             (string) $connection->getConfig('database'),
+            SchemaScope::of($connection),
         ]);
     }
 

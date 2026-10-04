@@ -21,6 +21,6 @@ class CreatePolicySQL implements SQLGenInterface {
 
     public function getDown(): string {
         return 'DROP POLICY IF EXISTS ' . $this->dialect->quote($this->obj->name)
-            . ' ON ' . $this->dialect->quote($this->obj->table) . ';';
+            . ' ON ' . $this->dialect->qualify($this->obj->table) . ';';
     }
 }

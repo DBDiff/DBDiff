@@ -23,7 +23,7 @@ class AlterTableDropKeySQL implements SQLGenInterface {
         $table  = $this->obj->table;
         $schema = $this->obj->diff->getOldValue();
         if ($this->dialect->getDriver() === 'mysql') {
-            $t = $this->dialect->quote($table);
+            $t = $this->dialect->qualify($table);
             return "ALTER TABLE $t ADD $schema;";
         }
         return $schema . ';';

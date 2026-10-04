@@ -1,7 +1,11 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 class AlterTableDropConstraint {
+    use InSchema;
+
     public $table;
     public $column;
     public $key;

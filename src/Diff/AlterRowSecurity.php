@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 /**
  * A change to a table's row level security flags.
@@ -9,6 +11,8 @@
  * an ALTER against a relation that is already gone.
  */
 class AlterRowSecurity {
+    use InSchema;
+
     public $table;
     public $column = null;
     public $key = null;

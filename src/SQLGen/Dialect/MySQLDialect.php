@@ -6,6 +6,8 @@ use DBDiff\DB\Data\ScalarText;
 
 class MySQLDialect implements SQLDialectInterface {
 
+    use QualifiesNames;
+
     public function quote(string $name): string {
         return '`' . str_replace('`', '``', $name) . '`';
     }

@@ -24,7 +24,7 @@ class AlterTablePersistenceSQL implements SQLGenInterface {
     }
 
     private function statement(bool $unlogged): string {
-        $t = $this->dialect->quote($this->obj->table);
+        $t = $this->dialect->qualify($this->obj->table);
         return "ALTER TABLE $t SET " . ($unlogged ? 'UNLOGGED' : 'LOGGED') . ';';
     }
 }

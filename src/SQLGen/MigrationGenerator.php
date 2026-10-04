@@ -1,6 +1,11 @@
 <?php namespace DBDiff\SQLGen;
 
 use DBDiff\SQLGen\Dialect\DialectRegistry;
+use DBDiff\Diff\CreateSchema;
+use DBDiff\Diff\DropSchema;
+use DBDiff\Diff\CreateRoutine;
+use DBDiff\Diff\DropRoutine;
+use DBDiff\Diff\AlterRoutine;
 
 
 class MigrationGenerator {
@@ -33,7 +38,7 @@ class MigrationGenerator {
             }
             $reflection  = new \ReflectionClass($diff);
             $sqlGenClass = __NAMESPACE__."\\DiffToSQL\\".$reflection->getShortName()."SQL";
-            $gen         = new $sqlGenClass($diff, $dialect);
+            $gen         = new $sqlGenClass($diff, $dialect->inSchema($diff->schema ?? null));
             $statement   = $gen->$method();
             if ($statement !== '') {
                 $sql .= $units ? self::unit($diff, $statement) : $statement."\n";
@@ -54,8 +59,23 @@ class MigrationGenerator {
         $table = $diff->table ?? null;
         $part  = $diff->column ?? $diff->key ?? $diff->name ?? null;
         if (is_string($table) && $table !== '') {
-            return is_string($part) && $part !== '' && $part !== $table ? "$table.$part" : $table;
+            $table = self::inSchema($diff, $table);
+            return is_string($part) && $part !== '' && $part !== $diff->table ? "$table.$part" : $table;
         }
-        return is_string($part) ? $part : '';
+        return is_string($part) ? self::inSchema($diff, $part) : '';
+    }
+
+    /**
+     * An object outside `public` named with its schema. A routine's name is
+     * its signature as PostgreSQL prints it, qualified already, and a schema
+     * is named by itself.
+     */
+    private static function inSchema(object $diff, string $name): string {
+        $schema = $diff->schema ?? null;
+        $named = [CreateSchema::class, DropSchema::class, CreateRoutine::class, DropRoutine::class, AlterRoutine::class];
+        if ($schema === null || $schema === 'public' || in_array($diff::class, $named, true)) {
+            return $name;
+        }
+        return "$schema.$name";
     }
 }

@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 /**
  * A column's storage strategy changing — PLAIN, MAIN, EXTERNAL, EXTENDED.
@@ -9,6 +11,8 @@
  * values that are read by substring) reported no difference at all.
  */
 class AlterTableColumnStorage {
+    use InSchema;
+
     public $table;
     public $column;
     public $key;

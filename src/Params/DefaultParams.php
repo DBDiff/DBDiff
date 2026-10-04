@@ -95,6 +95,18 @@ class DefaultParams {
     public $tablesToIgnore = null;
 
     /*
+     PostgreSQL: the schemas compared (supports globs: *, ?). Null compares
+     `public` only, unless schemasToIgnore is set: then every schema but the
+     ignored ones and the system's own.
+    */
+    public $schemas = null;
+
+    /*
+     PostgreSQL: schemas never compared (supports globs: *, ?).
+    */
+    public $schemasToIgnore = null;
+
+    /*
      Per-table column exclusion. Keys are table names (or glob patterns),
      values are arrays of column names to exclude from both schema and data diffs.
     */
