@@ -90,18 +90,22 @@ class PostgresDialect extends AbstractAnsiDialect {
     /** See withSerialSequence(). */
     private ?string $serialSequence = null;
     private ?string $serialSequenceType = null;
+    /** The column stops being serial but keeps owning its sequence. */
+    private bool $keepSerialSequence = false;
 
     /**
      * This dialect, naming the sequence of a column becoming or ceasing to be
      * serial for changeColumn() — read from the database by the schema diff
      * (AlterTableChangeColumn::$serialSequence), since the definitions do
      * not carry it — and, for a serial column on both sides, the type its
-     * sequence must end with, when that is not what it has.
+     * sequence must end with, when that is not what it has. `$keep`: the
+     * column stops being serial but still owns the sequence, which stays.
      */
-    public function withSerialSequence(?string $sequence, ?string $type = null): static {
+    public function withSerialSequence(?string $sequence, ?string $type = null, bool $keep = false): static {
         $copy = clone $this;
         $copy->serialSequence     = $sequence;
         $copy->serialSequenceType = $type;
+        $copy->keepSerialSequence = $keep;
         return $copy;
     }
 
@@ -186,7 +190,7 @@ class PostgresDialect extends AbstractAnsiDialect {
             return $this->serialSequenceType !== null ? ["ALTER SEQUENCE $sequence AS {$this->serialSequenceType};"] : [];
         }
         if (!$new->serial) {
-            return ["DROP SEQUENCE IF EXISTS $sequence;"];
+            return $this->keepSerialSequence ? [] : ["DROP SEQUENCE IF EXISTS $sequence;"];
         }
         $literal = "'" . str_replace("'", "''", $sequence) . "'";
         return [

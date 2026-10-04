@@ -116,16 +116,26 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         ];
     }
 
-    public function getCreateStatement(Connection $connection, string $table): string {
+    public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string {
         $partition = PostgresSchemaHelper::partitionMeta($connection, $table);
 
         // A partition is declared against its parent, which supplies the columns,
         // constraints and indexes. Rebuilding it as a standalone CREATE TABLE
         // produced a detached ordinary table: rows still inserted, but the
         // partitioning was silently gone.
+        //
+        // What is the partition's own is added to it: a partition partitioned
+        // in turn ("h_eu is not partitioned" otherwise, for its partitions), and
+        // a constraint or index declared on it rather than inherited.
         if ($partition['is_partition']) {
-            return 'CREATE TABLE ' . SchemaScope::name($connection, $table)
-                . ' PARTITION OF ' . SchemaScope::name($connection, $partition['parent']) . " {$partition['bound']}";
+            $name = SchemaScope::name($connection, $table);
+            $ddl  = "CREATE TABLE $name PARTITION OF " . SchemaScope::name($connection, $partition['parent'])
+                . " {$partition['bound']}"
+                . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
+            foreach (PostgresSchemaHelper::partitionOwnDDL($connection, $table) as $statement) {
+                $ddl .= ";\n$statement";
+            }
+            return $ddl;
         }
 
         // pg_dump is the reference implementation and reproduces more of the
@@ -147,7 +157,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // The renderer below emits the key inline in CREATE TABLE, where the
         // partitions inherit it however the statements are ordered.
         if ($partition['partition_by'] === null) {
-            $viaPgDump = PgDumpRenderer::tableDDL($connection, $table);
+            $viaPgDump = PgDumpRenderer::tableDDL($connection, $table, $withoutConstraints);
             if ($viaPgDump !== null) {
                 return $viaPgDump;
             }
@@ -165,9 +175,21 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // PostgreSQL rejects outright:
         //   ERROR: multiple primary keys for table "t" are not allowed
         // Keeping the named form preserves the constraint name.
+        // A constraint added NOT VALID is added after, as pg_dump does: inside
+        // CREATE TABLE PostgreSQL validates it regardless, so the copy held a
+        // validated constraint the source does not.
         $parts = array_values($columns);
-        foreach ($constraints as $constraintDef) {
-            $parts[] = $constraintDef;
+        $notValid = [];
+        $leftOut = array_flip($withoutConstraints);
+        foreach ($constraints as $name => $constraintDef) {
+            if (isset($leftOut[$name])) {
+                continue;
+            }
+            if (preg_match('/\sNOT VALID$/', $constraintDef)) {
+                $notValid[] = $constraintDef;
+            } else {
+                $parts[] = $constraintDef;
+            }
         }
 
         $unlogged = $partition['unlogged'] ? 'UNLOGGED ' : '';
@@ -185,6 +207,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // fillfactor, autovacuum thresholds, parallel_workers and the rest are
         // part of how the table behaves, not cosmetic.
         $ddl .= PostgresSchemaHelper::withOptions($partition['reloptions']);
+
+        foreach ($notValid as $constraintDef) {
+            $ddl .= ";\nALTER TABLE " . SchemaScope::name($connection, $table) . " ADD $constraintDef";
+        }
 
         foreach ($keys as $idxDef) {
             $ddl .= ";\n$idxDef";
@@ -576,7 +602,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // duplicate per-table queries that fetchColumns() and fetchConstraints()
         // previously issued separately.
         $nnRows = $connection->select(
-            "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name
+            "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name,
+                    EXISTS (SELECT 1 FROM pg_constraint o
+                             WHERE o.connamespace = con.connamespace AND o.conname = con.conname
+                               AND o.oid <> con.oid) AS shared_name
              FROM pg_constraint con
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
@@ -588,7 +617,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $nnColsByTable = [];
         foreach ($nnRows as $r) {
             $default = $r['table_name'] . '_' . $r['column_name'] . '_not_null';
-            if ($r['conname'] !== $default || !$r['convalidated']) {
+            // A default name another constraint of the schema also has is named
+            // outright: left to PostgreSQL, it picks the next free one instead
+            // (`t_id_not_null1`) — a table made with LIKE ... INCLUDING ALL
+            // copies its source's names.
+            if ($r['conname'] !== $default || !$r['convalidated'] || $r['shared_name']) {
                 $namedNotNull[]                                    = $r;
                 $nnColsByTable[$r['table_name']][$r['column_name']] = true;
             }

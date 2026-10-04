@@ -74,7 +74,7 @@ final class PgDumpRenderer
      *
      * Null is not an error: it means the caller should use its own renderer.
      */
-    public static function tableDDL(Connection $connection, string $table): ?string
+    public static function tableDDL(Connection $connection, string $table, array $withoutConstraints = []): ?string
     {
         // Because this renderer is used whenever pg_dump happens to be present,
         // the same DBDiff version can emit different SQL on different machines.
@@ -100,7 +100,10 @@ final class PgDumpRenderer
 
         // Every entry naming this table: the table itself plus its indexes,
         // constraints, comments and anything else pg_dump attributes to it.
-        $entries = self::entriesFor($connection, $table);
+        $entries = array_values(array_filter(
+            self::entriesFor($connection, $table),
+            fn(string $line) => !self::namesConstraint($line, $withoutConstraints)
+        ));
         if ($entries === []) {
             return null;
         }
@@ -128,6 +131,24 @@ final class PgDumpRenderer
         self::$used = true;
 
         return $sql;
+    }
+
+    /**
+     * Whether a listing line is one of these foreign keys, left out to be added
+     * by a change of their own. A line ends with the constraint's name and
+     * its owner: `FK CONSTRAINT public a a_b_fk owner`.
+     */
+    private static function namesConstraint(string $line, array $names): bool
+    {
+        if ($names === [] || !str_contains($line, ' FK CONSTRAINT ')) {
+            return false;
+        }
+        foreach ($names as $name) {
+            if (preg_match('/ ' . preg_quote($name, '/') . ' \S+$/', $line)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -366,6 +387,9 @@ final class PgDumpRenderer
      *
      *   cannot drop sequence shipments_id_seq because other objects depend on it
      *
+     * CHECK CONSTRAINT is how pg_dump files a check added NOT VALID, which it
+     * cannot write inside CREATE TABLE; left out, the constraint was lost.
+     *
      * TABLE DATA and SEQUENCE SET stay out: this renders schema, and a schema
      * diff neither copies rows nor moves a sequence's current value.
      */
@@ -375,7 +399,7 @@ final class PgDumpRenderer
             $type,
             [
                 'TABLE', 'SEQUENCE', 'SEQUENCE OWNED BY', 'INDEX',
-                'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT',
+                'CONSTRAINT', 'CHECK CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT',
             ],
             true
         );

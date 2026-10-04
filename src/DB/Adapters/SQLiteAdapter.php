@@ -52,7 +52,7 @@ class SQLiteAdapter implements DBAdapterInterface {
         ];
     }
 
-    public function getCreateStatement(Connection $connection, string $table): string {
+    public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string {
         $result = $connection->select(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
             [$table]

@@ -64,6 +64,61 @@ class PostgresSchemaHelper {
     ];
 
     /**
+     * The foreign keys among these tables of the schema: each one's table,
+     * name, the table it references and its definition.
+     *
+     * @param  list<string> $tables
+     * @return list<array{table: string, name: string, references: string, definition: string}>
+     */
+    public static function foreignKeysAmong(Connection $connection, array $tables): array {
+        if ($tables === []) {
+            return [];
+        }
+        $in = implode(', ', array_fill(0, count($tables), '?'));
+        $rows = $connection->select(
+            "SELECT c.relname AS table, k.conname AS name, r.relname AS references,
+                    'CONSTRAINT ' || quote_ident(k.conname) || ' ' || pg_get_constraintdef(k.oid) AS definition
+               FROM pg_constraint k
+               JOIN pg_class c ON c.oid = k.conrelid
+               JOIN pg_class r ON r.oid = k.confrelid
+              WHERE k.contype = 'f' AND c.relnamespace = " . SchemaScope::oid($connection) . "
+                AND r.relnamespace = c.relnamespace AND c.relname IN ($in) AND r.relname IN ($in)
+              ORDER BY 1, 2",
+            array_merge($tables, $tables)
+        );
+        return array_map(fn($row) => (array) $row, $rows);
+    }
+
+    /**
+     * What a partition declares itself rather than inherits from its parent:
+     * its own constraints, as ALTER TABLE ... ADD CONSTRAINT, and its own
+     * indexes. An index attached to one of the parent's, or one backing a
+     * constraint, comes with that.
+     *
+     * @return list<string>
+     */
+    public static function partitionOwnDDL(Connection $connection, string $table): array {
+        $name = SchemaScope::name($connection, $table);
+        $rows = $connection->select(
+            "WITH p AS (SELECT c.oid FROM pg_class c WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ?)
+             SELECT 1 AS ord, k.conname AS name, quote_ident(k.conname) || ' ' || pg_get_constraintdef(k.oid) AS ddl
+               FROM pg_constraint k JOIN p ON k.conrelid = p.oid
+              WHERE k.conislocal AND k.coninhcount = 0 AND k.contype IN ('c', 'f', 'u', 'p', 'x')
+             UNION ALL
+             SELECT 2, i.relname, pg_get_indexdef(x.indexrelid)
+               FROM pg_index x JOIN p ON x.indrelid = p.oid JOIN pg_class i ON i.oid = x.indexrelid
+              WHERE NOT EXISTS (SELECT 1 FROM pg_inherits h WHERE h.inhrelid = x.indexrelid)
+                AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = x.indexrelid AND k.conrelid = p.oid)
+             ORDER BY 1, 2",
+            [$table]
+        );
+        return array_map(
+            fn($row) => (int) $row['ord'] === 1 ? "ALTER TABLE $name ADD CONSTRAINT {$row['ddl']}" : $row['ddl'],
+            $rows
+        );
+    }
+
+    /**
      * Partitioning facts for a table: whether it is a partitioned parent (and on
      * what key), and whether it is itself a partition (of what, for which
      * bound). All null/false for an ordinary table.

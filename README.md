@@ -23,7 +23,7 @@
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
-- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, and data — with deterministic, predictable output
+- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, extensions, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
@@ -840,6 +840,15 @@ Comparisons run in this order:
   emitted either: run `REFRESH MATERIALIZED VIEW` when you want the rows
 - ALTER = DROP + CREATE; PostgreSQL has no `CREATE OR REPLACE` for them
 - Ordered after views, since a matview may select from one
+
+### Extensions (PostgreSQL)
+- Extensions installed in a compared schema are created and dropped:
+  `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA ...`, before the types and
+  tables that may use one (an exclusion constraint's `btree_gist`), and dropped
+  after them
+- The version is not compared: each server offers its own
+- An extension's own functions, types and tables belong to it and are never
+  diffed one by one
 
 ### Comments (PostgreSQL)
 - `COMMENT ON` every object in the compared schemas: tables, columns, views and

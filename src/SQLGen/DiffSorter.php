@@ -16,6 +16,8 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "CreateSchema",
+        // Before anything that may use one: a type, an operator class.
+        "CreateExtension",
 
         "DropView",
         // Both depend on tables, so they go before any table is touched.
@@ -111,6 +113,8 @@ class DiffSorter {
         "DropCompositeType",
         "DropDomain",
         "DropEnum",
+        // After everything that used it, before its schema.
+        "DropExtension",
         "DropSchema",
     ];
 
@@ -118,6 +122,7 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "DropSchema",
+        "DropExtension",
 
         // Before the routines, views, policies and triggers the DOWN puts
         // back: they may name a label it restores, and a label swap takes
@@ -201,6 +206,7 @@ class DiffSorter {
         "CreateDomain",
         "CreateEnum",
         "CreateSequence",
+        "CreateExtension",
         "CreateSchema",
         // Last: after everything DOWN puts back.
         "AlterComment",

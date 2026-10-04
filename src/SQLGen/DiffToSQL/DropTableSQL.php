@@ -27,7 +27,7 @@ class DropTableSQL implements SQLGenInterface {
         if ($this->obj->schema !== null) {
             $this->obj->manager->useSchema($this->obj->schema);
         }
-        return $this->obj->manager->getCreateStatement($this->obj->connectionName, $table) . ';';
+        return $this->obj->manager->getCreateStatement($this->obj->connectionName, $table, $this->obj->withoutConstraints) . ';';
     }
 
 }

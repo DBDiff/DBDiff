@@ -85,6 +85,15 @@ class AlterTableChangeColumn {
      */
     public array $serialSequenceTypes = [];
 
+    /**
+     * Per direction, whether the side the column changes to still owns its
+     * serial sequence without using it — `ALTER COLUMN ... DROP DEFAULT`
+     * leaves it behind — so the change must not drop it.
+     *
+     * @var array{up?: bool, down?: bool}
+     */
+    public array $keepsSerialSequence = [];
+
     function __construct($table, $column, $diff) {
         $this->table = $table;
         $this->column = $column;

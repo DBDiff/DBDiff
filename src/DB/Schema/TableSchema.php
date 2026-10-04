@@ -365,6 +365,16 @@ class TableSchema {
         $atSource = $read('source', $change->diff->getNewValue());
 
         $change->serialSequence = ($atTarget ?? $atSource)['name'] ?? null;
+        // The side that is not serial may still own the sequence, left behind
+        // by DROP DEFAULT. An identity column owns one too, but its own: the
+        // serial one goes.
+        $owns = fn(string $side, string $def) => !PostgresColumnDefinition::parse($def)->isIdentity()
+            && PostgresSchemaHelper::serialSequence($this->manager->getDB($side), $table, $column) !== null;
+        if (($atTarget === null) !== ($atSource === null)) {
+            $change->keepsSerialSequence = $atSource === null
+                ? ['up' => $owns('source', $change->diff->getNewValue())]
+                : ['down' => $owns('target', $change->diff->getOldValue())];
+        }
         if ($atTarget !== null && $atSource !== null && $atTarget['type'] !== $atSource['type']) {
             $change->serialSequenceTypes = ['up' => $atSource['type'], 'down' => $atTarget['type']];
         }

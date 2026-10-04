@@ -118,6 +118,27 @@ final class PostgresObjectKinds {
     }
 
     /**
+     * Extensions installed in the schema, keyed by name, as the CREATE
+     * EXTENSION that installs one there. The version is left out: a server
+     * offers its own, and the same schema on two servers would otherwise
+     * differ by the server alone.
+     *
+     * @return array<string, string>
+     */
+    public static function extensions(Connection $connection): array {
+        $out = [];
+        foreach ($connection->select(
+            "SELECT e.extname AS name FROM pg_extension e
+              WHERE e.extnamespace = " . SchemaScope::oid($connection) . " ORDER BY 1"
+        ) as $row) {
+            $name = ((array) $row)['name'];
+            $out[$name] = 'CREATE EXTENSION IF NOT EXISTS "' . str_replace('"', '""', $name) . '" WITH SCHEMA '
+                . '"' . str_replace('"', '""', SchemaScope::of($connection)) . '"';
+        }
+        return $out;
+    }
+
+    /**
      * Domains, keyed by name.
      *
      * Constraints are emitted with their catalogue names. PostgreSQL would

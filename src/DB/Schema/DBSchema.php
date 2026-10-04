@@ -1,6 +1,11 @@
 <?php namespace DBDiff\DB\Schema;
 
 use Diff\Differ\ListDiffer;
+use Diff\DiffOp\DiffOpRemove;
+use Diff\DiffOp\DiffOpAdd;
+use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\Diff\AlterTableDropConstraint;
+use DBDiff\Diff\AlterTableAddConstraint;
 
 use DBDiff\Logger;
 use DBDiff\Params\ParamsFactory;
@@ -40,6 +45,8 @@ use DBDiff\Diff\CreatePolicy;
 use DBDiff\Diff\DropPolicy;
 use DBDiff\Diff\AlterPolicy;
 use DBDiff\Diff\AlterRowSecurity;
+use DBDiff\Diff\CreateExtension;
+use DBDiff\Diff\DropExtension;
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Support\PostgresObjectKinds;
 use DBDiff\DB\Support\PostgresComments;
@@ -100,10 +107,12 @@ class DBSchema {
             $deletedTables  = TableOrder::sort($deletedTables, $targetFkMap);
         }
 
+        $added = [];
         foreach ($addedTables as $i => $table) {
             $diff = new AddTable($table, $this->manager, 'source');
             $diff->sortOrder = $i;
             $diffs[] = $diff;
+            $added[] = $diff;
         }
 
         $commonTables = array_values(array_intersect($sourceTables, $targetTables));
@@ -122,10 +131,16 @@ class DBSchema {
 
         $this->orderPersistenceChanges($diffs);
 
+        $dropped = [];
         foreach ($deletedTables as $i => $table) {
             $diff = new DropTable($table, $this->manager, 'target');
             $diff->sortOrder = $i;
             $diffs[] = $diff;
+            $dropped[] = $diff;
+        }
+
+        if ($driver === 'pgsql') {
+            $diffs = array_merge($diffs, $this->keysAcrossACycle($added, 'source'), $this->keysAcrossACycle($dropped, 'target'));
         }
 
         // Enums / custom types (must be created before tables that reference them)
@@ -167,6 +182,38 @@ class DBSchema {
     }
 
     /**
+     * Foreign keys among tables made (or dropped) together that point at a
+     * table made after their own: in a cycle of references there is no order
+     * in which every table can be created with its keys, and the migration
+     * failed with `relation "b" does not exist`. Each is left out of its
+     * table and added by a change of its own once all of them exist — or,
+     * for tables being dropped, dropped first, so neither table is still
+     * referenced when it goes, and added back once DOWN has remade both.
+     *
+     * @param array<int, AddTable|DropTable> $tables
+     * @return list<AlterTableAddConstraint|AlterTableDropConstraint>
+     */
+    private function keysAcrossACycle(array $tables, string $side): array {
+        $byName = [];
+        foreach ($tables as $diff) {
+            $byName[$diff->table] = $diff;
+        }
+        $changes = [];
+        foreach (PostgresSchemaHelper::foreignKeysAmong($this->manager->getDB($side), array_keys($byName)) as $key) {
+            $from = $byName[$key['table']];
+            $to   = $byName[$key['references']];
+            if ($from === $to || $to->sortOrder < $from->sortOrder) {
+                continue;
+            }
+            $from->withoutConstraints[] = $key['name'];
+            $changes[] = $from instanceof AddTable
+                ? new AlterTableAddConstraint($key['table'], $key['name'], new DiffOpAdd($key['definition']))
+                : new AlterTableDropConstraint($key['table'], $key['name'], new DiffOpRemove($key['definition']));
+        }
+        return $changes;
+    }
+
+    /**
      * Composite types, domains, standalone sequences, materialised views and row
      * level security.
      *
@@ -177,7 +224,19 @@ class DBSchema {
         $source = $this->manager->getDB('source');
         $target = $this->manager->getDB('target');
 
+        $extensionsAt = [PostgresObjectKinds::extensions($source), PostgresObjectKinds::extensions($target)];
+        $extensions = [];
+        foreach (array_diff_key($extensionsAt[0], $extensionsAt[1]) as $name => $definition) {
+            $extensions[] = new CreateExtension($name, $definition);
+        }
+        foreach (array_diff_key($extensionsAt[1], $extensionsAt[0]) as $name => $definition) {
+            $extensions[] = new DropExtension($name, $definition);
+        }
+
         return array_merge(
+            // What the types and tables below may use: an extension's type or
+            // operator class (an exclusion constraint's btree_gist).
+            $extensions,
             // Like enums, a composite, a domain or a sequence can be referenced
             // by a column — by its type, or by a nextval() default — so
             // DiffSorter emits these ahead of the tables.
