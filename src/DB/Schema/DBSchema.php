@@ -42,6 +42,7 @@ use DBDiff\Diff\AlterPolicy;
 use DBDiff\Diff\AlterRowSecurity;
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Support\PostgresObjectKinds;
+use DBDiff\DB\Support\PostgresComments;
 
 
 
@@ -82,6 +83,7 @@ class DBSchema {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
+        $allTables    = array_merge($sourceTables, $targetTables);
         $sourceTables = TableFilter::filterTables($sourceTables, $params, 'schema');
         $targetTables = TableFilter::filterTables($targetTables, $params, 'schema');
 
@@ -152,6 +154,13 @@ class DBSchema {
             ColumnDependantPlan::apply($diffs);
             EnumSwapPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             CreationOrderPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
+            // Last, knowing what the changes above drop and recreate.
+            $diffs = array_merge($diffs, PostgresComments::diff(
+                $this->manager->getDB('source'),
+                $this->manager->getDB('target'),
+                $diffs,
+                array_values(array_diff($allTables, $sourceTables, $targetTables))
+            ));
         }
 
         return $diffs;

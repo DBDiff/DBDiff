@@ -25,7 +25,6 @@
   ],
   "hard_cases": [
     "hard_check_not_valid",
-    "hard_comments",
     "hard_exclusion_gist",
     "hard_exclusion_with_where",
     "hard_fk_circular_deferred",
@@ -33,7 +32,6 @@
     "hard_fk_set_null_cols",
     "hard_inherits",
     "hard_inherits_multiple_parents",
-    "hard_multiple_comments",
     "hard_nulls_not_distinct",
     "hard_part_child_own_constraint",
     "hard_part_fk_to_partitioned",
@@ -45,11 +43,9 @@
   "known_failures": [
     "alter_table_drop_default_139",
     "hard_check_not_valid",
-    "hard_comments",
     "hard_exclusion_gist",
     "hard_exclusion_with_where",
     "hard_fk_circular_deferred",
-    "hard_multiple_comments",
     "hard_part_child_own_constraint",
     "hard_part_list_subpart",
     "hard_table_like_including_all",

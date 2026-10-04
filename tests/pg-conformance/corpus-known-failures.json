@@ -4,9 +4,6 @@
     "A listed case must still fail, and one that passes fails the suite until it",
     "is removed, so this can only shrink. See tests/Support/CorpusKnownFailures.php."
   ],
-  "migrations": {
-    "objects_in_quoted_schema (before → after)": "A column's comment is not compared or migrated, so COMMENT ON COLUMN is lost (the conformance suite's hard_comments, known too).",
-    "objects_in_quoted_schema (after → before)": "A column's comment is not compared or migrated, so COMMENT ON COLUMN is lost (the conformance suite's hard_comments, known too)."
-  },
+  "migrations": {},
   "data": {}
 }
