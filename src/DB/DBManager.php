@@ -128,10 +128,6 @@ class DBManager {
         return $this->adapter->getTables($this->getDB($connection));
     }
 
-    public function getColumns(string $connection, string $table): array {
-        return $this->adapter->getColumns($this->getDB($connection), $table);
-    }
-
     /**
      * The columns a data diff reads and writes: every column but the generated
      * ones, whose values the server computes and refuses to be given.

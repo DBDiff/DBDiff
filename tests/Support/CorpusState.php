@@ -44,7 +44,11 @@ trait CorpusState
     private function state(string $db, array $schemas): array
     {
         $list = implode(', ', array_map(fn(string $s) => "'" . str_replace("'", "''", $s) . "'", $schemas));
-        $sql  = str_replace('__SCHEMAS__', $list, file_get_contents(self::conformanceDir() . '/state.sql'));
+        $path = self::conformanceDir() . '/state.sql';
+        if (!is_file($path)) {
+            throw new \RuntimeException("$path not found. Run `npm ci` in the DBDiff checkout.");
+        }
+        $sql  = str_replace('__SCHEMAS__', $list, file_get_contents($path));
         $json  = $this->connect($db)->query($sql)->fetchColumn();
         $state = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         // A column's position is its attnum, and PostgreSQL cannot move a

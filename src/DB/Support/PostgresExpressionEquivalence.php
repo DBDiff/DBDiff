@@ -108,6 +108,26 @@ final class PostgresExpressionEquivalence {
     }
 
     /** A temporary table with the same columns, to attach things to. */
+    /**
+     * The name a definition opens with — quoted or not, qualified or not —
+     * and the rest of it; null when it does not open with one.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private static function leadingName(string $sql): ?array {
+        $name = '';
+        while (preg_match('/^(?:"(?:[^"]|"")*"|[^\s".(]+)/', $sql, $part)) {
+            $name .= $part[0];
+            $sql = substr($sql, strlen($part[0]));
+            if (!str_starts_with($sql, '.')) {
+                return [$name, $sql];
+            }
+            $name .= '.';
+            $sql = substr($sql, 1);
+        }
+        return null;
+    }
+
     private static function tempTable(Connection $connection, string $table): void {
         $connection->statement(
             'CREATE TEMP TABLE ' . self::TEMP_TABLE . ' (LIKE ' . PostgresSchemaHelper::qualifiedName(SchemaScope::of($connection), $table)
@@ -142,11 +162,12 @@ final class PostgresExpressionEquivalence {
 
     /** DBDiff's `CREATE POLICY "name" ON "table" ...`, re-rendered the same way. */
     private static function policy(Connection $connection, string $table, string $definition): ?string {
-        if (!preg_match('/^CREATE\s+POLICY\s+("(?:[^"]|"")+")\s+ON\s+(?:"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?|\S+)(.*)$/s', $definition, $m)) {
+        if (!preg_match('/^CREATE\s+POLICY\s+("(?:[^"]|"")+")\s+ON\s+(.*)$/s', $definition, $m)
+            || ($relation = self::leadingName($m[2])) === null) {
             return null;
         }
         self::tempTable($connection, $table);
-        $connection->statement('CREATE POLICY ' . $m[1] . ' ON ' . self::TEMP_TABLE . $m[2]);
+        $connection->statement('CREATE POLICY ' . $m[1] . ' ON ' . self::TEMP_TABLE . $relation[1]);
         $row = $connection->selectOne(
             "SELECT p.polname AS name, p.polpermissive AS permissive,
                     CASE p.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
@@ -183,17 +204,20 @@ final class PostgresExpressionEquivalence {
      * materialised view's body goes through.
      */
     private static function view(Connection $connection, string $definition): ?string {
-        if (!preg_match('/^(CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?(?:\s+WITH\s+\([^)]*\))?)\s+AS\s+(.*)$/s', $definition, $m)) {
+        if (!preg_match('/^CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+/', $definition, $create)
+            || ($name = self::leadingName(substr($definition, strlen($create[0])))) === null
+            || !preg_match('/^((?:\s+WITH\s+\([^)]*\))?)\s+AS\s+(.*)$/s', $name[1], $rest)) {
             return null;
         }
+        $head = $create[0] . $name[0] . $rest[1];
         // A materialised view carries its index definitions after the body.
-        $parts = explode(";\n", $m[2], 2);
+        $parts = explode(";\n", $rest[2], 2);
         $connection->statement('CREATE TEMP VIEW dbdiff_canon_v AS ' . $parts[0]);
         $row = $connection->selectOne("SELECT pg_get_viewdef('pg_temp.dbdiff_canon_v'::regclass, true) AS def");
         if ($row === null) {
             return null;
         }
-        return $m[1] . ' AS ' . rtrim(trim($row['def']), ';') . (isset($parts[1]) ? ";\n" . $parts[1] : '');
+        return $head . ' AS ' . rtrim(trim($row['def']), ';') . (isset($parts[1]) ? ";\n" . $parts[1] : '');
     }
 
     /**
@@ -230,7 +254,9 @@ final class PostgresExpressionEquivalence {
 
     /** `CREATE DOMAIN "d" AS ...` re-rendered through a temporary domain. */
     private static function domain(Connection $connection, string $name, string $definition): ?string {
-        if (!preg_match('/^CREATE\s+DOMAIN\s+"(?:[^"]|"")+"(?:\."(?:[^"]|"")+")?\s+(AS\b.*)$/s', $definition, $m)) {
+        if (!preg_match('/^CREATE\s+DOMAIN\s+(.*)$/s', $definition, $create)
+            || ($domain = self::leadingName($create[1])) === null
+            || !preg_match('/^\s+(AS\b.*)$/s', $domain[1], $m)) {
             return null;
         }
         $connection->statement('CREATE DOMAIN pg_temp.dbdiff_canon_d ' . $m[1]);

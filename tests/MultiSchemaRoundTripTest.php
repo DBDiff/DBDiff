@@ -7,7 +7,7 @@
  * pg-conformance's state query over every schema, which does not depend on
  * what DBDiff reads.
  */
-class MultiSchemaRoundTripPostgresTest extends PostgresRoundTripTestCase
+class MultiSchemaRoundTripTest extends PostgresRoundTripTestCase
 {
     use CorpusState;
 

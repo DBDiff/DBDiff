@@ -29,7 +29,7 @@ use DBDiff\SQLGen\DiffToSQL\DropSchemaSQL;
 /**
  * Naming objects outside `public` (`--schemas`): what DBDiff writes itself.
  * What PostgreSQL renders is qualified by the server and is round-tripped in
- * MultiSchemaRoundTripPostgresTest.
+ * MultiSchemaRoundTripTest.
  */
 class MultiSchemaSQLTest extends TestCase
 {
