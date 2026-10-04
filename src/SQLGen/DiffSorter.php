@@ -56,6 +56,10 @@ class DiffSorter {
         "AlterTableOptions",
         "AlterTableCollation",
 
+        // An index goes before its column: DROP COLUMN ... CASCADE takes the
+        // index with it, and a DROP INDEX after it would fail.
+        "AlterTableDropKey",
+
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
@@ -64,7 +68,6 @@ class DiffSorter {
 
         "AlterTableAddKey",
         "AlterTableChangeKey",
-        "AlterTableDropKey",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
@@ -156,13 +159,15 @@ class DiffSorter {
         "AlterTableOptions",
         "AlterTableCollation",
 
+        // Undoing an added index before undoing its added column (see UP).
+        "AlterTableAddKey",
+
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
         "AlterTableColumnStorage",
         "AlterTableDropColumn",
 
-        "AlterTableAddKey",
         "AlterTableChangeKey",
         "AlterTableDropKey",
 
