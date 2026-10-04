@@ -24,7 +24,7 @@ class AlterTableColumnStorageSQL implements SQLGenInterface {
     }
 
     private function statement(string $storage): string {
-        return 'ALTER TABLE ' . $this->dialect->quote($this->obj->table)
+        return 'ALTER TABLE ' . $this->dialect->qualify($this->obj->table)
             . ' ALTER COLUMN ' . $this->dialect->quote($this->obj->column) . " SET STORAGE $storage;";
     }
 }

@@ -19,7 +19,7 @@ class UpdateDataSQL implements SQLGenInterface {
     }
     
     public function getUp(): string {
-        $t      = $this->dialect->quote($this->obj->table);
+        $t      = $this->dialect->qualify($this->obj->table);
         $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
         array_walk($values, function (&$diff, $column) use ($d) {
@@ -40,7 +40,7 @@ class UpdateDataSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        $t      = $this->dialect->quote($this->obj->table);
+        $t      = $this->dialect->qualify($this->obj->table);
         $d      = $this->dialect;
         $values = $this->obj->diff['diff'];
         array_walk($values, function (&$diff, $column) use ($d) {

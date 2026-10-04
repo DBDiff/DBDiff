@@ -27,7 +27,7 @@ class AlterTableDropConstraintSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        $t      = $this->dialect->quote($this->obj->table);
+        $t      = $this->dialect->qualify($this->obj->table);
         $schema = $this->obj->diff->getOldValue();
         return "ALTER TABLE $t ADD $schema;";
     }

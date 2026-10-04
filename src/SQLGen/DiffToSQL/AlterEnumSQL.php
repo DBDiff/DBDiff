@@ -107,7 +107,7 @@ class AlterEnumSQL extends AbstractRecreateSQL {
 
         $at = $position === null ? '' : " $position " . EnumLabels::quote($neighbour);
 
-        return 'ALTER TYPE ' . $this->dialect->quote($this->obj->name)
+        return 'ALTER TYPE ' . $this->dialect->qualify($this->obj->name)
             . ' ADD VALUE IF NOT EXISTS ' . EnumLabels::quote($label) . $at . ';';
     }
 
@@ -116,7 +116,7 @@ class AlterEnumSQL extends AbstractRecreateSQL {
      * is in the way, when that is known.
      */
     private function replace(string $definition, array $blockers): string {
-        $quoted = $this->dialect->quote($this->obj->name);
+        $quoted = $this->dialect->qualify($this->obj->name);
         $note = $blockers === []
             ? "-- Removing or reordering enum labels needs the type replaced, which\n"
               . "-- PostgreSQL refuses while any column still uses it. Migrate the\n"

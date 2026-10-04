@@ -61,7 +61,8 @@ final class EnumLabels {
         if ($labels === []) {
             return false;
         }
-        $name = '(?:"?public"?\.)?(?:"' . preg_quote(str_replace('"', '""', $type), '/') . '"|'
+        // Qualified when the type is outside the search path: `'c'::app.st`.
+        $name = '(?:"(?:[^"]|"")+"\.|[A-Za-z_][\w$]*\.)?(?:"' . preg_quote(str_replace('"', '""', $type), '/') . '"|'
             . preg_quote($type, '/') . '(?![\w$]))';
         preg_match_all("/'((?:[^']|'')*)'::$name(\\[\\])?/", $sql, $matches, PREG_SET_ORDER);
         foreach ($matches as $m) {

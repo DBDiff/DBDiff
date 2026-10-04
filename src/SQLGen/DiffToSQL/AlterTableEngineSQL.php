@@ -22,7 +22,7 @@ class AlterTableEngineSQL implements SQLGenInterface {
         if (empty($this->obj->engine)) {
             return '';
         }
-        $t = $this->dialect->quote($this->obj->table);
+        $t = $this->dialect->qualify($this->obj->table);
         return "ALTER TABLE $t ENGINE = {$this->obj->engine};";
     }
 
@@ -33,7 +33,7 @@ class AlterTableEngineSQL implements SQLGenInterface {
         if (empty($this->obj->prevEngine)) {
             return '';
         }
-        $t = $this->dialect->quote($this->obj->table);
+        $t = $this->dialect->qualify($this->obj->table);
         return "ALTER TABLE $t ENGINE = {$this->obj->prevEngine};";
     }
 

@@ -69,7 +69,7 @@ final class PostgresObjectKinds {
         );
         $sequences = [];
         foreach ($result as $row) {
-            $sequences[$row['name']] = 'CREATE SEQUENCE "' . $row['name'] . '"'
+            $sequences[$row['name']] = 'CREATE SEQUENCE ' . SchemaScope::name($connection, $row['name'])
                 . ' AS ' . $row['data_type']
                 . ' INCREMENT BY ' . $row['seqincrement']
                 . ' MINVALUE ' . $row['seqmin']
@@ -111,7 +111,7 @@ final class PostgresObjectKinds {
         );
         $types = [];
         foreach ($result as $row) {
-            $types[$row['name']] = 'CREATE TYPE "' . $row['name'] . '" AS ('
+            $types[$row['name']] = 'CREATE TYPE ' . SchemaScope::name($connection, $row['name']) . ' AS ('
                 . ($row['attributes'] ?? '') . ')';
         }
         return $types;
@@ -139,7 +139,7 @@ final class PostgresObjectKinds {
         );
         $domains = [];
         foreach ($result as $row) {
-            $domains[$row['name']] = self::renderDomain($row, $row['name']);
+            $domains[$row['name']] = self::renderDomain($row, SchemaScope::name($connection, $row['name']));
         }
         return $domains;
     }
@@ -150,7 +150,7 @@ final class PostgresObjectKinds {
      */
     public static function domainDefinition(Connection $connection, string $regtype, string $name): ?string {
         $row = $connection->selectOne(self::DOMAIN_SELECT . " WHERE t.oid = ?::regtype", [$regtype]);
-        return $row === null ? null : self::renderDomain($row, $name);
+        return $row === null ? null : self::renderDomain($row, SchemaScope::name($connection, $name));
     }
 
     private const DOMAIN_SELECT = "SELECT t.typname AS name,
@@ -169,8 +169,9 @@ final class PostgresObjectKinds {
              LEFT JOIN pg_collation co ON co.oid = t.typcollation
                                      AND co.collname <> 'default'";
 
+    /** `$name` arrives quoted, and qualified where it needs to be. */
     private static function renderDomain(array $row, string $name): string {
-        $sql = 'CREATE DOMAIN "' . $name . '" AS ' . $row['base_type'];
+        $sql = 'CREATE DOMAIN ' . $name . ' AS ' . $row['base_type'];
         if (!empty($row['collation'])) {
             $sql .= ' COLLATE "' . $row['collation'] . '"';
         }
@@ -228,7 +229,7 @@ final class PostgresObjectKinds {
             // The cost is that recreating a matview populates it, which is a
             // query the migration runs. That is the right way round: the
             // alternative reported destructive drift on every diff.
-            $sql = 'CREATE MATERIALIZED VIEW "' . $row['name'] . '"'
+            $sql = 'CREATE MATERIALIZED VIEW ' . SchemaScope::name($connection, $row['name'])
                 . PostgresSchemaHelper::withOptions($row['options'])
                 . ' AS ' . rtrim(trim($row['definition']), ';');
             foreach ($indexes[$row['name']] ?? [] as $indexDef) {
@@ -238,7 +239,7 @@ final class PostgresObjectKinds {
             // reads a matview, so a new one was created without its comment,
             // and a changed one went unnoticed.
             if ($row['comment'] !== null) {
-                $sql .= ";\nCOMMENT ON MATERIALIZED VIEW \"" . $row['name'] . '" IS ' . $row['comment'];
+                $sql .= ";\nCOMMENT ON MATERIALIZED VIEW " . SchemaScope::name($connection, $row['name']) . ' IS ' . $row['comment'];
             }
             $matviews[$row['name']] = $sql;
         }
@@ -294,7 +295,7 @@ final class PostgresObjectKinds {
         );
         $policies = [];
         foreach ($result as $row) {
-            $sql = PostgresSchemaHelper::policyDefinition($row, '"' . $row['table_name'] . '"');
+            $sql = PostgresSchemaHelper::policyDefinition($row, SchemaScope::name($connection, $row['table_name']));
             $policies[$row['table_name'] . '.' . $row['name']] = [
                 'name'       => $row['name'],
                 'table'      => $row['table_name'],

@@ -29,7 +29,7 @@ class AlterRowSecuritySQL implements SQLGenInterface {
     }
 
     private function statements(bool $enabled, bool $forced): string {
-        $table = $this->dialect->quote($this->obj->table);
+        $table = $this->dialect->qualify($this->obj->table);
         $lines = [
             'ALTER TABLE ' . $table . ($enabled ? ' ENABLE' : ' DISABLE') . ' ROW LEVEL SECURITY;',
             'ALTER TABLE ' . $table . ($forced ? ' FORCE' : ' NO FORCE') . ' ROW LEVEL SECURITY;',

@@ -2,6 +2,8 @@
 
 use DBDiff\DB\Schema\DBSchema;
 use DBDiff\DB\Schema\TableSchema;
+use DBDiff\DB\Schema\MultiSchemaDiff;
+use DBDiff\DB\Support\SchemaSelection;
 use DBDiff\DB\Data\DBData;
 use DBDiff\DB\Data\TableData;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
@@ -25,6 +27,24 @@ class DiffCalculator {
         // generate correctly-quoted SQL for the target driver.
         DialectRegistry::setForDriver($this->manager->getDriver());
 
+        if ($this->manager->getDriver() === 'pgsql' && $params->input['kind'] === 'db') {
+            $schemas = SchemaSelection::resolve($params, $this->manager->getDB('source'), $this->manager->getDB('target'));
+            if (!SchemaSelection::isDefault($schemas)) {
+                return (new MultiSchemaDiff($this->manager))->getDiff($schemas, fn() => $this->diffOne($params), $params->type !== 'data');
+            }
+        }
+
+        [$schemaDiff, $dataDiff] = $this->diffOne($params);
+
+        return [
+            'schema' => $schemaDiff,
+            'data'   => $dataDiff,
+        ];
+
+    }
+
+    /** The schema and data diff of the connections as they stand. */
+    private function diffOne($params): array {
         // Schema diff
         $schemaDiff = [];
         if ($params->type !== 'data') {
@@ -49,10 +69,6 @@ class DiffCalculator {
             }
         }
 
-        return [
-            'schema' => $schemaDiff,
-            'data'   => $dataDiff,
-        ];
-
+        return [$schemaDiff, $dataDiff];
     }
 }

@@ -35,8 +35,8 @@ final class EnumSwapSQL {
 
     /** @return string[] */
     public function statements(): array {
-        $old = $this->dialect->quote($this->type);
-        $new = $this->dialect->quote(substr($this->type, 0, 58) . '__new');
+        $old = $this->dialect->qualify($this->type);
+        $new = $this->dialect->qualify(substr($this->type, 0, 58) . '__new');
         // As they are now, never with a definition another diff gives them.
         $dependants = new ColumnDependantsSQL($this->swap['dependants'], $this->swap['skip'], 'down');
 
@@ -45,7 +45,8 @@ final class EnumSwapSQL {
             $dependants->drops(),
             $this->standAside(),
             $this->retypes($new),
-            ["DROP TYPE $old;", "ALTER TYPE $new RENAME TO $old;"],
+            // RENAME TO takes a bare name: the type stays in its schema.
+            ["DROP TYPE $old;", "ALTER TYPE $new RENAME TO " . $this->dialect->quote($this->type) . ';'],
             $this->putBack(),
             $this->typeMetadata($old),
             $dependants->recreates()
@@ -60,7 +61,7 @@ final class EnumSwapSQL {
             $lines[] = $this->alterTable($c['table'], 'DROP CONSTRAINT IF EXISTS ' . $this->dialect->quote($c['name']));
         }
         foreach ($usage['indexes'] as $i) {
-            $lines[] = 'DROP INDEX IF EXISTS ' . $this->dialect->quote($i['name']) . ';';
+            $lines[] = 'DROP INDEX IF EXISTS ' . $this->dialect->qualify($i['name']) . ';';
         }
         foreach ($usage['columns'] as $c) {
             if ($c['default'] !== null) {
@@ -85,11 +86,11 @@ final class EnumSwapSQL {
         foreach (array_filter($usage['constraints'], fn($c) => $c['recreate']) as $c) {
             $name    = $this->dialect->quote($c['name']);
             $lines[] = $this->alterTable($c['table'], "ADD CONSTRAINT $name {$c['definition']}");
-            array_push($lines, ...self::comment("CONSTRAINT $name ON " . $this->dialect->quote($c['table']), $c['comment']));
+            array_push($lines, ...self::comment("CONSTRAINT $name ON " . $this->dialect->qualify($c['table']), $c['comment']));
         }
         foreach (array_filter($usage['indexes'], fn($i) => $i['recreate']) as $i) {
             $lines[] = rtrim($i['definition'], ';') . ';';
-            array_push($lines, ...self::comment('INDEX ' . $this->dialect->quote($i['name']), $i['comment']));
+            array_push($lines, ...self::comment('INDEX ' . $this->dialect->qualify($i['name']), $i['comment']));
         }
         return $lines;
     }
@@ -119,7 +120,7 @@ final class EnumSwapSQL {
 
     /** `ALTER TABLE "t" <clause>;` */
     private function alterTable(string $table, string $clause): string {
-        return 'ALTER TABLE ' . $this->dialect->quote($table) . " $clause;";
+        return 'ALTER TABLE ' . $this->dialect->qualify($table) . " $clause;";
     }
 
     /** The comment and grants DROP TYPE took with the old type. */

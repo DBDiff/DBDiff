@@ -105,6 +105,9 @@ abstract class PostgresRoundTripTestCase extends TestCase
      * Run as a separate process: the CLI keeps process-wide state (the
      * dialect, the parsed parameters), and each case needs a clean one.
      */
+    /** `--schemas` for every diff; empty compares `public` alone, DBDiff's default. */
+    protected string $schemas = '';
+
     protected function diff(string $source, string $target, string $type = 'schema'): ?array
     {
         $out = tempnam(sys_get_temp_dir(), $this->prefix . '_') . '.sql';
@@ -112,6 +115,7 @@ abstract class PostgresRoundTripTestCase extends TestCase
             . ' diff --type=' . escapeshellarg($type) . ' --nocomments --include=both --allow-destructive'
             . ' --server1-url=' . escapeshellarg($this->url($source))
             . ' --server2-url=' . escapeshellarg($this->url($target))
+            . ($this->schemas !== '' ? ' --schemas=' . escapeshellarg($this->schemas) : '')
             . ' --output=' . escapeshellarg($out) . ' 2>&1';
         exec($cmd, $lines, $status);
         $log = implode("\n", $lines);

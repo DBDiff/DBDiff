@@ -19,7 +19,18 @@ class RoutineDrop {
     public static function build(string $definition, string $name, SQLDialectInterface $dialect): string {
         $type = preg_match('/\bPROCEDURE\b/i', $definition) ? 'PROCEDURE' : 'FUNCTION';
         [$bare, $args] = self::splitSignature($name);
-        return "DROP $type IF EXISTS " . $dialect->quote($bare) . $args . ';';
+        return "DROP $type IF EXISTS " . self::name($bare, $dialect) . $args . ';';
+    }
+
+    /**
+     * PostgreSQL names a routine as `regprocedure` prints it: already quoted
+     * where it needs to be and qualified outside the search path, so
+     * `"Fn"` or `app.fn` is SQL as it stands, and quoting it again names
+     * nothing. A plain name is quoted as it always has been.
+     */
+    private static function name(string $bare, SQLDialectInterface $dialect): string {
+        $printed = $dialect->getDriver() === 'pgsql' && (str_contains($bare, '"') || str_contains($bare, '.'));
+        return $printed ? $bare : $dialect->quote($bare);
     }
 
     /**

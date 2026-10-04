@@ -16,6 +16,9 @@ class DBManager {
     protected DBAdapterInterface $adapter;
     protected string $driver = 'mysql';
 
+    /** The schema useSchema() last pointed the connections at. */
+    protected ?string $schema = null;
+
     function __construct() {
         $this->capsule = new Capsule;
         $dispatcher    = new Dispatcher();
@@ -54,6 +57,28 @@ class DBManager {
             }
 
             $this->capsule->addConnection($config, $key);
+        }
+    }
+
+    /**
+     * Point both connections' catalog reads at one PostgreSQL schema.
+     *
+     * The search path stays `public`, which is where a migration is read
+     * against: a definition PostgreSQL renders — a view, a constraint, a
+     * column's type — then names everything outside `public` in full, so it
+     * means the same thing when it is applied.
+     */
+    public function useSchema(string $schema): void {
+        if ($this->schema === $schema) {
+            return;
+        }
+        $this->schema = $schema;
+        foreach (['source', 'target'] as $name) {
+            $config = $this->getDB($name)->getConfig();
+            $config['schema']      = $schema;
+            $config['search_path'] = 'public';
+            $this->capsule->getDatabaseManager()->purge($name);
+            $this->capsule->addConnection($config, $name);
         }
     }
 
@@ -101,10 +126,6 @@ class DBManager {
 
     public function getTables(string $connection): array {
         return $this->adapter->getTables($this->getDB($connection));
-    }
-
-    public function getColumns(string $connection, string $table): array {
-        return $this->adapter->getColumns($this->getDB($connection), $table);
     }
 
     /**

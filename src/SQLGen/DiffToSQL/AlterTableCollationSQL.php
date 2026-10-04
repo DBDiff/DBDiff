@@ -19,7 +19,7 @@ class AlterTableCollationSQL implements SQLGenInterface {
         if (!$this->dialect->isMySQLOnly()) {
             return '';
         }
-        $t = $this->dialect->quote($this->obj->table);
+        $t = $this->dialect->qualify($this->obj->table);
         return "ALTER TABLE $t DEFAULT COLLATE {$this->obj->collation};";
     }
 
@@ -27,7 +27,7 @@ class AlterTableCollationSQL implements SQLGenInterface {
         if (!$this->dialect->isMySQLOnly()) {
             return '';
         }
-        $t = $this->dialect->quote($this->obj->table);
+        $t = $this->dialect->qualify($this->obj->table);
         return "ALTER TABLE $t DEFAULT COLLATE {$this->obj->prevCollation};";
     }
 

@@ -91,11 +91,11 @@ class DBSchema {
         // Topological sort so parents are created before children
         if (!empty($addedTables)) {
             $sourceFkMap  = $this->manager->getForeignKeyMap('source');
-            $addedTables  = $this->topologicalSort($addedTables, $sourceFkMap);
+            $addedTables  = TableOrder::sort($addedTables, $sourceFkMap);
         }
         if (!empty($deletedTables)) {
             $targetFkMap    = $this->manager->getForeignKeyMap('target');
-            $deletedTables  = $this->topologicalSort($deletedTables, $targetFkMap);
+            $deletedTables  = TableOrder::sort($deletedTables, $targetFkMap);
         }
 
         foreach ($addedTables as $i => $table) {
@@ -545,73 +545,10 @@ class DBSchema {
         }
 
         $tables = array_values(array_unique(array_map(fn($d) => $d->table, $changes)));
-        $rank   = array_flip($this->topologicalSort($tables, $this->manager->getForeignKeyMap('target')));
+        $rank   = array_flip(TableOrder::sort($tables, $this->manager->getForeignKeyMap('target')));
         foreach ($changes as $diff) {
             $diff->sortOrder = $rank[$diff->table] ?? null;
         }
-    }
-
-    /**
-     * Topological sort using Kahn's algorithm.
-     *
-     * Returns tables ordered so that parent tables (referenced by FKs)
-     * come before their children. Peers (no dependency between them)
-     * are sorted alphabetically for deterministic output.
-     *
-     * Cycles are broken gracefully — remaining tables are appended.
-     */
-    private function topologicalSort(array $tables, array $fkMap): array
-    {
-        [$deps, $children] = $this->buildAdjacency($tables, $fkMap);
-
-        $inDegree = array_map('count', $deps);
-
-        $queue = [];
-        foreach ($inDegree as $t => $degree) {
-            if ($degree === 0) {
-                $queue[] = $t;
-            }
-        }
-        sort($queue);
-
-        $sorted = [];
-        while (!empty($queue)) {
-            $current  = array_shift($queue);
-            $sorted[] = $current;
-            foreach ($children[$current] as $child) {
-                $inDegree[$child]--;
-                if ($inDegree[$child] === 0) {
-                    $queue[] = $child;
-                    sort($queue);
-                }
-            }
-        }
-
-        // Append any remaining tables (cycles) alphabetically
-        $remaining = array_diff($tables, $sorted);
-        sort($remaining);
-        return array_merge($sorted, $remaining);
-    }
-
-    /**
-     * Build adjacency maps for topological sort.
-     *
-     * @return array{array<string,string[]>, array<string,string[]>}
-     */
-    private function buildAdjacency(array $tables, array $fkMap): array
-    {
-        $tableSet = array_flip($tables);
-        $deps     = array_fill_keys($tables, []);
-        $children = array_fill_keys($tables, []);
-        foreach ($tables as $table) {
-            foreach ($fkMap[$table] ?? [] as $parent) {
-                if (isset($tableSet[$parent]) && $parent !== $table) {
-                    $deps[$table][]      = $parent;
-                    $children[$parent][] = $table;
-                }
-            }
-        }
-        return [$deps, $children];
     }
 
     /**

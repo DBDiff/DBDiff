@@ -20,6 +20,6 @@ class CreateViewSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        return 'DROP VIEW IF EXISTS ' . $this->dialect->quote($this->obj->name) . ';';
+        return 'DROP VIEW IF EXISTS ' . $this->dialect->qualify($this->obj->name) . ';';
     }
 }

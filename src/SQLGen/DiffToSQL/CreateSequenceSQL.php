@@ -20,6 +20,6 @@ class CreateSequenceSQL implements SQLGenInterface {
     }
 
     public function getDown(): string {
-        return 'DROP SEQUENCE IF EXISTS ' . $this->dialect->quote($this->obj->name) . ';';
+        return 'DROP SEQUENCE IF EXISTS ' . $this->dialect->qualify($this->obj->name) . ';';
     }
 }

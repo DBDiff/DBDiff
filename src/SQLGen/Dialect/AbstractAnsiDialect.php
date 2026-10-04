@@ -17,6 +17,8 @@ use DBDiff\DB\Data\ScalarText;
  */
 abstract class AbstractAnsiDialect implements SQLDialectInterface {
 
+    use QualifiesNames;
+
     // ── Identifier quoting ───────────────────────────────────────────────────
 
     public function quote(string $name): string {
@@ -61,7 +63,7 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
      * so no ALTER TABLE wrapper is needed.
      */
     public function dropIndex(string $table, string $key): string {
-        $k = $this->quote($key);
+        $k = $this->qualify($key);
         return "DROP INDEX $k;";
     }
 
@@ -70,12 +72,12 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
     }
 
     public function addColumn(string $table, string $colDef): string {
-        $t = $this->quote($table);
+        $t = $this->qualify($table);
         return "ALTER TABLE $t ADD COLUMN $colDef;";
     }
 
     public function dropColumn(string $table, string $col): string {
-        $t = $this->quote($table);
+        $t = $this->qualify($table);
         $c = $this->quote($col);
         return "ALTER TABLE $t DROP COLUMN $c;";
     }
@@ -89,7 +91,7 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
      * override changeColumnWarning() to customise the comment text.
      */
     public function changeColumn(string $table, string $col, string $newDef, string $oldDef = ''): string {
-        $t = $this->quote($table);
+        $t = $this->qualify($table);
         $c = $this->quote($col);
 
         return implode("\n", [
@@ -110,7 +112,7 @@ abstract class AbstractAnsiDialect implements SQLDialectInterface {
     }
 
     public function dropConstraint(string $table, string $name, string $schema): string {
-        $t = $this->quote($table);
+        $t = $this->qualify($table);
         $n = $this->quote($name);
         return "ALTER TABLE $t DROP CONSTRAINT $n;";
     }
