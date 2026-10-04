@@ -95,6 +95,9 @@ class DiffSorter {
         "CreatePolicy",
         "AlterPolicy",
 
+        // After everything is made or remade; what is dropped needs none.
+        "AlterComment",
+
         // Very last: what the source no longer has, once nothing uses it. The
         // tables, columns, defaults, constraints, views, triggers and policies
         // that called a routine or were typed by a type have been dropped or
@@ -199,6 +202,8 @@ class DiffSorter {
         "CreateEnum",
         "CreateSequence",
         "CreateSchema",
+        // Last: after everything DOWN puts back.
+        "AlterComment",
     ];
 
     public function sort($diff, $type) {

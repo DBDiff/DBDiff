@@ -347,6 +347,10 @@ final class PgDumpRenderer
      * the function it executes, and the migration failed with "function
      * public.h_f() does not exist".
      *
+     * Comments are excluded for the same reason: PostgresComments sets every
+     * comment, for whichever renderer made the table, after the objects it
+     * names exist.
+     *
      * TABLE ATTACH and INDEX ATTACH are excluded for the same reason
      * partitions are skipped entirely — see tableDDL.
      *
@@ -371,7 +375,7 @@ final class PgDumpRenderer
             $type,
             [
                 'TABLE', 'SEQUENCE', 'SEQUENCE OWNED BY', 'INDEX',
-                'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT', 'COMMENT',
+                'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT',
             ],
             true
         );

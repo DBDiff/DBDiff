@@ -52,6 +52,7 @@
             <file>./CorpusDataRoundTripTest.php</file>
             <!-- Checked against the corpus's state query, so it needs the package too. -->
             <file>./MultiSchemaRoundTripTest.php</file>
+            <file>./CommentsRoundTripTest.php</file>
         </testsuite>
         <testsuite name="SQLite">
             <file>./End2EndSQLiteTest.php</file>

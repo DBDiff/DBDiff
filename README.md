@@ -23,7 +23,7 @@
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
-- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, and data — with deterministic, predictable output
+- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
@@ -64,7 +64,7 @@ Use `--driver=pgsql` (or `driver: pgsql` in your `.dbdiff` config).
 When `pg_dump` and `pg_restore` are on `PATH` and at least as new as the
 server, DBDiff uses them to render `CREATE TABLE` and everything attached to
 it — indexes, constraints, identity sequence options, collations, storage,
-compression and comments. They are PostgreSQL's own tooling, maintained in
+and compression. They are PostgreSQL's own tooling, maintained in
 lockstep with the server, so the DDL is what the server itself would produce.
 
 Measured against the 90-case corpus in
@@ -840,6 +840,17 @@ Comparisons run in this order:
   emitted either: run `REFRESH MATERIALIZED VIEW` when you want the rows
 - ALTER = DROP + CREATE; PostgreSQL has no `CREATE OR REPLACE` for them
 - Ordered after views, since a matview may select from one
+
+### Comments (PostgreSQL)
+- `COMMENT ON` every object in the compared schemas: tables, columns, views and
+  their columns, indexes, sequences, functions and procedures, types and their
+  attributes, domains, constraints, triggers, policies and the schema itself
+- A comment added, changed or removed is one change, set after everything else
+  is made — whichever renderer made the object
+- An object another change drops and recreates (a view replaced, a function,
+  trigger, policy, index or constraint redefined) has its comment set again,
+  since the recreation takes it away
+- An extension's objects are its own, comments included, and are left alone
 
 ### Sequences (PostgreSQL)
 - Detects created, dropped, and altered standalone sequences, rendering every
