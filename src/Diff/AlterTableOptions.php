@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 /**
  * A table's storage parameters changing — fillfactor, autovacuum_*, and the
@@ -9,6 +11,8 @@
  * existed, so a fillfactor change was reported as no difference (issue #229).
  */
 class AlterTableOptions {
+    use InSchema;
+
     public $table;
     public $column;
     public $key;

@@ -21,8 +21,12 @@
 class CorpusMigrationsRoundTripTest extends PostgresRoundTripTestCase
 {
     use CorpusKnownFailures;
+    use CorpusState;
 
     protected string $prefix = 'dbdiff_corpus';
+
+    /** Every schema: the corpus has cases outside `public`. */
+    protected string $schemas = '*';
 
     /** @return array<string, array{string, string, string, list<string>, int}> */
     public static function cases(): array
@@ -80,11 +84,13 @@ class CorpusMigrationsRoundTripTest extends PostgresRoundTripTestCase
 
         $this->apply($target, $up);
         $this->assertNull($this->diff($source, $target), "UP left a difference behind:\n$up");
+        $this->assertSameState($source, $target, "UP did not reach the source's schema:\n$up");
         $this->assertEquals($sourceMeta, $this->viewMetadata($target), "UP lost view metadata:\n$up");
         $this->assertEquals($kept, $rows($target), "UP lost rows:\n$up");
 
         $this->apply($target, $down);
         $this->assertNull($this->diff($original, $target), "DOWN did not restore the target:\n$down");
+        $this->assertSameState($original, $target, "DOWN did not restore the target's schema:\n$down");
         $this->assertEquals($targetMeta, $this->viewMetadata($target), "DOWN lost view metadata:\n$down");
         $this->assertEquals($kept, $rows($target), "DOWN lost rows:\n$down");
     }

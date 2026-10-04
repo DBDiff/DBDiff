@@ -16,7 +16,7 @@ class AlterTableAddConstraintSQL implements SQLGenInterface {
     }
 
     public function getUp(): string {
-        $t      = $this->dialect->quote($this->obj->table);
+        $t      = $this->dialect->qualify($this->obj->table);
         $schema = $this->obj->diff->getNewValue();
         return "ALTER TABLE $t ADD $schema;";
     }

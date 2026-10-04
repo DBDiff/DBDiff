@@ -212,9 +212,15 @@ Row level security is diffed as a first-class object — policies and each table
 Supabase enforces per-row access. A policy dropped or changed between two
 environments shows up in the migration instead of passing silently.
 
-DBDiff reads the `public` schema, so policies and objects Supabase keeps in
-`auth`, `storage` and its other managed schemas are outside the diff. Those are
-managed by Supabase itself rather than by your migrations.
+DBDiff reads the `public` schema unless told otherwise, so policies and objects
+Supabase keeps in `auth`, `storage` and its other managed schemas are outside
+the diff. Those are managed by Supabase itself rather than by your migrations.
+Schemas of your own are compared with `--schemas`, or every schema but the
+managed ones with `--ignore-schemas`:
+
+```bash
+dbdiff diff --supabase --ignore-schemas='auth,storage,realtime,_realtime,_analytics,vault,net,graphql*,supabase_*,pgsodium*,pgtle,extensions' ...
+```
 
 
 ## Compatible Database Variants
@@ -447,6 +453,8 @@ _Flags always override settings in `.dbdiff`._
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
 | `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*` |
 | `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
+| `--schemas=<list>` | PostgreSQL: the schemas to compare (supports globs). Defaults to `public`. `--schemas='*'` compares every schema but the system's own; `--schemas=public,app` compares two. Objects outside `public` are named in full in the migration, and a schema only one side has is created or dropped. |
+| `--ignore-schemas=<list>` | PostgreSQL: schemas to skip (supports globs). On its own, compares every other schema. Example: `--ignore-schemas=auth,storage,extensions` |
 | `--allow-destructive` | Generate the migration even when it contains data-losing changes. See [Destructive Change Protection](#destructive-change-protection). |
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
@@ -713,6 +721,8 @@ DBDiff offers fine-grained control over what enters the diff. All list values su
 |---|---|---|---|
 | Table include list | `tables` | `--tables` | schema + data |
 | Table exclude list | `tablesToIgnore` | `--ignore-tables` | schema + data |
+| Schema include list (PostgreSQL) | `schemas` | `--schemas` | schema + data |
+| Schema exclude list (PostgreSQL) | `schemasToIgnore` | `--ignore-schemas` | schema + data |
 | Data-only exclude | `tablesDataToIgnore` | — | data only |
 | Column exclusion | `fieldsToIgnore` | — | schema + data |
 | Row filtering | `rowsToIgnore` | — | data only |

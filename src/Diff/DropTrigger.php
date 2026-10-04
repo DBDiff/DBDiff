@@ -1,7 +1,11 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 class DropTrigger {
+    use InSchema;
+
     public $table;
     public $column = null;
     public $key = null;

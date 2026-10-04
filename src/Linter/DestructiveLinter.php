@@ -12,6 +12,7 @@ use DBDiff\Diff\DropSequence;
 use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\DropDomain;
 use DBDiff\Diff\DropPolicy;
+use DBDiff\Diff\DropSchema;
 
 /**
  * Inspects a diff array and returns a LintResult describing every
@@ -52,9 +53,9 @@ class DestructiveLinter {
         $addsByTable  = [];
         foreach ($schema as $item) {
             if ($item instanceof AlterTableDropColumn) {
-                $dropsByTable[$item->table][] = $item;
+                $dropsByTable[self::inSchema($item, $item->table)][] = $item;
             } elseif ($item instanceof AlterTableAddColumn) {
-                $addsByTable[$item->table][] = $item;
+                $addsByTable[self::inSchema($item, $item->table)][] = $item;
             }
         }
 
@@ -89,11 +90,12 @@ class DestructiveLinter {
      */
     private function classifyItem(object $item, array $renameKeys): ?LintViolation {
         if ($item instanceof DropTable) {
+            $table = self::inSchema($item, $item->table);
             return new LintViolation(
                 'error',
                 'drop-table',
-                "table `{$item->table}`",
-                "DROP TABLE `{$item->table}`",
+                "table `{$table}`",
+                "DROP TABLE `{$table}`",
                 'Use --allow-destructive to proceed, or archive the table instead.'
             );
         }
@@ -148,6 +150,10 @@ class DestructiveLinter {
                 'Ensure no columns use this domain before dropping; its '
                 . 'constraints stop being enforced.',
             ],
+            DropSchema::class => [
+                'drop-schema', "schema `{name}`", 'DROP SCHEMA "{name}"',
+                'It is dropped only once empty; each object in it is reported on its own.',
+            ],
             DropPolicy::class => [
                 'drop-policy', "policy `{name}` on `{table}`",
                 'DROP POLICY "{name}" ON "{table}"',
@@ -158,7 +164,9 @@ class DestructiveLinter {
 
         foreach ($rules as $class => [$kind, $subject, $sql, $advice]) {
             if ($item instanceof $class) {
-                $tokens = ['{name}' => $item->name ?? '', '{table}' => $item->table ?? ''];
+                $tokens = $item instanceof DropSchema
+                    ? ['{name}' => $item->name]
+                    : ['{name}' => self::inSchema($item, $item->name ?? ''), '{table}' => self::inSchema($item, $item->table ?? '')];
                 return new LintViolation(
                     'warning',
                     $kind,
@@ -177,14 +185,15 @@ class DestructiveLinter {
      * or a true drop-column (error).
      */
     private function classifyDropColumn(AlterTableDropColumn $item, array $renameKeys): LintViolation {
-        $key = $this->columnKey($item->table, $item->column);
+        $table = self::inSchema($item, $item->table);
+        $key   = $this->columnKey($table, $item->column);
 
         if (in_array($key, $renameKeys, true)) {
             return new LintViolation(
                 'warning',
                 'possible-rename',
-                "column `{$item->table}`.`{$item->column}`",
-                "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
+                "column `{$table}`.`{$item->column}`",
+                "ALTER TABLE `{$table}` DROP COLUMN `{$item->column}`",
                 'Detected a possible column rename. If intentional, use --allow-destructive.'
             );
         }
@@ -192,10 +201,16 @@ class DestructiveLinter {
         return new LintViolation(
             'error',
             'drop-column',
-            "column `{$item->table}`.`{$item->column}`",
-            "ALTER TABLE `{$item->table}` DROP COLUMN `{$item->column}`",
+            "column `{$table}`.`{$item->column}`",
+            "ALTER TABLE `{$table}` DROP COLUMN `{$item->column}`",
             'Use --allow-destructive to proceed. Back up data in this column first.'
         );
+    }
+
+    /** A name, with its schema when that is not `public`. */
+    private static function inSchema(object $item, string $name): string {
+        $schema = $item->schema ?? null;
+        return $schema === null || $schema === 'public' || $name === '' ? $name : "{$schema}.{$name}";
     }
 
     private function columnKey(string $table, string $column): string {

@@ -46,9 +46,18 @@ class PostgresColumnType {
             ?? self::parameterisedType($col);
     }
 
-    /** A domain names itself; its own definition carries the underlying type. */
+    /**
+     * A domain names itself; its own definition carries the underlying type.
+     * Outside `public` it is named in full, as the migration is read there.
+     */
     private static function domainType(array $col): ?string {
-        return empty($col['domain_name']) ? null : $col['domain_name'];
+        if (empty($col['domain_name'])) {
+            return null;
+        }
+        $schema = $col['domain_schema'] ?? null;
+        return $schema && !in_array($schema, ['public', 'pg_catalog'], true)
+            ? '"' . str_replace('"', '""', $schema) . '"."' . str_replace('"', '""', $col['domain_name']) . '"'
+            : $col['domain_name'];
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\DB\Support\SchemaScope;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
@@ -192,7 +193,7 @@ class StreamingMergeDiff
         $pkCols   = $this->quoteCols($key);
         $pkSelect = implode(', ', $pkCols);
         $orderBy  = implode(', ', $pkCols);
-        $q        = $this->quoteIdentifier($table);
+        $q        = $this->tableName($table);
 
         $srcPdo  = $this->source->getPdo();
         $tgtPdo  = $this->target->getPdo();
@@ -307,7 +308,7 @@ class StreamingMergeDiff
             return [];
         }
 
-        $q       = $this->quoteIdentifier($table);
+        $q       = $this->tableName($table);
         $colList = implode(', ', $this->quoteCols($columns));
         $orderBy = implode(', ', $this->quoteCols($key));
 
@@ -341,6 +342,15 @@ class StreamingMergeDiff
     private function normaliseRows(array $rows): array
     {
         return array_map(fn($row) => BinaryValue::fromStreams(is_array($row) ? $row : (array) $row), $rows);
+    }
+
+    /**
+     * A table as the queries name it: in PostgreSQL, in the schema being
+     * compared, which both connections share.
+     */
+    private function tableName(string $table): string
+    {
+        return $this->driver === 'pgsql' ? SchemaScope::name($this->source, $table) : $this->quoteIdentifier($table);
     }
 
     /**

@@ -15,6 +15,7 @@ class DiffSorter {
     private $up_order = [
         "SetDBCharset",
         "SetDBCollation",
+        "CreateSchema",
 
         "DropView",
         // Both depend on tables, so they go before any table is touched.
@@ -104,11 +105,13 @@ class DiffSorter {
         "DropCompositeType",
         "DropDomain",
         "DropEnum",
+        "DropSchema",
     ];
 
     private $down_order = [
         "SetDBCharset",
         "SetDBCollation",
+        "DropSchema",
 
         // Before the routines, views, policies and triggers the DOWN puts
         // back: they may name a label it restores, and a label swap takes
@@ -189,7 +192,8 @@ class DiffSorter {
         "CreateCompositeType",
         "CreateDomain",
         "CreateEnum",
-        "CreateSequence"
+        "CreateSequence",
+        "CreateSchema",
     ];
 
     public function sort($diff, $type) {
@@ -284,7 +288,7 @@ class DiffSorter {
     }
 
     private function compareByName($a, $b): int {
-        $tableCmp = strcmp($a->table ?? '', $b->table ?? '');
+        $tableCmp = strcmp($a->schema ?? '', $b->schema ?? '') ?: strcmp($a->table ?? '', $b->table ?? '');
         if ($tableCmp !== 0) {
             return $tableCmp;
         }

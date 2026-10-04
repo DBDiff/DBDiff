@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 /**
  * A table changing between LOGGED and UNLOGGED.
@@ -9,6 +11,8 @@
  * other is a durability difference (issue #229).
  */
 class AlterTablePersistence {
+    use InSchema;
+
     public $table;
     public $column;
     public $key;

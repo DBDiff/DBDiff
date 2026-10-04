@@ -6,6 +6,12 @@ interface SQLDialectInterface {
     /** Quote a single identifier (table, column, index name). */
     public function quote(string $name): string;
 
+    /** This dialect, naming objects in the given schema (see QualifiesNames). */
+    public function inSchema(?string $schema): static;
+
+    /** A schema object's name, quoted, and qualified outside `public`. */
+    public function qualify(string $name): string;
+
     /** The PDO driver string: mysql | pgsql | sqlite */
     public function getDriver(): string;
 

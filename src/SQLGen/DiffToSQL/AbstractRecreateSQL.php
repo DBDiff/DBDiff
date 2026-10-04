@@ -40,7 +40,7 @@ abstract class AbstractRecreateSQL implements SQLGenInterface {
     }
 
     private function recreate(string $definition): string {
-        $quoted = $this->dialect->quote($this->obj->name);
+        $quoted = $this->dialect->qualify($this->obj->name);
         return 'DROP ' . $this->dropKeyword() . " IF EXISTS $quoted;\n" . $definition . ';';
     }
 }

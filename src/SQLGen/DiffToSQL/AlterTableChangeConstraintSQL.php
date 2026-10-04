@@ -16,7 +16,7 @@ class AlterTableChangeConstraintSQL implements SQLGenInterface {
     }
 
     private function buildChange(string $dropSchema, string $addSchema): string {
-        $t    = $this->dialect->quote($this->obj->table);
+        $t    = $this->dialect->qualify($this->obj->table);
         $drop = DropIfExists::apply($this->obj, $this->dialect->dropConstraint($this->obj->table, $this->obj->name, $dropSchema));
         return "$drop\nALTER TABLE $t ADD $addSchema;";
     }

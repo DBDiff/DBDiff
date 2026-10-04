@@ -1,7 +1,11 @@
 <?php namespace DBDiff\Diff;
 
+use DBDiff\Diff\Concerns\InSchema;
+
 
 class CreateCompositeType {
+    use InSchema;
+
     public $table = null;
     public $column = null;
     public $key = null;

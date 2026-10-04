@@ -17,7 +17,7 @@ class AlterTableAddKeySQL implements SQLGenInterface {
 
     public function getUp(): string {
         $table  = $this->obj->table;
-        $t      = $this->dialect->quote($table);
+        $t      = $this->dialect->qualify($table);
         $schema = $this->obj->diff->getNewValue();
         // For MySQL, schema is an inline key definition (e.g. KEY `idx` (`col`))
         // For Postgres/SQLite, schema is a full CREATE INDEX statement

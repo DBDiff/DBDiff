@@ -124,7 +124,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // produced a detached ordinary table: rows still inserted, but the
         // partitioning was silently gone.
         if ($partition['is_partition']) {
-            return "CREATE TABLE \"$table\" PARTITION OF \"{$partition['parent']}\" {$partition['bound']}";
+            return 'CREATE TABLE ' . SchemaScope::name($connection, $table)
+                . ' PARTITION OF ' . SchemaScope::name($connection, $partition['parent']) . " {$partition['bound']}";
         }
 
         // pg_dump is the reference implementation and reproduces more of the
@@ -170,7 +171,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         }
 
         $unlogged = $partition['unlogged'] ? 'UNLOGGED ' : '';
-        $ddl  = "CREATE {$unlogged}TABLE \"$table\" (\n";
+        $ddl  = "CREATE {$unlogged}TABLE " . SchemaScope::name($connection, $table) . " (\n";
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
 
@@ -192,7 +193,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
         // so it trails the statement instead.
         foreach (PostgresSchemaHelper::storageStatements(
-            $table,
+            SchemaScope::name($connection, $table),
             PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? []
         ) as $stmt) {
             $ddl .= ";\n$stmt";
@@ -218,7 +219,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN information_schema.constraint_column_usage ccu
                ON tc.constraint_name = ccu.constraint_name
               AND tc.constraint_schema = ccu.constraint_schema
-             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = " . SchemaScope::literal($connection) . ""
+             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = " . SchemaScope::literal($connection) . "
+               AND ccu.table_schema = tc.table_schema"
         );
         $map = [];
         foreach ($result as $row) {
@@ -235,7 +237,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                JOIN pg_class c ON c.oid = i.inhrelid
                JOIN pg_class p ON p.oid = i.inhparent
                JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . ""
+              WHERE n.nspname = " . SchemaScope::literal($connection) . "
+                AND p.relnamespace = c.relnamespace"
         ) as $row) {
             $map[$row['child']][] = $row['parent'];
         }
@@ -271,7 +274,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $views = [];
         foreach ($result as $row) {
             $body = rtrim(trim($row['definition']), ';');
-            $views[$row['viewname']] = 'CREATE VIEW "' . $row['viewname'] . '"'
+            $views[$row['viewname']] = 'CREATE VIEW ' . SchemaScope::name($connection, $row['viewname'])
                 . PostgresSchemaHelper::withOptions($row['options'])
                 . ' AS ' . $body;
         }
@@ -362,7 +365,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                 fn($v) => "'" . str_replace("'", "''", $v) . "'",
                 explode('||', $row['labels'])
             );
-            $enums[$row['name']] = 'CREATE TYPE "' . $row['name'] . '" AS ENUM (' . implode(', ', $labels) . ')';
+            $enums[$row['name']] = 'CREATE TYPE ' . SchemaScope::name($connection, $row['name']) . ' AS ENUM (' . implode(', ', $labels) . ')';
         }
         return $enums;
     }
@@ -424,7 +427,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                  FROM information_schema.columns isc
                  JOIN pg_class cls
                    ON cls.relname = isc.table_name
-                  AND cls.relnamespace = " . SchemaScope::literal($connection) . "::regnamespace
+                  AND cls.relnamespace = " . SchemaScope::oid($connection) . "
                  JOIN pg_attribute a
                    ON a.attrelid = cls.oid
                   AND a.attname = isc.column_name
@@ -556,7 +559,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                     -- without them silently resets the counter.
                     identity_start, identity_increment, identity_maximum,
                     identity_minimum, identity_cycle,
-                    is_generated, generation_expression, domain_name
+                    is_generated, generation_expression, domain_name, domain_schema
              FROM information_schema.columns
              WHERE table_schema = " . SchemaScope::literal($connection) . " AND table_name IN ($ph)
              ORDER BY table_name, ordinal_position",

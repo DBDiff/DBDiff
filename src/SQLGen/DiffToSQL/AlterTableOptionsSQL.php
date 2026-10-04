@@ -36,7 +36,7 @@ class AlterTableOptionsSQL implements SQLGenInterface {
         $fromOptions = self::parse($from);
         $toOptions   = self::parse($to);
 
-        $t     = $this->dialect->quote($this->obj->table);
+        $t     = $this->dialect->qualify($this->obj->table);
         $lines = [];
 
         $set = [];
