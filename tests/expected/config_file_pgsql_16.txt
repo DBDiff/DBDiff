@@ -1,12 +1,12 @@
 #---------- UP ----------
 DELETE FROM "posts" WHERE "id" = '4';
 DELETE FROM "users" WHERE "id" = '4';
+DROP INDEX "posts_published_idx";
+DROP INDEX "users_status_idx";
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
 ALTER TABLE "users" DROP COLUMN "updated_at" CASCADE;
-DROP INDEX "posts_published_idx";
-DROP INDEX "users_status_idx";
 INSERT INTO "posts" ("id","user_id","title","content","published") VALUES('3','2','Jane Post','This is Jane post content',true);
 INSERT INTO "users" ("id","name","email","status","created_at") VALUES('3','Bob Wilson','bob@example.com','inactive','2024-01-01 00:00:00');
 UPDATE "posts" SET "title" = 'First Post', "content" = 'This is the first post content' WHERE "id" = '1';
