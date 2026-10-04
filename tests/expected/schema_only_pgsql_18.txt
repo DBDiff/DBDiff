@@ -1,10 +1,10 @@
 #---------- UP ----------
+DROP INDEX "posts_published_idx";
+DROP INDEX "users_status_idx";
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'active'::character varying;
 ALTER TABLE "posts" DROP COLUMN "published_at" CASCADE;
 ALTER TABLE "users" DROP COLUMN "phone" CASCADE;
 ALTER TABLE "users" DROP COLUMN "updated_at" CASCADE;
-DROP INDEX "posts_published_idx";
-DROP INDEX "users_status_idx";
 #---------- DOWN ----------
 ALTER TABLE "users" ALTER COLUMN "status" SET DEFAULT 'pending'::character varying;
 ALTER TABLE "posts" ADD COLUMN "published_at" timestamp;
