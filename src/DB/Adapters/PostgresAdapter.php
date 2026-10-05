@@ -164,6 +164,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // PostgreSQL rejects outright:
         //   ERROR: multiple primary keys for table "t" are not allowed
         // Keeping the named form preserves the constraint name.
+        // A child under INHERITS is written with its own columns only; the
+        // parents supply the rest, and their checks.
+        $parents = PostgresTableParts::inheritedFrom($connection, $table);
+        if ($parents !== []) {
+            $attrs   = PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? [];
+            $columns = array_filter($columns, fn($name) => (bool) ($attrs[$name]['local'] ?? true), ARRAY_FILTER_USE_KEY);
+        }
         [$inline, $notValid] = PostgresTableParts::splitConstraints($constraints, $withoutConstraints);
         $parts = array_merge(array_values($columns), $inline);
 
@@ -171,6 +178,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $ddl  = "CREATE {$unlogged}TABLE " . SchemaScope::name($connection, $table) . " (\n";
         $ddl .= implode(",\n", array_map(fn($p) => "  $p", $parts));
         $ddl .= "\n)";
+        if ($parents !== []) {
+            $ddl .= ' INHERITS (' . implode(', ', $parents) . ')';
+        }
 
         // Without this the parent came out as an ordinary table and every
         // partition attached to it had nowhere to go. pg_get_partkeydef()
@@ -666,7 +676,18 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                                          WHEN 'a' THEN 'NO ACTION' END AS delete_rule,
                     CASE con.confmatchtype WHEN 'f' THEN 'FULL' WHEN 'p' THEN 'PARTIAL'
                                            WHEN 's' THEN 'NONE' END AS match_option,
-                    con.convalidated
+                    con.convalidated,
+                    -- PostgreSQL 15+, read through to_jsonb so 14, which has
+                    -- neither column, reads null: a UNIQUE NULLS NOT DISTINCT,
+                    -- and the columns ON DELETE SET NULL (b) / SET DEFAULT sets.
+                    (SELECT (to_jsonb(i) ->> 'indnullsnotdistinct')::boolean
+                       FROM pg_index i WHERE i.indexrelid = con.conindid) AS nulls_not_distinct,
+                    (SELECT json_agg(sa.attname ORDER BY s.ord)
+                       FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(to_jsonb(con) -> 'confdelsetcols') = 'array'
+                                                           THEN to_jsonb(con) -> 'confdelsetcols' ELSE '[]' END)
+                            WITH ORDINALITY AS s(attnum, ord)
+                       JOIN pg_attribute sa ON sa.attrelid = con.conrelid AND sa.attnum = s.attnum::int
+                    ) AS delete_set_columns
              FROM pg_constraint con
              JOIN pg_class rel     ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
@@ -677,6 +698,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              LEFT JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
              WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
                AND con.contype IN ('f', 'u', 'p')
+               -- Not the copies PostgreSQL makes of a foreign key onto a
+               -- partitioned table, one per partition: they come with it, and
+               -- rendered too, the table failed with \"constraint already exists\".
+               AND con.conparentid = 0
              ORDER BY rel.relname, con.conname, cols.ord",
             $tables
         );
@@ -689,6 +714,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
              WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
                AND con.contype IN ('c', 'x')
+               -- A child's copy of its parent's check comes with INHERITS.
+               AND con.conislocal
              ORDER BY rel.relname, con.conname",
             $tables
         );

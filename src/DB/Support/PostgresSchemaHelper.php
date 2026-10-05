@@ -232,7 +232,10 @@ class PostgresSchemaHelper {
                     -- Inherited from a parent: a partition's columns, or a
                     -- child's under INHERITS. Its type follows the parent's and
                     -- cannot be changed on its own (issue #232).
-                    a.attinhcount > 0 AS inherited
+                    a.attinhcount > 0 AS inherited,
+                    -- Declared by the table itself, inherited or not: a column
+                    -- that is only inherited is not written in its CREATE TABLE.
+                    a.attislocal AS local
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid
@@ -492,11 +495,14 @@ class PostgresSchemaHelper {
                 ' REFERENCES ' . PostgresForeignKey::references($c) .
                 $match .
                 " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
+                // ON DELETE SET NULL (b): the columns it sets, PostgreSQL 15+.
+                (($set = json_decode($c['delete_set_columns'] ?? 'null', true)) ? ' ("' . implode('", "', $set) . '")' : '') .
                 $defer . $notValid;
         }
 
         if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
-            return "CONSTRAINT \"$name\" {$type} (\"$cols\")" . $defer;
+            $nulls = $type === 'UNIQUE' && !empty($c['nulls_not_distinct']) ? ' NULLS NOT DISTINCT' : '';
+            return "CONSTRAINT \"$name\" {$type}{$nulls} (\"$cols\")" . $defer;
         }
 
         return null;

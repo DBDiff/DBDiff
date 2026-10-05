@@ -107,6 +107,29 @@ final class PostgresTableParts
     }
 
     /**
+     * The tables a table inherits from under INHERITS, in order, named as SQL
+     * (qualified outside `public`). Empty for a partition, whose parent is
+     * declared with PARTITION OF instead.
+     *
+     * @return list<string>
+     */
+    public static function inheritedFrom(Connection $connection, string $table): array
+    {
+        $rows = $connection->select(
+            "SELECT CASE WHEN n.nspname = 'public' THEN quote_ident(p.relname)
+                         ELSE quote_ident(n.nspname) || '.' || quote_ident(p.relname) END AS parent
+               FROM pg_inherits i
+               JOIN pg_class c ON c.oid = i.inhrelid
+               JOIN pg_class p ON p.oid = i.inhparent
+               JOIN pg_namespace n ON n.oid = p.relnamespace
+              WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ? AND NOT c.relispartition
+              ORDER BY i.inhseqno",
+            [$table]
+        );
+        return array_map(fn($row) => ((array) $row)['parent'], $rows);
+    }
+
+    /**
      * Whether the table has a NOT NULL constraint under its default name that
      * another constraint of the schema shares — on PostgreSQL 18, a table made
      * with LIKE ... INCLUDING ALL copies its source's. Left implicit, as pg_dump
