@@ -635,76 +635,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             $tables
         );
 
-        // FK/UNIQUE/PK constraints, read straight from pg_catalog.
-        //
-        // The information_schema equivalent (table_constraints joined to
-        // key_column_usage, referential_constraints and constraint_column_usage)
-        // is ~900x slower: those views wrap the catalogs in per-row privilege
-        // checks, which stops the planner pushing `relname IN (...)` down, so
-        // they are largely materialised before the filter applies. On a
-        // 1000-table database that single join was 99% of the whole batch
-        // fetch — 8.4s against 9ms here. See issue #184.
-        //
-        // The CASE arms reproduce exactly what the information_schema views
-        // emit, so the assembled DDL is unchanged. Note Postgres maps simple
-        // match ('s') to 'NONE', not 'SIMPLE'.
-        $conRows = $connection->select(
-            "SELECT rel.relname AS table_name,
-                    con.conname AS constraint_name,
-                    CASE con.contype
-                         WHEN 'f' THEN 'FOREIGN KEY'
-                         WHEN 'u' THEN 'UNIQUE'
-                         ELSE 'PRIMARY KEY'
-                    END AS constraint_type,
-                    CASE WHEN con.condeferrable THEN 'YES' ELSE 'NO' END AS is_deferrable,
-                    CASE WHEN con.condeferred   THEN 'YES' ELSE 'NO' END AS initially_deferred,
-                    att.attname  AS column_name,
-                    cols.ord     AS ordinal_position,
-                    frel.relname AS foreign_table,
-                    fnsp.nspname AS foreign_schema,
-                    -- Every referenced column, in key order: reading only
-                    -- confkey[1] rendered a two-column key as REFERENCES p (a).
-                    (SELECT json_agg(fa.attname ORDER BY fk.ord)
-                       FROM unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord)
-                       JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = fk.attnum
-                    ) AS foreign_columns,
-                    CASE con.confupdtype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
-                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
-                                         WHEN 'a' THEN 'NO ACTION' END AS update_rule,
-                    CASE con.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
-                                         WHEN 'd' THEN 'SET DEFAULT' WHEN 'r' THEN 'RESTRICT'
-                                         WHEN 'a' THEN 'NO ACTION' END AS delete_rule,
-                    CASE con.confmatchtype WHEN 'f' THEN 'FULL' WHEN 'p' THEN 'PARTIAL'
-                                           WHEN 's' THEN 'NONE' END AS match_option,
-                    con.convalidated,
-                    -- PostgreSQL 15+, read through to_jsonb so 14, which has
-                    -- neither column, reads null: a UNIQUE NULLS NOT DISTINCT,
-                    -- and the columns ON DELETE SET NULL (b) / SET DEFAULT sets.
-                    (SELECT (to_jsonb(i) ->> 'indnullsnotdistinct')::boolean
-                       FROM pg_index i WHERE i.indexrelid = con.conindid) AS nulls_not_distinct,
-                    (SELECT json_agg(sa.attname ORDER BY s.ord)
-                       FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(to_jsonb(con) -> 'confdelsetcols') = 'array'
-                                                           THEN to_jsonb(con) -> 'confdelsetcols' ELSE '[]' END)
-                            WITH ORDINALITY AS s(attnum, ord)
-                       JOIN pg_attribute sa ON sa.attrelid = con.conrelid AND sa.attnum = s.attnum::int
-                    ) AS delete_set_columns
-             FROM pg_constraint con
-             JOIN pg_class rel     ON con.conrelid = rel.oid
-             JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
-             LEFT JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
-             LEFT JOIN pg_attribute att  ON att.attrelid  = con.conrelid
-                                        AND att.attnum    = cols.attnum
-             LEFT JOIN pg_class frel     ON con.confrelid = frel.oid
-             LEFT JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
-             WHERE nsp.nspname = " . SchemaScope::literal($connection) . " AND rel.relname IN ($ph)
-               AND con.contype IN ('f', 'u', 'p')
-               -- Not the copies PostgreSQL makes of a foreign key onto a
-               -- partitioned table, one per partition: they come with it, and
-               -- rendered too, the table failed with \"constraint already exists\".
-               AND con.conparentid = 0
-             ORDER BY rel.relname, con.conname, cols.ord",
-            $tables
-        );
+        $conRows = PostgresTableParts::keyConstraintRows($connection, $tables);
 
         $checkRows = $connection->select(
             "SELECT rel.relname AS table_name, con.conname AS constraint_name,
