@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DB\Support\SchemaScope;
 use Diff\Differ\ListDiffer;
 use Diff\DiffOp\DiffOpRemove;
 use Diff\DiffOp\DiffOpAdd;
@@ -91,8 +92,9 @@ class DBSchema {
         $targetTables = $this->manager->getTables('target');
 
         $allTables    = array_merge($sourceTables, $targetTables);
-        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'schema');
-        $targetTables = TableFilter::filterTables($targetTables, $params, 'schema');
+        $schema       = $driver === 'pgsql' ? SchemaScope::of($this->manager->getDB('source')) : null;
+        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'schema', $schema);
+        $targetTables = TableFilter::filterTables($targetTables, $params, 'schema', $schema);
 
         $addedTables = array_values(array_diff($sourceTables, $targetTables));
         $deletedTables = array_values(array_diff($targetTables, $sourceTables));

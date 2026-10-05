@@ -501,4 +501,43 @@ class TableFilterTest extends TestCase
     {
         $this->assertFalse(TableFilter::globMatch('prefix?', 'prefix'));
     }
+
+    // ── Schema-qualified patterns (PostgreSQL, --schemas) ─────────────────
+
+    // A diff over several schemas reads one schema's tables at a time, by
+    // bare name: `app.*` matched nothing, and the user's filter did nothing.
+    public function testAPatternWithASchemaMatchesThatSchemaOnly(): void
+    {
+        $params = (object) ['tables' => ['app.*']];
+        $this->assertSame(['accounts', 'invoices'], TableFilter::filterTables(['accounts', 'invoices'], $params, 'schema', 'app'));
+        $this->assertSame([], TableFilter::filterTables(['accounts', 'invoices'], $params, 'schema', 'public'));
+    }
+
+    public function testABarePatternMatchesInEverySchemaAsBefore(): void
+    {
+        $params = (object) ['tables' => ['accounts']];
+        $this->assertSame(['accounts'], TableFilter::filterTables(['accounts', 'orders'], $params, 'schema', 'app'));
+        $this->assertSame(['accounts'], TableFilter::filterTables(['accounts', 'orders'], $params, 'schema', 'public'));
+    }
+
+    public function testExcludingOneSchemasTableLeavesTheOtherSchemas(): void
+    {
+        $params = (object) ['tablesToIgnore' => ['public.accounts']];
+        $this->assertSame(['orders'], TableFilter::filterTables(['accounts', 'orders'], $params, 'schema', 'public'));
+        $this->assertSame(['accounts', 'orders'], TableFilter::filterTables(['accounts', 'orders'], $params, 'schema', 'app'));
+    }
+
+    public function testAScopeKeyedByQualifiedNameWinsInItsSchema(): void
+    {
+        $params = (object) ['tableScope' => ['app.accounts' => 'schema', 'accounts' => 'data']];
+        $this->assertSame(['accounts'], TableFilter::filterTables(['accounts'], $params, 'schema', 'app'));
+        $this->assertSame([], TableFilter::filterTables(['accounts'], $params, 'schema', 'public'));
+    }
+
+    // Without a schema - MySQL, SQLite - a pattern is matched as written.
+    public function testWithoutASchemaAPatternIsMatchedAsWritten(): void
+    {
+        $this->assertFalse(TableFilter::matchesTable('accounts', 'app.*'));
+        $this->assertTrue(TableFilter::matchesTable('app.accounts', 'app.*'));
+    }
 }
