@@ -17,6 +17,9 @@ class AddTable {
 
     /** @var \DBDiff\DB\DBManager */
     public $manager;
+
+    /** @var list<string> foreign keys left out of the table, added by a change of their own */
+    public array $withoutConstraints = [];
     public $connectionName;
 
     public function __construct($table, $manager, string $connectionName = 'source') {

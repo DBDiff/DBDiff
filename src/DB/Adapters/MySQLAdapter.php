@@ -84,7 +84,7 @@ class MySQLAdapter implements DBAdapterInterface {
         ];
     }
 
-    public function getCreateStatement(Connection $connection, string $table): string {
+    public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string {
         $res = $connection->select("SHOW CREATE TABLE `$table`");
         return $res[0]['Create Table'];
     }

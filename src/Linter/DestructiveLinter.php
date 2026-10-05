@@ -13,6 +13,7 @@ use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\DropDomain;
 use DBDiff\Diff\DropPolicy;
 use DBDiff\Diff\DropSchema;
+use DBDiff\Diff\DropExtension;
 
 /**
  * Inspects a diff array and returns a LintResult describing every
@@ -149,6 +150,10 @@ class DestructiveLinter {
                 'drop-domain', "domain `{name}`", 'DROP DOMAIN "{name}"',
                 'Ensure no columns use this domain before dropping; its '
                 . 'constraints stop being enforced.',
+            ],
+            DropExtension::class => [
+                'drop-extension', "extension `{name}`", 'DROP EXTENSION "{name}"',
+                'Its objects go with it; it is dropped only once nothing else uses them.',
             ],
             DropSchema::class => [
                 'drop-schema', "schema `{name}`", 'DROP SCHEMA "{name}"',

@@ -50,7 +50,10 @@ interface DBAdapterInterface {
      * Return a complete CREATE TABLE statement for the given table.
      * Used by AddTableSQL / DropTableSQL.
      */
-    public function getCreateStatement(Connection $connection, string $table): string;
+    /**
+     * @param list<string> $withoutConstraints constraints left out, to be added by a change of their own
+     */
+    public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string;
 
     /**
      * Return a single server-level variable value, or null if the concept

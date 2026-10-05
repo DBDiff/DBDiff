@@ -74,7 +74,7 @@ final class PgDumpRenderer
      *
      * Null is not an error: it means the caller should use its own renderer.
      */
-    public static function tableDDL(Connection $connection, string $table): ?string
+    public static function tableDDL(Connection $connection, string $table, array $withoutConstraints = []): ?string
     {
         // Because this renderer is used whenever pg_dump happens to be present,
         // the same DBDiff version can emit different SQL on different machines.
@@ -100,7 +100,13 @@ final class PgDumpRenderer
 
         // Every entry naming this table: the table itself plus its indexes,
         // constraints, comments and anything else pg_dump attributes to it.
-        $entries = self::entriesFor($connection, $table);
+        // A foreign key left out to be added by a change of its own: its line
+        // ends with the constraint's name and owner, `FK CONSTRAINT public a a_b_fk owner`.
+        $leftOut = fn(string $line) => str_contains($line, ' FK CONSTRAINT ') && array_filter(
+            $withoutConstraints,
+            fn(string $name) => preg_match('/ ' . preg_quote($name, '/') . ' \S+$/', $line) === 1
+        ) !== [];
+        $entries = array_values(array_filter(self::entriesFor($connection, $table), fn(string $line) => !$leftOut($line)));
         if ($entries === []) {
             return null;
         }
@@ -129,6 +135,7 @@ final class PgDumpRenderer
 
         return $sql;
     }
+
 
     /**
      * Whether this renderer produced any DDL in the current process.
@@ -366,6 +373,9 @@ final class PgDumpRenderer
      *
      *   cannot drop sequence shipments_id_seq because other objects depend on it
      *
+     * CHECK CONSTRAINT is how pg_dump files a check added NOT VALID, which it
+     * cannot write inside CREATE TABLE; left out, the constraint was lost.
+     *
      * TABLE DATA and SEQUENCE SET stay out: this renders schema, and a schema
      * diff neither copies rows nor moves a sequence's current value.
      */
@@ -375,7 +385,7 @@ final class PgDumpRenderer
             $type,
             [
                 'TABLE', 'SEQUENCE', 'SEQUENCE OWNED BY', 'INDEX',
-                'CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT',
+                'CONSTRAINT', 'CHECK CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT',
             ],
             true
         );

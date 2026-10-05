@@ -144,8 +144,9 @@ class DBManager {
         return $this->adapter->getPrimaryKey($this->getDB($connection), $table);
     }
 
-    public function getCreateStatement(string $connection, string $table): string {
-        return $this->adapter->getCreateStatement($this->getDB($connection), $table);
+    /** @param list<string> $withoutConstraints see DBAdapterInterface::getCreateStatement() */
+    public function getCreateStatement(string $connection, string $table, array $withoutConstraints = []): string {
+        return $this->adapter->getCreateStatement($this->getDB($connection), $table, $withoutConstraints);
     }
 
     public function getTableSchema(string $connection, string $table): array {

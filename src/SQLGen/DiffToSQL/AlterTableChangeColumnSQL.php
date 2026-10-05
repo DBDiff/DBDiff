@@ -45,7 +45,8 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
         $dialect = $this->dialect instanceof PostgresDialect && !empty($this->obj->serialSequence)
             ? $this->dialect->withSerialSequence(
                 $this->obj->serialSequence,
-                $this->obj->serialSequenceTypes[$direction] ?? null
+                $this->obj->serialSequenceTypes[$direction] ?? null,
+                $this->obj->keepsSerialSequence[$direction] ?? false
             )
             : $this->dialect;
         return $dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
