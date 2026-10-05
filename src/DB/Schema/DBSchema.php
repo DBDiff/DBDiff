@@ -3,7 +3,7 @@
 use Diff\Differ\ListDiffer;
 use Diff\DiffOp\DiffOpRemove;
 use Diff\DiffOp\DiffOpAdd;
-use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\Diff\AlterTableDropConstraint;
 use DBDiff\Diff\AlterTableAddConstraint;
 
@@ -199,7 +199,7 @@ class DBSchema {
             $byName[$diff->table] = $diff;
         }
         $changes = [];
-        foreach (PostgresSchemaHelper::foreignKeysAmong($this->manager->getDB($side), array_keys($byName)) as $key) {
+        foreach (PostgresTableParts::foreignKeysAmong($this->manager->getDB($side), array_keys($byName)) as $key) {
             $from = $byName[$key['table']];
             $to   = $byName[$key['references']];
             if ($from === $to || $to->sortOrder < $from->sortOrder) {

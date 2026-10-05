@@ -100,10 +100,13 @@ final class PgDumpRenderer
 
         // Every entry naming this table: the table itself plus its indexes,
         // constraints, comments and anything else pg_dump attributes to it.
-        $entries = array_values(array_filter(
-            self::entriesFor($connection, $table),
-            fn(string $line) => !self::namesConstraint($line, $withoutConstraints)
-        ));
+        // A foreign key left out to be added by a change of its own: its line
+        // ends with the constraint's name and owner, `FK CONSTRAINT public a a_b_fk owner`.
+        $leftOut = fn(string $line) => str_contains($line, ' FK CONSTRAINT ') && array_filter(
+            $withoutConstraints,
+            fn(string $name) => preg_match('/ ' . preg_quote($name, '/') . ' \S+$/', $line) === 1
+        ) !== [];
+        $entries = array_values(array_filter(self::entriesFor($connection, $table), fn(string $line) => !$leftOut($line)));
         if ($entries === []) {
             return null;
         }
@@ -133,23 +136,6 @@ final class PgDumpRenderer
         return $sql;
     }
 
-    /**
-     * Whether a listing line is one of these foreign keys, left out to be added
-     * by a change of their own. A line ends with the constraint's name and
-     * its owner: `FK CONSTRAINT public a a_b_fk owner`.
-     */
-    private static function namesConstraint(string $line, array $names): bool
-    {
-        if ($names === [] || !str_contains($line, ' FK CONSTRAINT ')) {
-            return false;
-        }
-        foreach ($names as $name) {
-            if (preg_match('/ ' . preg_quote($name, '/') . ' \S+$/', $line)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /**
      * Whether this renderer produced any DDL in the current process.

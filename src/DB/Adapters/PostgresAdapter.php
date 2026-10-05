@@ -4,6 +4,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
+use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Support\PostgresColumnDependants;
@@ -116,26 +117,52 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         ];
     }
 
+    /**
+     * A partition, declared against its parent, which supplies the columns,
+     * constraints and indexes. Rebuilding it as a standalone CREATE TABLE
+     * produced a detached ordinary table: rows still inserted, but the
+     * partitioning was silently gone.
+     *
+     * What is the partition's own is added to it: a partition partitioned in
+     * turn ("h_eu is not partitioned" otherwise, for its partitions), and a
+     * constraint or index declared on it rather than inherited.
+     */
+    private static function partitionDDL(Connection $connection, string $table, array $partition): string {
+        $ddl = 'CREATE TABLE ' . SchemaScope::name($connection, $table)
+            . ' PARTITION OF ' . SchemaScope::name($connection, $partition['parent']) . " {$partition['bound']}"
+            . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
+        foreach (PostgresTableParts::partitionOwnDDL($connection, $table) as $statement) {
+            $ddl .= ";\n$statement";
+        }
+        return $ddl;
+    }
+
+    /**
+     * The constraints written inside CREATE TABLE, and those added after it:
+     * one added NOT VALID, which inside CREATE TABLE PostgreSQL validates
+     * regardless, so the copy held a validated constraint the source does not.
+     * Those in `$without` are left out altogether.
+     *
+     * @return array{0: list<string>, 1: list<string>}
+     */
+    private static function splitConstraints(array $constraints, array $without): array {
+        $inline = [];
+        $after  = [];
+        foreach (array_diff_key($constraints, array_flip($without)) as $definition) {
+            if (preg_match('/\sNOT VALID$/', $definition)) {
+                $after[] = $definition;
+            } else {
+                $inline[] = $definition;
+            }
+        }
+        return [$inline, $after];
+    }
+
     public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string {
         $partition = PostgresSchemaHelper::partitionMeta($connection, $table);
 
-        // A partition is declared against its parent, which supplies the columns,
-        // constraints and indexes. Rebuilding it as a standalone CREATE TABLE
-        // produced a detached ordinary table: rows still inserted, but the
-        // partitioning was silently gone.
-        //
-        // What is the partition's own is added to it: a partition partitioned
-        // in turn ("h_eu is not partitioned" otherwise, for its partitions), and
-        // a constraint or index declared on it rather than inherited.
         if ($partition['is_partition']) {
-            $name = SchemaScope::name($connection, $table);
-            $ddl  = "CREATE TABLE $name PARTITION OF " . SchemaScope::name($connection, $partition['parent'])
-                . " {$partition['bound']}"
-                . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
-            foreach (PostgresSchemaHelper::partitionOwnDDL($connection, $table) as $statement) {
-                $ddl .= ";\n$statement";
-            }
-            return $ddl;
+            return self::partitionDDL($connection, $table, $partition);
         }
 
         // pg_dump is the reference implementation and reproduces more of the
@@ -156,7 +183,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         //
         // The renderer below emits the key inline in CREATE TABLE, where the
         // partitions inherit it however the statements are ordered.
-        if ($partition['partition_by'] === null) {
+        //
+        // So is a table with a NOT NULL name pg_dump would leave implicit and
+        // PostgreSQL would not give back (PostgresTableParts::sharesNotNullName).
+        if ($partition['partition_by'] === null && !PostgresTableParts::sharesNotNullName($connection, $table)) {
             $viaPgDump = PgDumpRenderer::tableDDL($connection, $table, $withoutConstraints);
             if ($viaPgDump !== null) {
                 return $viaPgDump;
@@ -175,22 +205,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // PostgreSQL rejects outright:
         //   ERROR: multiple primary keys for table "t" are not allowed
         // Keeping the named form preserves the constraint name.
-        // A constraint added NOT VALID is added after, as pg_dump does: inside
-        // CREATE TABLE PostgreSQL validates it regardless, so the copy held a
-        // validated constraint the source does not.
-        $parts = array_values($columns);
-        $notValid = [];
-        $leftOut = array_flip($withoutConstraints);
-        foreach ($constraints as $name => $constraintDef) {
-            if (isset($leftOut[$name])) {
-                continue;
-            }
-            if (preg_match('/\sNOT VALID$/', $constraintDef)) {
-                $notValid[] = $constraintDef;
-            } else {
-                $parts[] = $constraintDef;
-            }
-        }
+        [$inline, $notValid] = self::splitConstraints($constraints, $withoutConstraints);
+        $parts = array_merge(array_values($columns), $inline);
 
         $unlogged = $partition['unlogged'] ? 'UNLOGGED ' : '';
         $ddl  = "CREATE {$unlogged}TABLE " . SchemaScope::name($connection, $table) . " (\n";
