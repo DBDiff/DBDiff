@@ -4,11 +4,53 @@ use Illuminate\Database\Connection;
 
 /**
  * Parts of a PostgreSQL table its CREATE TABLE does not carry on its own:
- * what a partition declares itself, the foreign keys among tables made
- * together, and constraint names PostgreSQL would not give back.
+ * a partition and what it declares itself, constraints added after the
+ * table, the foreign keys among tables made together, and constraint names
+ * PostgreSQL would not give back.
  */
 final class PostgresTableParts
 {
+    /**
+     * A partition, declared against its parent, which supplies the columns,
+     * constraints and indexes. Rebuilding it as a standalone CREATE TABLE
+     * produced a detached ordinary table: rows still inserted, but the
+     * partitioning was silently gone.
+     *
+     * What is the partition's own is added to it: a partition partitioned in
+     * turn ("h_eu is not partitioned" otherwise, for its partitions), and a
+     * constraint or index declared on it rather than inherited.
+     */
+    public static function partitionDDL(Connection $connection, string $table, array $partition): string {
+        $ddl = 'CREATE TABLE ' . SchemaScope::name($connection, $table)
+            . ' PARTITION OF ' . SchemaScope::name($connection, $partition['parent']) . " {$partition['bound']}"
+            . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
+        foreach (self::partitionOwnDDL($connection, $table) as $statement) {
+            $ddl .= ";\n$statement";
+        }
+        return $ddl;
+    }
+
+    /**
+     * The constraints written inside CREATE TABLE, and those added after it:
+     * one added NOT VALID, which inside CREATE TABLE PostgreSQL validates
+     * regardless, so the copy held a validated constraint the source does not.
+     * Those in `$without` are left out altogether.
+     *
+     * @return array{0: list<string>, 1: list<string>}
+     */
+    public static function splitConstraints(array $constraints, array $without): array {
+        $inline = [];
+        $after  = [];
+        foreach (array_diff_key($constraints, array_flip($without)) as $definition) {
+            if (preg_match('/\sNOT VALID$/', $definition)) {
+                $after[] = $definition;
+            } else {
+                $inline[] = $definition;
+            }
+        }
+        return [$inline, $after];
+    }
+
     /**
      * What a partition declares itself rather than inherits from its parent:
      * its own constraints, as ALTER TABLE ... ADD CONSTRAINT, and its own
