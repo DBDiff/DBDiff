@@ -20,14 +20,19 @@ class TableFilter
      * @param string[] $tables       Raw table list from the adapter
      * @param object   $params       Params object (tables, tablesToIgnore, tablesDataToIgnore, tableScope)
      * @param string   $scope        'all' = both schema+data, 'schema' = schema only, 'data' = data only
+     * @param string|null $schema    PostgreSQL: the schema the tables are in, for patterns that name one
      * @return string[] Filtered table list (re-indexed)
      */
-    public static function filterTables(array $tables, object $params, string $scope = 'all'): array
+    public static function filterTables(array $tables, object $params, string $scope = 'all', ?string $schema = null): array
     {
+        $any = fn(string $table, array $patterns) => array_filter(
+            $patterns, fn(string $pattern) => self::matchesTable($table, $pattern, $schema)
+        ) !== [];
+
         // 1. Include list — keep only matching tables
         $includeList = $params->tables ?? null;
         if (!empty($includeList)) {
-            $tables = self::matchGlobs($tables, $includeList);
+            $tables = array_filter($tables, fn(string $t) => $any($t, (array) $includeList));
         }
 
         // 2. Exclude list — remove matching tables.
@@ -35,14 +40,14 @@ class TableFilter
         //    narrows the included set (useful for "wp_* minus wp_wc_session*").
         $excludeList = $params->tablesToIgnore ?? null;
         if (!empty($excludeList)) {
-            $tables = self::rejectGlobs($tables, $excludeList);
+            $tables = array_filter($tables, fn(string $t) => !$any($t, (array) $excludeList));
         }
 
         // 3. Data-only exclusion — when in data scope, additionally exclude
         if ($scope === 'data') {
             $dataExclude = $params->tablesDataToIgnore ?? null;
             if (!empty($dataExclude)) {
-                $tables = self::rejectGlobs($tables, $dataExclude);
+                $tables = array_filter($tables, fn(string $t) => !$any($t, (array) $dataExclude));
             }
         }
 
@@ -51,8 +56,8 @@ class TableFilter
         //    to 'schema' only.
         $tableScope = $params->tableScope ?? null;
         if (!empty($tableScope) && $scope !== 'all') {
-            $tables = array_filter($tables, function (string $name) use ($tableScope, $scope) {
-                $s = $tableScope[$name] ?? 'all';
+            $tables = array_filter($tables, function (string $name) use ($tableScope, $scope, $schema) {
+                $s = ($schema !== null ? $tableScope["$schema.$name"] ?? null : null) ?? $tableScope[$name] ?? 'all';
                 // 'all' → included in both schema and data
                 // 'schema' → included in schema only
                 // 'data' → included in data only
@@ -140,6 +145,20 @@ class TableFilter
     }
 
     // ── Glob helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Whether a table pattern names this table. In PostgreSQL, where a diff
+     * may cover several schemas, a pattern with a dot is matched against the
+     * schema-qualified name (`app.*`, `public.orders`); one without matches
+     * the bare name in any schema, as it always has. SupaForge's own filter
+     * reads a pattern the same way.
+     */
+    public static function matchesTable(string $table, string $pattern, ?string $schema = null): bool
+    {
+        return $schema !== null && str_contains($pattern, '.')
+            ? self::globMatch($pattern, "$schema.$table")
+            : self::globMatch($pattern, $table);
+    }
 
     /**
      * Keep only items from $haystack that match any pattern in $patterns.

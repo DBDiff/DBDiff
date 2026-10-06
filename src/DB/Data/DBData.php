@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\DB\Support\SchemaScope;
 use DBDiff\Params\ParamsFactory;
 use DBDiff\Params\TableFilter;
 use DBDiff\Diff\SetDBCollation;
@@ -24,8 +25,9 @@ class DBData {
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');
 
-        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'data');
-        $targetTables = TableFilter::filterTables($targetTables, $params, 'data');
+        $schema       = $this->manager->getDriver() === 'pgsql' ? SchemaScope::of($this->manager->getDB('source')) : null;
+        $sourceTables = TableFilter::filterTables($sourceTables, $params, 'data', $schema);
+        $targetTables = TableFilter::filterTables($targetTables, $params, 'data', $schema);
 
         $commonTables = array_intersect($sourceTables, $targetTables);
         foreach ($commonTables as $table) {

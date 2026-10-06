@@ -451,7 +451,7 @@ _Flags always override settings in `.dbdiff`._
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Where to write. A **file path** for `native`, `liquibase-xml` and `liquibase-yaml`; a **directory** for `flyway` and `laravel`, which name their own files. Defaults to `migration.sql` in the current directory. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
-| `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*` |
+| `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*`. PostgreSQL with `--schemas`: a pattern with a schema (`app.*`, `public.orders`) matches in that schema only; one without matches the table in every schema. |
 | `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
 | `--schemas=<list>` | PostgreSQL: the schemas to compare (supports globs). Defaults to `public`. `--schemas='*'` compares every schema but the system's own; `--schemas=public,app` compares two. Objects outside `public` are named in full in the migration, and a schema only one side has is created or dropped. |
 | `--ignore-schemas=<list>` | PostgreSQL: schemas to skip (supports globs). On its own, compares every other schema. Example: `--ignore-schemas=auth,storage,extensions` |
