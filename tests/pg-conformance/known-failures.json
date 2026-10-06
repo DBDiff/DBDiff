@@ -20,25 +20,10 @@
   ],
   "alter_path": [],
   "hard_cases": [
-    "hard_fk_match_full",
-    "hard_fk_set_null_cols",
-    "hard_inherits",
-    "hard_inherits_multiple_parents",
-    "hard_nulls_not_distinct",
-    "hard_part_fk_to_partitioned",
-    "hard_type_bit_varbit",
-    "hard_unique_multicolumn_nulls"
+    "hard_fk_match_full"
   ],
   "known_failures": [],
   "unmodelled_kind": [],
   "wrong_output": [],
-  "builtin_renderer_only": [
-    "hard_fk_set_null_cols",
-    "hard_inherits",
-    "hard_inherits_multiple_parents",
-    "hard_nulls_not_distinct",
-    "hard_part_fk_to_partitioned",
-    "hard_type_bit_varbit",
-    "hard_unique_multicolumn_nulls"
-  ]
+  "builtin_renderer_only": []
 }
