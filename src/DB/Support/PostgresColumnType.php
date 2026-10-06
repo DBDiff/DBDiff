@@ -118,6 +118,11 @@ class PostgresColumnType {
         if ($dataType === 'character varying' || $dataType === 'character') {
             $base   = ['character varying' => 'varchar', 'character' => 'char'][$dataType];
             $result = $col['character_maximum_length'] ? "$base({$col['character_maximum_length']})" : $base;
+        } elseif ($dataType === 'bit' || $dataType === 'bit varying') {
+            // The length is in character_maximum_length, as for varchar: left
+            // off, bit(8) became bit(1) and bit varying(64) unbounded.
+            $n      = $col['character_maximum_length'];
+            $result = $n ? "$dataType($n)" : $dataType;
         } elseif ($dataType === 'numeric' || $dataType === 'decimal') {
             $p      = $col['numeric_precision'];
             $result = ($p !== null) ? "$dataType($p,{$col['numeric_scale']})" : $dataType;

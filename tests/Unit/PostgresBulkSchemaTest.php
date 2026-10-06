@@ -663,6 +663,36 @@ class PostgresBulkSchemaTest extends TestCase
         );
     }
 
+    // PostgreSQL 15+: what the built-in renderer dropped, so the copy held a
+    // key that set every column null, and a unique that treated nulls apart.
+    public function testAForeignKeySettingSomeColumnsNullNamesThem(): void
+    {
+        $c = self::conRow('h', 'fk', [
+            'constraint_type'    => 'FOREIGN KEY',
+            'foreign_table'      => 'p',
+            'foreign_columns'    => '["a", "b"]',
+            'update_rule'        => 'NO ACTION',
+            'delete_rule'        => 'SET NULL',
+            'delete_set_columns' => '["b"]',
+        ]);
+        $c['columns'] = ['a', 'b'];
+
+        $this->assertStringContainsString(
+            'ON UPDATE NO ACTION ON DELETE SET NULL ("b")',
+            PostgresSchemaHelper::constraintDefinition('fk', $c)
+        );
+    }
+
+    public function testAUniqueTreatingNullsAsEqualSaysSo(): void
+    {
+        $c = self::conRow('h', 'u', ['constraint_type' => 'UNIQUE', 'nulls_not_distinct' => true]);
+        $c['columns'] = ['a', 'b'];
+
+        $this->assertSame('CONSTRAINT "u" UNIQUE NULLS NOT DISTINCT ("a", "b")', PostgresSchemaHelper::constraintDefinition('u', $c));
+        $c['nulls_not_distinct'] = false;
+        $this->assertSame('CONSTRAINT "u" UNIQUE ("a", "b")', PostgresSchemaHelper::constraintDefinition('u', $c));
+    }
+
     public function testBuildConstraintDefReturnsNullForUnknownType(): void
     {
         $c = self::conRow('t', 'x', ['constraint_type' => 'CHECK']);
@@ -698,6 +728,12 @@ class PostgresBulkSchemaTest extends TestCase
             'varchar with length'    => [
                 ['data_type' => 'character varying', 'character_maximum_length' => 255], 'varchar(255)',
             ],
+            // The length was dropped: bit(8) became bit(1), bit varying(64) unbounded.
+            'bit with length'        => [['data_type' => 'bit', 'character_maximum_length' => 8], 'bit(8)'],
+            'bit varying with length' => [
+                ['data_type' => 'bit varying', 'character_maximum_length' => 64], 'bit varying(64)',
+            ],
+            'bit varying unbounded'  => [['data_type' => 'bit varying', 'character_maximum_length' => null], 'bit varying'],
             'varchar without length' => [
                 ['data_type' => 'character varying', 'character_maximum_length' => null], 'varchar',
             ],
