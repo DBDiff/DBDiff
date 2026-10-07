@@ -112,22 +112,14 @@ class PostgresSchemaHelper {
      * name would not resolve there.
      */
     public static function qualifiedUdt(array $col): string {
-        $name   = self::ident($col['udt_name']);
+        $name   = PostgresIdent::quote($col['udt_name']);
         $schema = $col['udt_schema'] ?? null;
 
         return ($schema && !in_array($schema, ['public', 'pg_catalog'], true))
-            ? self::ident($schema) . '.' . $name
+            ? PostgresIdent::quote($schema) . '.' . $name
             : $name;
     }
 
-    /**
-     * An identifier quoted with its own quotes doubled. Written between plain
-     * quotes, a name holding one (`Col "c"`) was a syntax error that failed the
-     * whole migration.
-     */
-    public static function ident(string $name): string {
-        return '"' . str_replace('"', '""', $name) . '"';
-    }
 
     /**
      * The WITH (...) clause for a relation's reloptions, or nothing when there
@@ -155,7 +147,7 @@ class PostgresSchemaHelper {
      * was already at the cognitive-complexity ceiling before serial was added.
      */
     public static function columnDefinition(array $row, string $type, string $notNull): string {
-        $quoted = self::ident($row['column_name']);
+        $quoted = PostgresIdent::quote($row['column_name']);
 
         // serial carries its own type and implies NOT NULL, so it replaces both
         // the resolved type and the suffix rather than decorating them.
@@ -171,7 +163,7 @@ class PostgresSchemaHelper {
         // non-default collation is written: spelling out the inherited one
         // would make every column read as changed.
         $collate = isset($row['explicit_collation']) && $row['explicit_collation'] !== null
-            ? ' COLLATE ' . self::ident($row['explicit_collation'])
+            ? ' COLLATE ' . PostgresIdent::quote($row['explicit_collation'])
             : '';
 
         // Compression is per-column and only meaningful when set away from the
@@ -494,8 +486,8 @@ class PostgresSchemaHelper {
             $notValid = ' NOT VALID';
         }
 
-        $name = self::ident($name);
-        $cols = implode(', ', array_map([self::class, 'ident'], $c['columns']));
+        $name = PostgresIdent::quote($name);
+        $cols = implode(', ', array_map([PostgresIdent::class, 'quote'], $c['columns']));
         $type = $c['constraint_type'];
 
         if ($type === 'FOREIGN KEY') {
@@ -506,7 +498,7 @@ class PostgresSchemaHelper {
                 $match .
                 " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
                 // ON DELETE SET NULL (b): the columns it sets, PostgreSQL 15+.
-                (($set = json_decode($c['delete_set_columns'] ?? 'null', true)) ? ' (' . implode(', ', array_map([self::class, 'ident'], $set)) . ')' : '') .
+                (($set = json_decode($c['delete_set_columns'] ?? 'null', true)) ? ' (' . implode(', ', array_map([PostgresIdent::class, 'quote'], $set)) . ')' : '') .
                 $defer . $notValid;
         }
 
@@ -528,7 +520,7 @@ class PostgresSchemaHelper {
      * check_expr.
      */
     public static function policyDefinition(array $row, string $relation): string {
-        $sql = 'CREATE POLICY ' . self::ident($row['name']) . ' ON ' . $relation;
+        $sql = 'CREATE POLICY ' . PostgresIdent::quote($row['name']) . ' ON ' . $relation;
         if (!$row['permissive']) {
             $sql .= ' AS RESTRICTIVE';
         }

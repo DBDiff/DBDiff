@@ -120,7 +120,7 @@ final class PostgresColumnDefinition {
 
     /** The type with its collation — what `ALTER COLUMN ... TYPE` takes. */
     public function typeWithCollation(): string {
-        return $this->type . ($this->collation !== null ? ' COLLATE ' . PostgresSchemaHelper::ident($this->collation) : '');
+        return $this->type . ($this->collation !== null ? ' COLLATE ' . PostgresIdent::quote($this->collation) : '');
     }
 
     /** One clause starting at token `$i`; returns the index after it. */

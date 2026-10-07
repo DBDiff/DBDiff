@@ -49,26 +49,26 @@ final class PostgresExpressionEquivalence {
      * @return array<int, object>
      */
     public static function dropEquivalent(array $diffs, Connection $source, Connection $target): array {
-        return array_values(array_filter($diffs, function ($diff) use ($source, $target) {
-            $pair = self::definitions($diff);
-            if ($pair === null) {
-                return true;
-            }
-            [$kind, $table, $sourceDef, $targetDef] = $pair;
-            $a = self::canonical($source, $kind, $table, $sourceDef);
-            $b = self::canonical($target, $kind, $table, $targetDef);
-            if ($a !== null && $a === $b) {
-                return false;
-            }
-            // Across major versions the same definition prints differently —
-            // PostgreSQL 16 dropped the table qualifiers 15 writes in a view
-            // (`SELECT id` against `SELECT vt.id`) — so each side's own
-            // rendering never matches. Rendered on one server, they do.
-            if ($b !== null && self::major($source) !== self::major($target)) {
-                return self::canonical($target, $kind, $table, $sourceDef) !== $b;
-            }
+        return array_values(array_filter($diffs, fn($diff) => self::isRealChange($diff, $source, $target)));
+    }
+
+    /** False when the two definitions are the same one rendered differently. */
+    private static function isRealChange(object $diff, Connection $source, Connection $target): bool {
+        $pair = self::definitions($diff);
+        if ($pair === null) {
             return true;
-        }));
+        }
+        [$kind, $table, $sourceDef, $targetDef] = $pair;
+        $a = self::canonical($source, $kind, $table, $sourceDef);
+        $b = self::canonical($target, $kind, $table, $targetDef);
+        // Across major versions the same definition prints differently —
+        // PostgreSQL 16 dropped the table qualifiers 15 writes in a view
+        // (`SELECT id` against `SELECT vt.id`) — so each side's own rendering
+        // never matches. Rendered on one server, they do.
+        $same = ($a !== null && $a === $b)
+            || ($b !== null && self::major($source) !== self::major($target)
+                && self::canonical($target, $kind, $table, $sourceDef) === $b);
+        return !$same;
     }
 
     /** @var array<int, int> server major version, per connection */
@@ -199,7 +199,7 @@ final class PostgresExpressionEquivalence {
                FROM pg_policy p
               WHERE p.polrelid = 'pg_temp." . self::TEMP_TABLE . "'::regclass"
         );
-        return $row === null ? null : PostgresSchemaHelper::policyDefinition($row, PostgresSchemaHelper::ident($table));
+        return $row === null ? null : PostgresSchemaHelper::policyDefinition($row, PostgresIdent::quote($table));
     }
 
     /** `pg_get_triggerdef` output, re-rendered. A trigger on a view is not attempted. */

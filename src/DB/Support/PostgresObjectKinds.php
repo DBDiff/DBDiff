@@ -194,7 +194,7 @@ final class PostgresObjectKinds {
     private static function renderDomain(array $row, string $name): string {
         $sql = 'CREATE DOMAIN ' . $name . ' AS ' . $row['base_type'];
         if (!empty($row['collation'])) {
-            $sql .= ' COLLATE ' . PostgresSchemaHelper::ident($row['collation']);
+            $sql .= ' COLLATE ' . PostgresIdent::quote($row['collation']);
         }
         if ($row['default_expr'] !== null && $row['default_expr'] !== '') {
             $sql .= ' DEFAULT ' . $row['default_expr'];

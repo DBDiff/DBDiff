@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresSchemaHelper;
 use PHPUnit\Framework\TestCase;
 
@@ -19,8 +20,8 @@ class QuotedIdentifiersTest extends TestCase
 {
     public function testIdentDoublesQuotes(): void
     {
-        $this->assertSame('"say ""hi"" there"', PostgresSchemaHelper::ident('say "hi" there'));
-        $this->assertSame('"plain"', PostgresSchemaHelper::ident('plain'));
+        $this->assertSame('"say ""hi"" there"', PostgresIdent::quote('say "hi" there'));
+        $this->assertSame('"plain"', PostgresIdent::quote('plain'));
     }
 
     public function testColumnDefinitionQuotesTheColumn(): void
