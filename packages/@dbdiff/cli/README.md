@@ -2,8 +2,9 @@
 
 > Compare MySQL, Postgres or SQLite databases and automatically create schema & data change migrations — no PHP required.
 
-DBDiff reads two databases and writes the migration between them: up and down,
-schema and data, as plain SQL or for Flyway, Liquibase or Laravel. On
+DBDiff reads two databases and writes the migration between them: schema and
+data, up and down, as plain SQL or for Flyway, Liquibase, Laravel or a custom
+template. On
 PostgreSQL it covers tables, partitions, views, materialized views, functions,
 triggers, types, domains, sequences, row level security, extensions and
 comments, across one schema or all of them. Every migration is built to apply
