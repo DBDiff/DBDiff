@@ -20,6 +20,13 @@ class AlterView {
      */
     public bool $downHandledElsewhere = false;
 
+    /**
+     * The grants to put back once the view is recreated: `up` the source's,
+     * `down` the target's, with the target's owner and default grantees —
+     * see PostgresViewGrants.
+     */
+    public ?array $privileges = null;
+
     public $sourceDefinition;
     public $targetDefinition;
 

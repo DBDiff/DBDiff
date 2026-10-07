@@ -162,36 +162,9 @@ final class ColumnDependantsSQL {
         return $lines;
     }
 
-    /**
-     * The view's grants, exactly — none added, none lost.
-     *
-     * DROP VIEW discards them and CREATE VIEW starts over, and where the
-     * database has default privileges the new view picks those up as well. On
-     * Supabase that grants `anon` and `authenticated` everything, so a view
-     * whose grants had been narrowed came back wide open. The REVOKE strips
-     * whatever creation added before the recorded grants go back on.
-     *
-     * @return string[]
-     */
+    /** The view's grants, exactly — see GrantSQL::restore. */
     private function privileges(array $view, string $name): array {
-        $lines = [];
-
-        // Plain REVOKEs rather than a DO block that reads the catalog at run
-        // time: migration runners split on semicolons, and a DO block's body
-        // is full of them. The grantees default privileges can add are known
-        // now, from the target the migration runs against. Never the owner,
-        // whose own privileges come with ownership.
-        $revokeFrom = array_values(array_diff($this->dependants['defaultGrantees'] ?? [], [$view['owner'] ?? '']));
-        if ($revokeFrom !== []) {
-            $lines[] = "REVOKE ALL ON $name FROM " . implode(', ', $revokeFrom) . ';';
-            // Whoever runs the migration creates the view and so owns it, and
-            // may be one of those grantees without having owned the original
-            // — the REVOKE would then strip the new owner's own privileges.
-            // Re-granting them is a no-op in every other case.
-            $lines[] = "GRANT ALL ON $name TO CURRENT_USER;";
-        }
-
-        return array_merge($lines, GrantSQL::statements($view['grants'] ?? [], "ON $name"));
+        return GrantSQL::restore($name, $view['grants'] ?? [], $view['owner'] ?? '', $this->dependants['defaultGrantees'] ?? []);
     }
 
     /** @return array<int, array<string, mixed>> */
