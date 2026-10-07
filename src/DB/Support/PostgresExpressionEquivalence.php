@@ -181,7 +181,7 @@ final class PostgresExpressionEquivalence {
                FROM pg_policy p
               WHERE p.polrelid = 'pg_temp." . self::TEMP_TABLE . "'::regclass"
         );
-        return $row === null ? null : PostgresSchemaHelper::policyDefinition($row, '"' . $table . '"');
+        return $row === null ? null : PostgresSchemaHelper::policyDefinition($row, PostgresSchemaHelper::ident($table));
     }
 
     /** `pg_get_triggerdef` output, re-rendered. A trigger on a view is not attempted. */

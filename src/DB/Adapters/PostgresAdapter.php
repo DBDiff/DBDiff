@@ -775,13 +775,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
         foreach ($checkRows as $row) {
             $result[$row['table_name']][$row['constraint_name']] =
-                'CONSTRAINT "' . $row['constraint_name'] . '" ' . $row['definition'];
+                'CONSTRAINT ' . PostgresSchemaHelper::ident($row['constraint_name']) . ' ' . $row['definition'];
         }
 
         foreach ($namedNotNull as $nn) {
             $notValid = $nn['convalidated'] ? '' : ' NOT VALID';
             $result[$nn['table_name']][$nn['conname']] =
-                'CONSTRAINT "' . $nn['conname'] . '" NOT NULL "' . $nn['column_name'] . '"' . $notValid;
+                'CONSTRAINT ' . PostgresSchemaHelper::ident($nn['conname']) . ' NOT NULL ' . PostgresSchemaHelper::ident($nn['column_name']) . $notValid;
         }
 
         return $result;
