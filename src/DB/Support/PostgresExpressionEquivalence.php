@@ -57,8 +57,26 @@ final class PostgresExpressionEquivalence {
             [$kind, $table, $sourceDef, $targetDef] = $pair;
             $a = self::canonical($source, $kind, $table, $sourceDef);
             $b = self::canonical($target, $kind, $table, $targetDef);
-            return $a === null || $b === null || $a !== $b;
+            if ($a !== null && $a === $b) {
+                return false;
+            }
+            // Across major versions the same definition prints differently —
+            // PostgreSQL 16 dropped the table qualifiers 15 writes in a view
+            // (`SELECT id` against `SELECT vt.id`) — so each side's own
+            // rendering never matches. Rendered on one server, they do.
+            if ($b !== null && self::major($source) !== self::major($target)) {
+                return self::canonical($target, $kind, $table, $sourceDef) !== $b;
+            }
+            return true;
         }));
+    }
+
+    /** @var array<int, int> server major version, per connection */
+    private static array $majors = [];
+
+    private static function major(Connection $connection): int {
+        $key = spl_object_id($connection);
+        return self::$majors[$key] ??= intdiv((int) $connection->selectOne('SHOW server_version_num')['server_version_num'], 10000);
     }
 
     /**
