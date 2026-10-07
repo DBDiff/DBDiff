@@ -24,12 +24,21 @@ npm install -g @dbdiff/cli --registry=https://npm.pkg.github.com
 # Schema diff between two MySQL databases
 dbdiff server1.db1:server2.db2
 
-# Full diff (schema + data) with Supabase Postgres
-dbdiff --supabase --server1=user:pass@host:5432 db1:db2
+# Two PostgreSQL databases by URL, schema and data, with the DOWN too
+dbdiff diff --server1-url='postgres://user:pass@host1:5432/app' \
+            --server2-url='postgres://user:pass@host2:5432/app' \
+            --type=all --include=both --output=migration.sql
 
-# Generate migration files
-dbdiff --type=both --output=migrations/ server1.db1:server2.db2
+# Every schema but Supabase's own
+dbdiff diff --supabase --server1-url=... --server2-url=... \
+            --ignore-schemas='auth,storage,realtime,vault,extensions,graphql*,supabase_*'
+
+# Flyway-style files in a directory
+dbdiff --format=flyway --description=add_users --output=./sql/ server1.db1:server2.db2
 ```
+
+Run `dbdiff --help` for every flag, or see the
+[full documentation](https://github.com/DBDiff/DBDiff#command-line-api).
 
 ## How it works
 

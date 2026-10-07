@@ -59,58 +59,31 @@ Use `--driver=pgsql` (or `driver: pgsql` in your `.dbdiff` config).
 | PostgreSQL 17.x | ✅ Supported |
 | PostgreSQL 18.x | ✅ Supported |
 
-#### Higher-fidelity DDL with `pg_dump`
+#### Rendering DDL: built-in or `pg_dump`
 
-When `pg_dump` and `pg_restore` are on `PATH` and at least as new as the
-server, DBDiff uses them to render `CREATE TABLE` and everything attached to
-it — indexes, constraints, identity sequence options, collations, storage,
-and compression. They are PostgreSQL's own tooling, maintained in
-lockstep with the server, so the DDL is what the server itself would produce.
+DBDiff renders `CREATE TABLE` and what hangs off it (indexes, constraints,
+identity options, collations, storage, compression) in one of two ways:
 
-Measured against the 90-case corpus in
+- **Built-in.** Always available. It needs nothing installed.
+- **`pg_dump`.** Used when `pg_dump` and `pg_restore` are on `PATH` and at
+  least as new as the server. This is PostgreSQL's own rendering.
+
+Both renderers reproduce every case in the
 [`@akalforge/pg-conformance`](https://www.npmjs.com/package/@akalforge/pg-conformance)
-by convergence — build the case, reproduce it, replay it, compare catalog
-fingerprints:
+corpus on PostgreSQL 14 to 18. That's PostgreSQL's regression-suite shapes
+plus 90 hand-written hard cases, each built, diffed, applied and compared by
+catalog fingerprint. CI runs the corpus on every pull request.
 
-| renderer | reproduces |
-|---|---|
-| built-in | 68 / 90 |
-| with `pg_dump` | **81 / 90** |
+The migration header records which renderer was used (`-- Renderer: pg_dump`).
+Set `DBDIFF_PG_DUMP_RENDERER=off` to pin the built-in one for byte-identical
+output across machines. `DBDIFF_PG_DUMP` and `DBDIFF_PG_RESTORE` override the
+binary paths.
 
-Measured on PostgreSQL 16. The figures move by a case or two with the server:
-the built-in renderer reproduces 67 on PostgreSQL 18, where `LIKE ... INCLUDING
-ALL` copies the named NOT NULL constraints that release introduced. And
-`pg_dump` only counts when it is at least as new as the server — an older one is
-not used at all, so those runs score as built-in.
-
-Nothing is required. `pg_dump` is not bundled — the released binaries are
-static PHP and cannot carry it — so when it is absent, or older than the
-server, DBDiff falls back to its built-in renderer and says why.
-
-Partitioned tables always use the built-in renderer, whatever is installed, and
-that is deliberate rather than a limitation of the integration. `pg_dump` writes
-a partitioned parent's primary key as `ALTER TABLE ONLY parent ADD CONSTRAINT`,
-which reaches the partitions existing at the moment it runs and no others —
-correct in `pg_dump`'s own output order, and silently wrong as soon as anything
-reorders the statements, which a tool applying a migration grouped by object
-kind reasonably does. The built-in renderer puts the key inside `CREATE TABLE`,
-where the partitions inherit it however the statements are ordered. It costs one
-case in the table above — an expression partition key — and buys DDL that does
-not depend on being applied in the order it was written.
-
-A migration produced this way records it, so two machines emitting different
-SQL is explainable from the file:
-
-```sql
--- DBDiff migration
--- Version: 20260901000613
--- Generated: 2026-09-01 00:06:13
--- Renderer: pg_dump
-```
-
-Set `DBDIFF_PG_DUMP_RENDERER=off` to pin a run to the built-in renderer — useful
-when you need byte-identical output across machines regardless of what is
-installed. `DBDIFF_PG_DUMP` and `DBDIFF_PG_RESTORE` override the binary paths.
+Partitioned tables always use the built-in renderer. `pg_dump` adds a
+partitioned parent's primary key with `ALTER TABLE ONLY`, which reaches only
+the partitions that exist at that moment. The built-in renderer puts the key
+inside `CREATE TABLE`, where every partition inherits it whatever order the
+statements run in.
 
 #### Migrations that run, not just SQL that parses
 
@@ -221,6 +194,11 @@ managed ones with `--ignore-schemas`:
 ```bash
 dbdiff diff --supabase --ignore-schemas='auth,storage,realtime,_realtime,_analytics,vault,net,graphql*,supabase_*,pgsodium*,pgtle,extensions' ...
 ```
+
+For the rest of a Supabase project, such as storage, auth config, cron,
+webhooks, Realtime, Vault and grants, use
+[SupaForge](https://github.com/akalforge/supaforge). It runs DBDiff for the
+schema and data and covers the other layers itself.
 
 
 ## Compatible Database Variants
@@ -770,117 +748,28 @@ tableScope:
 ```
 
 
-## How Does the Diff Work?
+## What Is Compared
 
-Comparisons run in this order:
+| Object | MySQL | PostgreSQL | SQLite | Notes |
+|---|---|---|---|---|
+| Tables and columns | ✅ | ✅ | ✅ | Types, defaults, nullability, collation; `UNLOGGED` and storage parameters on PostgreSQL |
+| Keys, indexes, constraints | ✅ | ✅ | ✅ | Including `NOT VALID`, `NULLS NOT DISTINCT`, deferrable and cyclic foreign keys |
+| Views, materialized views | ✅ | ✅ | ✅ | A matview's indexes go with it; whether it's populated is not compared |
+| Triggers | ✅ | ✅ | ✅ | |
+| Functions, procedures | ✅ | ✅ | — | Overloads are told apart by signature |
+| Enum, composite and domain types | — | ✅ | — | Enum labels are added in place, or migrated to a new type when removed or reordered |
+| Sequences | — | ✅ | — | Altered in place, so the counter is kept |
+| Row level security | — | ✅ | — | Policies, and each table's `ENABLE`/`FORCE` flags |
+| Extensions | — | ✅ | — | Created and dropped with the schema they're installed in; their own objects are never diffed |
+| Comments | — | ✅ | — | On every object above, and set again when a change recreates an object |
+| Partitions, inheritance | — | ✅ | — | Partition bounds, keys, and a partition's own constraints and indexes |
+| Schemas | — | ✅ | — | With `--schemas` / `--ignore-schemas`; a schema only one side has is created or dropped |
+| Data | ✅ | ✅ | ✅ | Changed, missing and extra rows, compared by hash in primary-key order |
 
-### Overall
-- Checks both databases exist and are accessible
-- Compares database collation between source and target
-
-### Schema
-- Detects differences in column count, name, type, collation or attributes
-- New columns in the source are added to the target
-- A table's **durability** (`LOGGED` / `UNLOGGED`) and its **storage
-  parameters** (`fillfactor`, autovacuum settings and the rest of `reloptions`)
-  are compared and altered in place — `ALTER TABLE ... SET UNLOGGED`,
-  `ALTER TABLE ... SET (...)` / `RESET (...)`
-- A column whose type changes takes the views reading it with it: PostgreSQL
-  refuses `ALTER COLUMN ... TYPE` while a view selects the column, so the
-  dependent views are dropped in dependency order, the column altered, and each
-  view recreated from its stored definition — with its own indexes
-
-### Views
-- Detects created, dropped, and altered views across source and target
-- ALTER = DROP IF EXISTS + CREATE with the new definition
-
-### Triggers
-- Detects created, dropped, and altered triggers
-- PostgreSQL DROP TRIGGER includes the required ON table clause
-
-### Stored Procedures / Functions
-- Detects created, dropped, and altered routines (MySQL and PostgreSQL)
-- SQLite has no stored procedures — routines are skipped automatically
-- MySQL definitions are normalized (DEFINER, ALGORITHM, SQL SECURITY stripped)
-
-### Enum Types (PostgreSQL)
-- Detects created, dropped, and altered `CREATE TYPE ... AS ENUM` definitions
-- Adding labels uses `ALTER TYPE ... ADD VALUE`, positioned with `BEFORE` /
-  `AFTER` so the new label lands where the source has it. Replacing the type
-  instead could not be applied at all: `DROP TYPE` fails while any column is
-  typed by it, which is every reason the type exists
-- Removing or reordering a label moves the columns to a new type and renames
-  it into place, keeping their data and everything that reads them — see
-  "Migrations that run, not just SQL that parses" above
-- A new or changed enum is ordered before table diffs, and an enum the source
-  no longer has after them — tables, views and routines may use it
-- MySQL and SQLite do not have standalone enum types — skipped automatically
-
-### Composite Types and Domains (PostgreSQL)
-- Detects created, dropped, and altered `CREATE TYPE ... AS (...)` and
-  `CREATE DOMAIN` definitions, including a domain's base type, default,
-  nullability and named CHECK constraints
-- ALTER = DROP + CREATE: neither a composite's attributes nor a domain's base
-  type can be changed in place
-- Created before table diffs, since a column may be typed by either, and
-  dropped after them
-- Every relation also owns a composite type describing its row shape; those
-  belong to the table and are not reported separately
-
-### Materialized Views (PostgreSQL)
-- Detects created, dropped, and altered materialized views
-- A materialized view's indexes are carried with it, so a unique index on one
-  is part of the diff
-- Population state is **not** compared. Whether a matview holds its rows yet is
-  a fact about the data — a `REFRESH` changes it and no DDL does — and `pg_dump`
-  restores every matview unpopulated. Comparing it made the same view on two
-  sides differ whenever one had been refreshed and the other had not, so every
-  `pg_dump`-based copy reported drift against the database it was copied from,
-  offering `DROP MATERIALIZED VIEW` as the fix. `WITH NO DATA` is no longer
-  emitted either: run `REFRESH MATERIALIZED VIEW` when you want the rows
-- ALTER = DROP + CREATE; PostgreSQL has no `CREATE OR REPLACE` for them
-- Ordered after views, since a matview may select from one
-
-### Extensions (PostgreSQL)
-- Extensions installed in a compared schema are created and dropped:
-  `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA ...`, before the types and
-  tables that may use one (an exclusion constraint's `btree_gist`), and dropped
-  after them
-- The version is not compared: each server offers its own
-- An extension's own functions, types and tables belong to it and are never
-  diffed one by one
-
-### Comments (PostgreSQL)
-- `COMMENT ON` every object in the compared schemas: tables, columns, views and
-  their columns, indexes, sequences, functions and procedures, types and their
-  attributes, domains, constraints, triggers, policies and the schema itself
-- A comment added, changed or removed is one change, set after everything else
-  is made — whichever renderer made the object
-- An object another change drops and recreates (a view replaced, a function,
-  trigger, policy, index or constraint redefined) has its comment set again,
-  since the recreation takes it away
-- An extension's objects are its own, comments included, and are left alone
-
-### Sequences (PostgreSQL)
-- Detects created, dropped, and altered standalone sequences, rendering every
-  option explicitly (type, increment, min, max, start, cache, cycle) because
-  the MINVALUE and MAXVALUE defaults follow the sequence's type
-- Altered in place with `ALTER SEQUENCE` rather than recreated, which would
-  reset the counter
-- A sequence owned by a `serial` or identity column belongs to that column and
-  is not reported separately
-
-### Row Level Security (PostgreSQL)
-- Detects policies created, dropped, and altered, with their command, roles,
-  permissiveness, `USING` and `WITH CHECK` expressions
-- The table's `ENABLE`/`FORCE ROW LEVEL SECURITY` flags are diffed separately,
-  because a table carrying policies with the flag left off enforces none of them
-- Policies are keyed per table, so two tables may share a policy name
-- Ordered last, after the tables they apply to exist
-
-### Data
-- Compares table storage engine, collation, and row count
-- Records changed rows and missing rows per table
+Expressions in CHECK constraints, partial indexes, policies, views, trigger
+conditions and generated columns are compared by what PostgreSQL makes of
+them, not by their text. A dump-and-restore copy therefore doesn't read as
+changed.
 
 
 ## Destructive Change Protection
@@ -1064,7 +953,9 @@ The CI matrix, per push and pull request:
 | Dolt | 2 PHP | 2 |
 | Supabase Postgres | 2 PHP | 2 |
 | PG conformance | PostgreSQL 16, 17, 18 | 3 |
-| DSN URL | mysql + pgsql | 1 |
+| Corpus round trips | PostgreSQL 14–18 | 5 |
+| DSN URL | mysql, pgsql | 2 |
+| SupaForge scenarios | this checkout under SupaForge's scenario suite | 1 |
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
 
