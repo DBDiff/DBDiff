@@ -2,6 +2,13 @@
 
 > Compare MySQL, Postgres or SQLite databases and automatically create schema & data change migrations — no PHP required.
 
+DBDiff reads two databases and writes the migration between them: up and down,
+schema and data, as plain SQL or for Flyway, Liquibase or Laravel. On
+PostgreSQL it covers tables, partitions, views, materialized views, functions,
+triggers, types, domains, sequences, row level security, extensions and
+comments, across one schema or all of them. Every migration is built to apply
+as written and leave the target identical to the source.
+
 ## Install
 
 ```bash
@@ -47,7 +54,7 @@ static PHP interpreter with all required extensions baked in, combined with
 the DBDiff PHAR. There is no PHP installation, no Composer, and no runtime
 dependencies required on the end-user machine.
 
-npm automatically downloads only the binary for your platform (~10–15 MB):
+npm downloads only the binary for your platform:
 
 | Platform | Package |
 |---|---|
