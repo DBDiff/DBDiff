@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-	<strong>DBDiff</strong> is an automated database schema and data diff tool for MySQL, Postgres & SQLite. It compares two databases, local or remote, and produces a migration file of the differences automatically.
+	<strong>DBDiff</strong> compares two MySQL, PostgreSQL or SQLite databases, local or remote, and writes the migration that turns one into the other: schema and data, up and down, ready to apply.
 </p>
 
 <p align="center">
@@ -20,17 +20,24 @@
 ## Features
 
 - Compares two databases (local or remote) and generates SQL migrations automatically
+- **Migrations that run.** Each one applies as written and leaves the target identical
+  to the source, and the DOWN reverts it, including the changes that need several
+  statements in the right order, like a column type under a view or an enum losing a label
+- **Proven, not hoped.** Every change to the PostgreSQL support is tested by building,
+  diffing, applying and fingerprinting a corpus of real-world shapes on every supported version
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
+- Every schema of a PostgreSQL database, or just the ones you choose, with
+  `--schemas` / `--ignore-schemas`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
-- Diffs tables, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, extensions, and data — with deterministic, predictable output
+- Diffs tables, partitions, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, extensions, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
 - Ignore specific tables or fields via a YAML config file
 - Unicode / UTF-8 aware
-- Fast — tested on databases with millions of rows; [schema diffs use a constant
-  number of round-trips](#schema-diff-performance) regardless of table count
+- Fast on large and remote databases: [schema diffs use a constant number of
+  round-trips](#schema-diff-performance) however many tables there are
 - Runs on Windows, Linux and macOS (command-line / Terminal)
 
 
@@ -40,24 +47,13 @@ _Other versions may work but are not actively tested. PRs to add official suppor
 
 ### MySQL
 
-| Version | Status |
-|---|---|
-| MySQL 8.0.x | ✅ Supported |
-| MySQL 8.4.x (LTS) | ✅ Supported |
-| MySQL 9.3.x (Innovation) | ✅ Supported |
-| MySQL 9.6.x (Innovation) | ✅ Supported |
+MySQL 8.0, the 8.4 LTS, and current Innovation releases.
 
 ### PostgreSQL
 
 Use `--driver=pgsql` (or `driver: pgsql` in your `.dbdiff` config).
 
-| Version | Status |
-|---|---|
-| PostgreSQL 14.x | ✅ Supported |
-| PostgreSQL 15.x | ✅ Supported |
-| PostgreSQL 16.x (LTS) | ✅ Supported |
-| PostgreSQL 17.x | ✅ Supported |
-| PostgreSQL 18.x | ✅ Supported |
+PostgreSQL 14 and later. CI tests every supported major version.
 
 #### Rendering DDL: built-in or `pg_dump`
 
@@ -70,9 +66,10 @@ identity options, collations, storage, compression) in one of two ways:
 
 Both renderers reproduce every case in the
 [`@akalforge/pg-conformance`](https://www.npmjs.com/package/@akalforge/pg-conformance)
-corpus on PostgreSQL 14 to 18. That's PostgreSQL's regression-suite shapes
-plus 90 hand-written hard cases, each built, diffed, applied and compared by
-catalog fingerprint. CI runs the corpus on every pull request.
+corpus on every supported PostgreSQL version. The corpus holds shapes drawn
+from PostgreSQL's own regression suite plus hand-written hard cases. Each one
+is built, diffed, applied and compared by catalog fingerprint, on every pull
+request.
 
 The migration header records which renderer was used (`-- Renderer: pg_dump`).
 Set `DBDIFF_PG_DUMP_RENDERER=off` to pin the built-in one for byte-identical
@@ -347,8 +344,8 @@ podman run --rm ghcr.io/dbdiff/dbdiff --driver=mysql \
 
 | Tag pattern | Registry | Description |
 |---|---|---|
-| `latest`, `{version}`, `slim-{version}` | GHCR | **Slim** — PHAR + PHP Alpine (~120 MB). For production use / CI. |
-| `full`, `full-{version}` | GHCR | **Full** — Composer source install (~600 MB). For development and cross-version testing. |
+| `latest`, `{version}`, `slim-{version}` | GHCR | **Slim** — PHAR + PHP Alpine. For production use / CI. |
+| `full`, `full-{version}` | GHCR | **Full** — Composer source install. For development and cross-version testing. |
 
 ### Build locally
 
@@ -392,7 +389,7 @@ After installing from source, continue with [Setup](#setup).
 
 _For source installs (git clone / Composer) only. Binaries, PHAR, npm, and Docker do not require these steps._
 
-1. Create a `.dbdiff` config file — see [File Examples](#file-examples)
+1. Create a `dbdiff.yml` config file — see [File Examples](#file-examples)
 2. Run: `./dbdiff server1.db1:server1.db2`
 
 Expected output:
@@ -754,7 +751,8 @@ tableScope:
 |---|---|---|---|---|
 | Tables and columns | ✅ | ✅ | ✅ | Types, defaults, nullability, collation; `UNLOGGED` and storage parameters on PostgreSQL |
 | Keys, indexes, constraints | ✅ | ✅ | ✅ | Including `NOT VALID`, `NULLS NOT DISTINCT`, deferrable and cyclic foreign keys |
-| Views, materialized views | ✅ | ✅ | ✅ | A matview's indexes go with it; whether it's populated is not compared |
+| Views | ✅ | ✅ | ✅ | |
+| Materialized views | — | ✅ | — | Their indexes go with them; whether one is populated is not compared |
 | Triggers | ✅ | ✅ | ✅ | |
 | Functions, procedures | ✅ | ✅ | — | Overloads are told apart by signature |
 | Enum, composite and domain types | — | ✅ | — | Enum labels are added in place, or migrated to a new type when removed or reordered |
@@ -825,35 +823,24 @@ the number of queries matters far more than how much each one returns.
 
 Two passes keep that number flat as a database grows:
 
-**1. Pre-scan — skip tables that are already identical.** Before diffing
+**1. Pre-scan: skip tables that are already identical.** Before diffing
 anything, DBDiff asks each side for a hash of every table's schema in a single
-query. Tables whose hashes match on both sides are byte-identical and are
-skipped entirely. On a production database compared against a staging copy,
-this is usually the overwhelming majority of tables.
+query. Tables whose hashes match on both sides are skipped entirely. Comparing
+production against a staging copy, that's usually almost all of them.
 
-```
-ℹ Pre-scan: skipped 284 / 291 unchanged tables
-```
+**2. Batch fetch: load the remaining tables together.** The tables that do
+differ are read in a fixed handful of queries per side, however many there
+are, rather than a set of queries per table.
 
-**2. Batch fetch — load the remaining tables together.** The tables that *do*
-differ still need their full schema read. Rather than one set of round-trips per
-table, PostgreSQL loads all of them in a fixed 7 queries per side, no matter how
-many tables changed:
-
-```
-ℹ Batch schema fetch: loaded 7 changed table(s) in 14 queries
-```
-
-Together these turn schema diffing from `O(tables)` round-trips into a constant
-number. A 300-table database with 7 real changes costs 16 queries in total,
-against roughly 4,800 with per-table fetching.
+Together these turn schema diffing from one set of round-trips per table into
+a constant number, which is what makes diffing a large remote database fast.
 
 Per-driver behaviour:
 
 | Driver | Pre-scan | Batch fetch | Notes |
 | ------ | -------- | ----------- | ----- |
 | PostgreSQL | Yes | Yes | Both passes active |
-| MySQL | Yes | Not needed | A table already resolves in ~2 queries |
+| MySQL | Yes | Not needed | A table already resolves in very few queries |
 | SQLite | Not needed | Not needed | Local file, no network latency |
 
 Both passes are optimisations only — they never change the generated migration.
@@ -902,7 +889,7 @@ Output: `dist/dbdiff.phar` — rename and move to `/usr/local/bin/dbdiff` if des
 2. Enter the version number (e.g. `2.1.0` — no `v` prefix)
 3. The workflow will:
    - Build the PHAR with Box
-   - Build self-contained binaries for all 8 platforms via static-php-cli
+   - Build self-contained binaries for every platform via static-php-cli
    - Publish all `@dbdiff/cli-*` packages to npm (skips any already published)
    - Create or update the GitHub Release with all assets
    - Create the git tag (skipped if it already exists)
@@ -938,24 +925,19 @@ Test DBDiff locally against any combination of PHP and MySQL:
 # Single combination
 ./start.sh 8.3 8.0
 
-# All 16 combinations in parallel
+# Every combination, in parallel
 ./start.sh all all --parallel
 ```
 
-The CI matrix, per push and pull request:
+On every push and pull request, CI runs:
 
-| Suite | Matrix | Jobs |
-|---|---|---|
-| Unit | 5 PHP | 5 |
-| MySQL | 5 PHP × 4 MySQL | 20 |
-| PostgreSQL | 5 PHP × 5 PostgreSQL (14–18) | 25 |
-| SQLite e2e | 5 PHP | 5 |
-| Dolt | 2 PHP | 2 |
-| Supabase Postgres | 2 PHP | 2 |
-| PG conformance | PostgreSQL 16, 17, 18 | 3 |
-| Corpus round trips | PostgreSQL 14–18 | 5 |
-| DSN URL | mysql, pgsql | 2 |
-| SupaForge scenarios | this checkout under SupaForge's scenario suite | 1 |
+- the unit suite on every supported PHP version;
+- integration tests against every supported MySQL and PostgreSQL version, SQLite,
+  Dolt and Supabase's own Postgres image;
+- the PostgreSQL conformance corpus, and round trips of every corpus
+  migration in both directions;
+- [SupaForge](https://github.com/akalforge/supaforge)'s scenario suite against
+  the checkout, so a change is tested the way SupaForge runs DBDiff.
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
 
