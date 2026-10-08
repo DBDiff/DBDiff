@@ -121,10 +121,11 @@ else
             cd "$BUILD"
             composer install --no-dev --no-scripts --optimize-autoloader
 
-            # box.json: output = dist/dbdiff.phar (relative to cwd)
-            # We write directly to the mounted /app/dist.
-            mkdir -p /app/dist
+            # box.json: output = dist/dbdiff.phar, relative to this build
+            # copy — so copy it out to the mounted /app/dist afterwards.
             box compile
+            mkdir -p /app/dist
+            cp dist/dbdiff.phar /app/dist/dbdiff.phar
         '
 
     echo "PHAR built: $(du -sh dist/dbdiff.phar | cut -f1)  dist/dbdiff.phar"
