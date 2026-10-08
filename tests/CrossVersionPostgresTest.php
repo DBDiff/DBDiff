@@ -32,6 +32,11 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         'check'   => "ALTER TABLE vt ADD CONSTRAINT c CHECK (status IN ('draft', 'active') AND a > b);",
         'policy'  => 'ALTER TABLE vt ENABLE ROW LEVEL SECURITY; CREATE POLICY p ON vt USING (a = 1 AND b = 2);',
         'index'   => 'CREATE INDEX i ON vt (id) WHERE a = 1 AND b = 2;',
+        // A view recreated for nothing had its comments set again, which
+        // read as comments changed although they were identical.
+        'comments' => "CREATE VIEW vt_c AS SELECT vt.id, vt.name FROM vt WHERE vt.a = 1;
+                       CREATE MATERIALIZED VIEW vt_cm AS SELECT vt.id FROM vt WHERE vt.a = 1;
+                       COMMENT ON VIEW vt_c IS 'v'; COMMENT ON COLUMN vt_c.name IS 'vn'; COMMENT ON MATERIALIZED VIEW vt_cm IS 'm';",
     ];
 
     protected function setUp(): void
