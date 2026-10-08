@@ -54,15 +54,15 @@ $patterns = json_decode(file_get_contents($patternsFile), true);
 // The shared fingerprint is published to npm, which is where the corpus lives
 // too. DBDiff is a Composer project, so it is required by path rather than
 // autoloaded; `npm ci` in the conformance job puts it here.
-$conformancePath = __DIR__ . '/../../node_modules/@akalforge/pg-conformance/src/Conformance.php';
+$conformancePath = __DIR__ . '/../../node_modules/@akal/pg-conformance/src/Conformance.php';
 if (!is_file($conformancePath)) {
-    fwrite(STDERR, "Missing @akalforge/pg-conformance. Run `npm ci` in the repository root.\n");
+    fwrite(STDERR, "Missing @akal/pg-conformance. Run `npm ci` in the repository root.\n");
     exit(1);
 }
 require_once $conformancePath;
 use Akal\PgConformance\Conformance;
 
-// Two hand-authored corpora from @akalforge/pg-conformance, covering the axes
+// Two hand-authored corpora from @akal/pg-conformance, covering the axes
 // the extractor cannot reach. Every extracted pattern starts from an existing
 // table and ALTERs it, so creating objects from nothing is invisible to it, as
 // are object kinds other than tables, columns and constraints.
@@ -146,7 +146,7 @@ function connectDb(string $host, string $port, string $user, string $pass, strin
 /**
  * Structural fingerprint of the public schema.
  *
- * The query comes from @akalforge/pg-conformance so that this harness, the
+ * The query comes from @akal/pg-conformance so that this harness, the
  * SupaForge convergence proof and its e2e harness all ask the database the
  * same question. Four separate definitions had accumulated between the two
  * projects and drifted apart; one of them called two schemas identical when a

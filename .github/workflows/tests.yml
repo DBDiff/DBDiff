@@ -631,7 +631,7 @@ jobs:
         path: tests/pg-conformance/report.json
 
   # ── Shared corpus ───────────────────────────────────────────────────────────
-  # Every case in @akalforge/pg-conformance's migrations corpus, round-tripped
+  # Every case in @akal/pg-conformance's migrations corpus, round-tripped
   # in both directions. Shared with SupaForge, which runs the same cases
   # through its CLI, so a case is written once and tested by both. Once per
   # PostgreSQL version: the result depends on the server, not on PHP.
@@ -769,7 +769,7 @@ jobs:
     - name: Checkout SupaForge
       uses: actions/checkout@v4
       with:
-        repository: akalforge/supaforge
+        repository: akalsoftware/supaforge
         path: supaforge
 
     - uses: actions/setup-node@v4

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Every case in @akalforge/pg-conformance's `migrations` corpus, round-tripped
+ * Every case in @akal/pg-conformance's `migrations` corpus, round-tripped
  * against a live server in both directions. See PostgresRoundTripTestCase.
  *
  * The corpus is shared with SupaForge, which runs the same cases through its
@@ -31,7 +31,7 @@ class CorpusMigrationsRoundTripTest extends PostgresRoundTripTestCase
     /** @return array<string, array{string, string, string, list<string>, int}> */
     public static function cases(): array
     {
-        $dir = getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__) . '/node_modules/@akalforge/pg-conformance';
+        $dir = getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__) . '/node_modules/@akal/pg-conformance';
         $path = "$dir/corpus/migrations.json";
         if (!is_file($path)) {
             // Failed, not skipped: a missing corpus would otherwise pass this

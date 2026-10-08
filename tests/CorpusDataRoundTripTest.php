@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Every case in @akalforge/pg-conformance's `data` corpus: the rows a data
+ * Every case in @akal/pg-conformance's `data` corpus: the rows a data
  * migration must carry over, round-tripped against a live server.
  *
  * Both databases get the case's schema; the source its `after` rows and the
@@ -25,7 +25,7 @@ class CorpusDataRoundTripTest extends PostgresRoundTripTestCase
     /** @return array<string, array{string, string, string, string, list<string>, int}> */
     public static function cases(): array
     {
-        $dir = getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__) . '/node_modules/@akalforge/pg-conformance';
+        $dir = getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__) . '/node_modules/@akal/pg-conformance';
         $path = "$dir/corpus/data.json";
         if (!is_file($path)) {
             throw new RuntimeException("$path not found. Run `npm ci` in the DBDiff checkout.");

@@ -12,7 +12,7 @@ updates:
     schedule:
       interval: daily
     allow:
-      - dependency-name: "@akalforge/pg-conformance"
+      - dependency-name: "@akal/pg-conformance"
     commit-message:
       prefix: chore
       include: scope

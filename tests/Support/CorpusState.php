@@ -16,7 +16,7 @@ trait CorpusState
     /** The corpus checkout or package the cases came from. */
     protected static function conformanceDir(): string
     {
-        return getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__, 2) . '/node_modules/@akalforge/pg-conformance';
+        return getenv('PG_CONFORMANCE_DIR') ?: dirname(__DIR__, 2) . '/node_modules/@akal/pg-conformance';
     }
 
     protected function assertSameState(string $expected, string $actual, string $message): void

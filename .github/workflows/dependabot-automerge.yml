@@ -1,6 +1,6 @@
 name: Auto-merge conformance updates
 
-# Turns a published patch of @akalforge/pg-conformance into a merged lockfile
+# Turns a published patch of @akal/pg-conformance into a merged lockfile
 # bump without anyone doing anything — while keeping `npm ci` reproducible,
 # which is the whole reason the lockfile has to move at all.
 #
@@ -39,7 +39,7 @@ jobs:
       # and making a good update look broken.
       - name: Enable auto-merge for patch updates to the shared corpus
         if: >-
-          steps.meta.outputs.dependency-names == '@akalforge/pg-conformance' &&
+          steps.meta.outputs.dependency-names == '@akal/pg-conformance' &&
           steps.meta.outputs.update-type == 'version-update:semver-patch'
         run: |
           if gh pr merge --auto --merge "$PR_URL"; then
