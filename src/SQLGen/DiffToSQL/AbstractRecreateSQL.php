@@ -32,15 +32,21 @@ abstract class AbstractRecreateSQL implements SQLGenInterface {
     abstract protected function dropKeyword(): string;
 
     public function getUp(): string {
-        return $this->recreate($this->obj->sourceDefinition);
+        return $this->recreate($this->obj->sourceDefinition, 'up');
     }
 
     public function getDown(): string {
-        return $this->recreate($this->obj->targetDefinition);
+        return $this->recreate($this->obj->targetDefinition, 'down');
     }
 
-    private function recreate(string $definition): string {
+    private function recreate(string $definition, string $direction): string {
         $quoted = $this->dialect->qualify($this->obj->name);
-        return 'DROP ' . $this->dropKeyword() . " IF EXISTS $quoted;\n" . $definition . ';';
+        $lines = ['DROP ' . $this->dropKeyword() . " IF EXISTS $quoted;", $definition . ';'];
+        // A view's grants go with it; put back the ones this side had.
+        $privileges = $this->obj->privileges ?? null;
+        if ($privileges !== null) {
+            array_push($lines, ...GrantSQL::restore($quoted, $privileges[$direction], $privileges['owner'], $privileges['defaultGrantees']));
+        }
+        return implode("\n", $lines);
     }
 }

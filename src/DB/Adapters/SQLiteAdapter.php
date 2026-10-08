@@ -152,7 +152,7 @@ class SQLiteAdapter implements DBAdapterInterface {
             $default = ($row['dflt_value'] !== null) ? ' DEFAULT ' . $row['dflt_value'] : '';
             $pk      = ($row['pk'] == 1) ? ' PRIMARY KEY' : '';
 
-            $columns[$name] = '"' . $name . '" ' . $type . $pk . $notNull . $default;
+            $columns[$name] = '"' . str_replace('"', '""', $name) . '" ' . $type . $pk . $notNull . $default;
         }
 
         return $columns;
@@ -170,7 +170,7 @@ class SQLiteAdapter implements DBAdapterInterface {
 
             $idxName   = $idx['name'];
             $indexInfo = $connection->select("PRAGMA index_info(\"$idxName\")");
-            $cols      = array_map(fn($i) => '"' . $i['name'] . '"', $indexInfo);
+            $cols      = array_map(fn($i) => '"' . str_replace('"', '""', $i['name']) . '"', $indexInfo);
             $unique    = $idx['unique'] ? 'UNIQUE ' : '';
 
             $keys[$idxName] =

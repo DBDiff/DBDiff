@@ -686,6 +686,63 @@ jobs:
     - name: Round-trip the corpus
       run: vendor/bin/phpunit -c tests/phpunit.xml --testsuite Corpus
 
+  # ── Two major versions ──────────────────────────────────────────────────────
+  # PostgreSQL prints the same object differently across major versions — 16
+  # dropped the table qualifiers 15 writes in a view — and only a diff between
+  # two versions shows whether that is mistaken for a change. Both directions.
+  cross-version:
+    name: Cross-version / PostgreSQL 15 and 17
+    runs-on: ubuntu-latest
+
+    services:
+      postgres15:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: dbdiff
+          POSTGRES_DB: diff1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U dbdiff"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      postgres17:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_USER: dbdiff
+          POSTGRES_DB: diff1
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U dbdiff"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.3'
+        extensions: pdo, pdo_pgsql, json
+        coverage: none
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: 15 → 17
+      env: { DB_HOST_POSTGRES: 127.0.0.1, DB_PORT_POSTGRES: 5432, DB_HOST_POSTGRES_OTHER: 127.0.0.1, DB_PORT_POSTGRES_OTHER: 5433 }
+      run: vendor/bin/phpunit -c tests/phpunit.xml tests/CrossVersionPostgresTest.php
+
+    - name: 17 → 15
+      env: { DB_HOST_POSTGRES: 127.0.0.1, DB_PORT_POSTGRES: 5433, DB_HOST_POSTGRES_OTHER: 127.0.0.1, DB_PORT_POSTGRES_OTHER: 5432 }
+      run: vendor/bin/phpunit -c tests/phpunit.xml tests/CrossVersionPostgresTest.php
+
   # ── SupaForge, on this change ───────────────────────────────────────────────
   # SupaForge drives DBDiff for every schema diff it makes. Its scenario suite
   # — the shared corpus through its CLI, judged by convergence against the

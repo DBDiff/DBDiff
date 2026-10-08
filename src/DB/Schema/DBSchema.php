@@ -20,6 +20,7 @@ use DBDiff\Diff\CreateView;
 use DBDiff\Diff\DropView;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\DB\Support\PostgresExpressionEquivalence;
+use DBDiff\DB\Support\PostgresViewGrants;
 use DBDiff\Diff\AlterView;
 use DBDiff\Diff\CreateTrigger;
 use DBDiff\Diff\DropTrigger;
@@ -168,6 +169,8 @@ class DBSchema {
                 $this->manager->getDB('source'),
                 $this->manager->getDB('target')
             );
+            // A view the migration replaces keeps its grants.
+            PostgresViewGrants::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             ColumnDependantPlan::apply($diffs);
             EnumSwapPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             CreationOrderPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));

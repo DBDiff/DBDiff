@@ -7,6 +7,7 @@ use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresColumnDependants;
 use DBDiff\DB\Support\SchemaScope;
 
@@ -775,13 +776,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
         foreach ($checkRows as $row) {
             $result[$row['table_name']][$row['constraint_name']] =
-                'CONSTRAINT "' . $row['constraint_name'] . '" ' . $row['definition'];
+                'CONSTRAINT ' . PostgresIdent::quote($row['constraint_name']) . ' ' . $row['definition'];
         }
 
         foreach ($namedNotNull as $nn) {
             $notValid = $nn['convalidated'] ? '' : ' NOT VALID';
             $result[$nn['table_name']][$nn['conname']] =
-                'CONSTRAINT "' . $nn['conname'] . '" NOT NULL "' . $nn['column_name'] . '"' . $notValid;
+                'CONSTRAINT ' . PostgresIdent::quote($nn['conname']) . ' NOT NULL ' . PostgresIdent::quote($nn['column_name']) . $notValid;
         }
 
         return $result;

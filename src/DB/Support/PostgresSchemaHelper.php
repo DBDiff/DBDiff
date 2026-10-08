@@ -112,13 +112,14 @@ class PostgresSchemaHelper {
      * name would not resolve there.
      */
     public static function qualifiedUdt(array $col): string {
-        $name   = '"' . $col['udt_name'] . '"';
+        $name   = PostgresIdent::quote($col['udt_name']);
         $schema = $col['udt_schema'] ?? null;
 
         return ($schema && !in_array($schema, ['public', 'pg_catalog'], true))
-            ? '"' . $schema . '".' . $name
+            ? PostgresIdent::quote($schema) . '.' . $name
             : $name;
     }
+
 
     /**
      * The WITH (...) clause for a relation's reloptions, or nothing when there
@@ -146,7 +147,7 @@ class PostgresSchemaHelper {
      * was already at the cognitive-complexity ceiling before serial was added.
      */
     public static function columnDefinition(array $row, string $type, string $notNull): string {
-        $quoted = '"' . $row['column_name'] . '"';
+        $quoted = PostgresIdent::quote($row['column_name']);
 
         // serial carries its own type and implies NOT NULL, so it replaces both
         // the resolved type and the suffix rather than decorating them.
@@ -162,7 +163,7 @@ class PostgresSchemaHelper {
         // non-default collation is written: spelling out the inherited one
         // would make every column read as changed.
         $collate = isset($row['explicit_collation']) && $row['explicit_collation'] !== null
-            ? ' COLLATE "' . $row['explicit_collation'] . '"'
+            ? ' COLLATE ' . PostgresIdent::quote($row['explicit_collation'])
             : '';
 
         // Compression is per-column and only meaningful when set away from the
@@ -485,24 +486,25 @@ class PostgresSchemaHelper {
             $notValid = ' NOT VALID';
         }
 
-        $cols = implode('", "', $c['columns']);
+        $name = PostgresIdent::quote($name);
+        $cols = implode(', ', array_map([PostgresIdent::class, 'quote'], $c['columns']));
         $type = $c['constraint_type'];
 
         if ($type === 'FOREIGN KEY') {
             $matchMap  = ['FULL' => ' MATCH FULL', 'PARTIAL' => ' MATCH PARTIAL'];
             $match     = $matchMap[$c['match_option'] ?? 'NONE'] ?? '';
-            return "CONSTRAINT \"$name\" FOREIGN KEY (\"$cols\")" .
+            return "CONSTRAINT $name FOREIGN KEY ($cols)" .
                 ' REFERENCES ' . PostgresForeignKey::references($c) .
                 $match .
                 " ON UPDATE {$c['update_rule']} ON DELETE {$c['delete_rule']}" .
                 // ON DELETE SET NULL (b): the columns it sets, PostgreSQL 15+.
-                (($set = json_decode($c['delete_set_columns'] ?? 'null', true)) ? ' ("' . implode('", "', $set) . '")' : '') .
+                (($set = json_decode($c['delete_set_columns'] ?? 'null', true)) ? ' (' . implode(', ', array_map([PostgresIdent::class, 'quote'], $set)) . ')' : '') .
                 $defer . $notValid;
         }
 
         if ($type === 'UNIQUE' || $type === 'PRIMARY KEY') {
             $nulls = $type === 'UNIQUE' && !empty($c['nulls_not_distinct']) ? ' NULLS NOT DISTINCT' : '';
-            return "CONSTRAINT \"$name\" {$type}{$nulls} (\"$cols\")" . $defer;
+            return "CONSTRAINT $name {$type}{$nulls} ($cols)" . $defer;
         }
 
         return null;
@@ -518,7 +520,7 @@ class PostgresSchemaHelper {
      * check_expr.
      */
     public static function policyDefinition(array $row, string $relation): string {
-        $sql = 'CREATE POLICY "' . $row['name'] . '" ON ' . $relation;
+        $sql = 'CREATE POLICY ' . PostgresIdent::quote($row['name']) . ' ON ' . $relation;
         if (!$row['permissive']) {
             $sql .= ' AS RESTRICTIVE';
         }
