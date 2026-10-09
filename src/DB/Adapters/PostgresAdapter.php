@@ -10,6 +10,7 @@ use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresColumnDependants;
 use DBDiff\DB\Support\SchemaScope;
+use DBDiff\DB\Support\PostgresCatalogColumns;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
@@ -83,11 +84,19 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         return Arr::pluck($result, 'tablename');
     }
 
+    // Columns and keys are read from the catalogs, not information_schema,
+    // which shows only what the connecting role holds a privilege on: a role
+    // that could not read a table saw no columns, and one that could only
+    // SELECT saw no primary key (table_constraints lists a table only for a
+    // privilege other than SELECT), so rows were matched without one.
     public function getColumns(Connection $connection, string $table): array {
         $result = $connection->select(
-            "SELECT column_name FROM information_schema.columns
-             WHERE table_schema = " . SchemaScope::literal($connection) . " AND table_name = ?
-             ORDER BY ordinal_position",
+            "SELECT a.attname AS column_name
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ?
+               AND a.attnum > 0 AND NOT a.attisdropped
+             ORDER BY a.attnum",
             [$table]
         );
         return Arr::pluck($result, 'column_name');
@@ -95,15 +104,14 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
     public function getPrimaryKey(Connection $connection, string $table): array {
         $result = $connection->select(
-            "SELECT kcu.column_name
-             FROM information_schema.table_constraints tc
-             JOIN information_schema.key_column_usage kcu
-               ON tc.constraint_name = kcu.constraint_name
-              AND tc.constraint_schema = kcu.constraint_schema
-             WHERE tc.constraint_type = 'PRIMARY KEY'
-               AND tc.table_schema = " . SchemaScope::literal($connection) . "
-               AND tc.table_name = ?
-             ORDER BY kcu.ordinal_position",
+            "SELECT a.attname AS column_name
+             FROM pg_constraint con
+             JOIN pg_class c ON c.oid = con.conrelid
+             CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+             JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+             WHERE con.contype = 'p'
+               AND c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ?
+             ORDER BY k.ord",
             [$table]
         );
         return Arr::pluck($result, 'column_name');
@@ -226,13 +234,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
     public function getForeignKeyMap(Connection $connection): array {
         $result = $connection->select(
-            "SELECT tc.table_name, ccu.table_name AS referenced_table
-             FROM information_schema.table_constraints tc
-             JOIN information_schema.constraint_column_usage ccu
-               ON tc.constraint_name = ccu.constraint_name
-              AND tc.constraint_schema = ccu.constraint_schema
-             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = " . SchemaScope::literal($connection) . "
-               AND ccu.table_schema = tc.table_schema"
+            "SELECT DISTINCT c.relname AS table_name, r.relname AS referenced_table
+             FROM pg_constraint con
+             JOIN pg_class c ON c.oid = con.conrelid
+             JOIN pg_class r ON r.oid = con.confrelid
+             WHERE con.contype = 'f'
+               AND c.relnamespace = " . SchemaScope::oid($connection) . "
+               AND r.relnamespace = c.relnamespace"
         );
         $map = [];
         foreach ($result as $row) {
@@ -436,7 +444,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                             COALESCE(NULLIF(a.attcompression::text, ''), ''),
                             ';' ORDER BY ordinal_position
                         ) AS col_str
-                 FROM information_schema.columns isc
+                 FROM " . PostgresCatalogColumns::SQL . " isc
                  JOIN pg_class cls
                    ON cls.relname = isc.table_name
                   AND cls.relnamespace = " . SchemaScope::oid($connection) . "
@@ -542,7 +550,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
      * returned by getTableSchema().
      *
      * Query budget per call:
-     *   1. information_schema.columns      (all tables, one query)
+     *   1. columns, unfiltered             (all tables, one query)
      *   2. pg_type domains                 (schema-global, one query)
      *   3. pg_constraint NOT NULL (PG18+)  (all tables, one query)
      *   4. pg_constraint constraint-index names to skip
@@ -572,7 +580,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                     identity_start, identity_increment, identity_maximum,
                     identity_minimum, identity_cycle,
                     is_generated, generation_expression, domain_name, domain_schema
-             FROM information_schema.columns
+             FROM " . PostgresCatalogColumns::SQL . " AS columns
              WHERE table_schema = " . SchemaScope::literal($connection) . " AND table_name IN ($ph)
              ORDER BY table_name, ordinal_position",
             $tables
