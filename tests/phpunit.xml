@@ -44,7 +44,7 @@
             <!-- Named for the thing it tests rather than the suffix. -->
             <file>./PostgresObjectKindsTest.php</file>
         </testsuite>
-        <!-- The shared corpus from @akalforge/pg-conformance (npm ci first).
+        <!-- The shared corpus from @akal/pg-conformance (npm ci first).
              Its own suite so it runs once per PostgreSQL version, not once
              per PHP and PostgreSQL pair. -->
         <testsuite name="Corpus">

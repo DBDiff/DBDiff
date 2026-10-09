@@ -65,7 +65,7 @@ identity options, collations, storage, compression) in one of two ways:
   least as new as the server. This is PostgreSQL's own rendering.
 
 Both renderers reproduce every case in the
-[`@akalforge/pg-conformance`](https://www.npmjs.com/package/@akalforge/pg-conformance)
+[`@akal/pg-conformance`](https://www.npmjs.com/package/@akal/pg-conformance)
 corpus on every supported PostgreSQL version. The corpus holds shapes drawn
 from PostgreSQL's own regression suite plus hand-written hard cases. Each one
 is built, diffed, applied and compared by catalog fingerprint, on every pull
@@ -194,7 +194,7 @@ dbdiff diff --supabase --ignore-schemas='auth,storage,realtime,_realtime,_analyt
 
 For the rest of a Supabase project, such as storage, auth config, cron,
 webhooks, Realtime, Vault and grants, use
-[SupaForge](https://github.com/akalforge/supaforge). It runs DBDiff for the
+[SupaForge](https://github.com/akalsoftware/supaforge). It runs DBDiff for the
 schema and data and covers the other layers itself.
 
 
@@ -936,7 +936,7 @@ On every push and pull request, CI runs:
   Dolt and Supabase's own Postgres image;
 - the PostgreSQL conformance corpus, and round trips of every corpus
   migration in both directions;
-- [SupaForge](https://github.com/akalforge/supaforge)'s scenario suite against
+- [SupaForge](https://github.com/akalsoftware/supaforge)'s scenario suite against
   the checkout, so a change is tested the way SupaForge runs DBDiff.
 
 See [DOCKER.md](DOCKER.md) for flags covering fast restarts, recording fixtures, and CI usage.
