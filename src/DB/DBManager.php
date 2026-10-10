@@ -51,6 +51,14 @@ class DBManager {
                 $config = $this->adapter->buildConnectionConfig([], $input['db']);
             } else {
                 $server = $params->{$input['server']};
+                // Named in the input but never given: say so, rather than
+                // connecting with an empty configuration and a PHP warning.
+                if (!is_array($server) || $server === []) {
+                    throw new DBException(
+                        "No connection settings for {$input['server']}. Pass --{$input['server']}=user:password@host:port, "
+                        . "use --server1-url / --server2-url, or set {$input['server']} in your .dbdiff config."
+                    );
+                }
                 // --supabase / --sslmode supply an sslmode where the server's own
                 // URL does not name one.
                 if (isset($params->sslmode) && empty($server['sslmode'])) {

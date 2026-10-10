@@ -36,9 +36,13 @@ $app->addCommands([
     new UrlEncodeCommand,
 ]);
 
-// Set `diff` as the default command so that the legacy
+// `diff` is the default command, and the 2.x invocation without it,
 //   dbdiff server1.db1:server2.db2 [options]
-// invocation still works without explicitly typing `diff`.
+// still works. Symfony takes the first argument for a command name, so
+// `server1.db1` was rejected as an unknown namespace; an argument shaped like
+// `server.db:server.db` that is not a command gets `diff` put in front of it.
 $app->setDefaultCommand('diff');
 
-$app->run();
+$app->run(new \Symfony\Component\Console\Input\ArgvInput(
+    \DBDiff\Params\LegacyInvocation::withDiff($_SERVER['argv'], fn(string $name) => $app->has($name))
+));
