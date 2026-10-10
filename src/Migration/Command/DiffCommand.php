@@ -291,7 +291,8 @@ class DiffCommand extends Command
 
     /**
      * Parse --server1-url / --server2-url DSN values into $params.
-     * Mutates $params with driver, server1, server2, and optionally sslmode.
+     * Mutates $params with driver, server1 and server2; each server carries its
+     * own sslmode and session options.
      *
      * @return array  Auto-built `input` structure derived from the DB names in the URLs.
      * @throws \InvalidArgumentException when either URL is missing.
@@ -312,9 +313,6 @@ class DiffCommand extends Command
         $params->server1 = $p1['server'];
         $params->server2 = $p2['server'];
 
-        if (!empty($p1['sslmode'])) {
-            $params->sslmode = $p1['sslmode'];
-        }
 
         return [
             'kind'   => 'db',

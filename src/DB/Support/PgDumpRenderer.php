@@ -532,6 +532,12 @@ final class PgDumpRenderer
             $env['PGSSLMODE'] = $sslmode;
         }
 
+        // pg_dump honours the URL's session settings the way libpq does.
+        $options = $connection->getConfig('session_options');
+        if (is_string($options) && $options !== '') {
+            $env['PGOPTIONS'] = $options;
+        }
+
         return $env;
     }
 

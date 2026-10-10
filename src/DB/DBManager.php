@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB;
 
+use DBDiff\DB\Support\PostgresSessionOptions;
+
 use DBDiff\DB\Support\ComputedColumns;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
@@ -49,14 +51,17 @@ class DBManager {
                 $config = $this->adapter->buildConnectionConfig([], $input['db']);
             } else {
                 $server = $params->{$input['server']};
-                // Allow top-level params like --supabase to add sslmode to server cfg.
-                if (isset($params->sslmode)) {
+                // --supabase / --sslmode supply an sslmode where the server's own
+                // URL does not name one.
+                if (isset($params->sslmode) && empty($server['sslmode'])) {
                     $server['sslmode'] = $params->sslmode;
                 }
                 $config = $this->adapter->buildConnectionConfig($server, $input['db']);
             }
 
             $this->capsule->addConnection($config, $key);
+            // The URL's session settings, on a connection just created.
+            PostgresSessionOptions::apply($this->capsule->getConnection($key));
         }
     }
 
@@ -79,6 +84,7 @@ class DBManager {
             $config['search_path'] = 'public';
             $this->capsule->getDatabaseManager()->purge($name);
             $this->capsule->addConnection($config, $name);
+            PostgresSessionOptions::apply($this->capsule->getConnection($name));
         }
     }
 
