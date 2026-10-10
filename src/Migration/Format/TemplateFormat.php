@@ -1,19 +1,21 @@
 <?php namespace DBDiff\Migration\Format;
 
 use DBDiff\Exceptions\FSException;
-use Illuminate\Filesystem\Filesystem;
-use Illuminate\View\Compilers\BladeCompiler;
 
 /**
  * Output through a template of your own: `--template=path` (or `template:` in
- * the config file), with `{{ $up }}` and `{{ $down }}` where the SQL goes —
+ * the config file), with `{!! $up !!}` and `{!! $down !!}` where the SQL goes —
  * Simple DB Migrate's `templates/simple-db-migrate.tmpl`, for example.
+ * `{{ $up }}` works too, and is not HTML-escaped: the output is SQL.
  *
- * 2.x applied it; 3.x documented it but wrote native SQL regardless, because
- * only the older entry point ever read the template.
+ * The placeholders are substituted, not evaluated, so a template cannot run
+ * code. 2.x applied templates; 3.x documented them but wrote native SQL
+ * regardless, because only the older entry point ever read the template.
  */
 final class TemplateFormat implements FormatInterface
 {
+    private const PLACEHOLDER = '/\{!!\s*\$(up|down)\s*!!\}|\{\{\s*\$(up|down)\s*\}\}/';
+
     public function __construct(private string $template, private bool $nocomments = false)
     {
         if (!is_file($template)) {
@@ -23,13 +25,12 @@ final class TemplateFormat implements FormatInterface
 
     public function render(string $up, string $down, string $description = '', string $version = ''): string
     {
-        $compiled = (new BladeCompiler(new Filesystem, sys_get_temp_dir()))
-            ->compileString(' ?>' . file_get_contents($this->template));
-        $content = (static function (string $__compiled, string $up, string $down): string {
-            ob_start();
-            eval($__compiled);
-            return (string) ob_get_clean();
-        })($compiled, trim($up, "\n"), trim($down, "\n"));
+        $sql = ['up' => trim($up, "\n"), 'down' => trim($down, "\n")];
+        $content = preg_replace_callback(
+            self::PLACEHOLDER,
+            fn(array $m) => $sql[$m[1] !== '' ? $m[1] : $m[2]],
+            (string) file_get_contents($this->template)
+        );
 
         return $this->nocomments
             ? $content
