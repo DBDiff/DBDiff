@@ -67,6 +67,7 @@ class DsnParser
                 'user'      => '',
                 'password'  => '',
                 'sslmode'   => '',
+                'options'   => '',
                 'pgbouncer' => false,
             ];
         }
@@ -125,6 +126,8 @@ class DsnParser
             'user'      => $user,
             'password'  => $password,
             'sslmode'   => $sslMode,
+            // libpq session settings, `-c name=value …` — see PostgresSessionOptions.
+            'options'   => (string) ($query['options'] ?? ''),
             'pgbouncer' => $pgbouncer,
         ];
     }
@@ -221,12 +224,16 @@ class DsnParser
             'driver'  => $parsed['driver'],
             'sslmode' => $parsed['sslmode'],
             'db'      => $parsed['driver'] === 'sqlite' ? $parsed['path'] : $parsed['name'],
-            'server'  => [
+            'server'  => array_filter([
                 'user'     => $parsed['user'],
                 'password' => $parsed['password'],
                 'host'     => $parsed['host'],
                 'port'     => (string) $parsed['port'],
-            ],
+                // Each server keeps its own: the source URL's sslmode used to
+                // be applied to both connections.
+                'sslmode'  => $parsed['sslmode'] ?? '',
+                'options'  => $parsed['options'] ?? '',
+            ], fn ($v, $k) => !in_array($k, ['sslmode', 'options'], true) || $v !== '', ARRAY_FILTER_USE_BOTH),
         ];
     }
 }

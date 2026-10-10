@@ -46,6 +46,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             'schema'   => 'public',
             'sslmode'  => $server['sslmode'] ?? 'prefer',
             'options'  => [self::disablePreparesAttribute() => true],
+            // The URL's libpq `options`, applied once connected (PostgresSessionOptions).
+            'session_options' => $server['options'] ?? '',
         ];
     }
 
