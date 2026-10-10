@@ -13,6 +13,15 @@ use Illuminate\Support\Arr;
 
 class TableData {
 
+    /** @var \DBDiff\DB\DBManager */
+    protected $manager;
+    /** @var \Illuminate\Database\Connection */
+    protected $source;
+    /** @var \Illuminate\Database\Connection */
+    protected $target;
+    protected DistTableData $distTableData;
+    protected LocalTableData $localTableData;
+
     function __construct($manager) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
