@@ -35,4 +35,14 @@ class LegacyShorthandPostgresTest extends PostgresRoundTripTestCase
         $this->assertSame($diff, $legacy);
         $this->assertSame(0, $diffStatus);
     }
+
+    public function testDifferentlyNamedTablesAreRefusedClearly(): void
+    {
+        $source = $this->db('s2', 'CREATE TABLE people (id int PRIMARY KEY);');
+        $target = $this->db('t2', 'CREATE TABLE users (id int PRIMARY KEY);');
+        [$status, , $log] = $this->cli(["server1.$source.people:server2.$target.users"]);
+        $this->assertNotSame(0, $status);
+        $this->assertStringContainsString('compared with the table of the same name', $log);
+        $this->assertStringNotContainsString('Warning:', $log);
+    }
 }

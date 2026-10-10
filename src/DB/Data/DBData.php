@@ -10,6 +10,9 @@ use DBDiff\Logger;
 
 class DBData {
 
+    /** @var \DBDiff\DB\DBManager */
+    protected $manager;
+
     function __construct($manager) {
         $this->manager = $manager;
     }

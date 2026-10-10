@@ -33,4 +33,11 @@ class LegacyInvocationTest extends TestCase
             $this->assertSame(array_merge(['dbdiff'], $args), $this->invoke($args), implode(' ', $args));
         }
     }
+
+    public function testItReadsTheTwoXNocommentsValue(): void
+    {
+        $this->assertSame(['dbdiff', 'diff', '--nocomments', 'server1.a:server2.b'], $this->invoke(['--nocomments=true', 'server1.a:server2.b']));
+        $this->assertSame(['dbdiff', 'diff', 'server1.a:server2.b'], $this->invoke(['--nocomments=false', 'server1.a:server2.b']));
+        $this->assertSame(['dbdiff', 'diff', '--nocomments', 'server1.a:server2.b'], $this->invoke(['diff', '--nocomments=1', 'server1.a:server2.b']));
+    }
 }
