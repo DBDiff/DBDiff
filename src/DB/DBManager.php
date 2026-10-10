@@ -60,15 +60,8 @@ class DBManager {
             }
 
             $this->capsule->addConnection($config, $key);
-            $this->applySessionOptions($key);
-        }
-    }
-
-    /** The URL's session settings, on a connection just (re)created. */
-    private function applySessionOptions(string $name): void
-    {
-        if ($this->driver === 'pgsql') {
-            PostgresSessionOptions::apply($this->capsule->getConnection($name));
+            // The URL's session settings, on a connection just created.
+            PostgresSessionOptions::apply($this->capsule->getConnection($key));
         }
     }
 
@@ -91,7 +84,7 @@ class DBManager {
             $config['search_path'] = 'public';
             $this->capsule->getDatabaseManager()->purge($name);
             $this->capsule->addConnection($config, $name);
-            $this->applySessionOptions($name);
+            PostgresSessionOptions::apply($this->capsule->getConnection($name));
         }
     }
 

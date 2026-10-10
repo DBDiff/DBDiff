@@ -27,51 +27,52 @@ final class PostgresSessionOptions
      */
     public static function parse(string $options): array
     {
-        $words = [];
-        $word = null;
-        $length = strlen($options);
-        for ($i = 0; $i < $length; $i++) {
-            $ch = $options[$i];
-            if ($ch === '\\' && $i + 1 < $length) {
-                $word = ($word ?? '') . $options[++$i];
-            } elseif (ctype_space($ch)) {
-                if ($word !== null) {
-                    $words[] = $word;
-                    $word = null;
-                }
-            } else {
-                $word = ($word ?? '') . $ch;
-            }
-        }
-        if ($word !== null) {
-            $words[] = $word;
-        }
-
+        $words = self::words($options);
         $settings = [];
-        for ($i = 0; $i < count($words); $i++) {
-            $w = $words[$i];
-            if ($w === '-c' && isset($words[$i + 1])) {
-                $w = $words[++$i];
-            } elseif (str_starts_with($w, '-c')) {
-                $w = substr($w, 2);
-            } elseif (str_starts_with($w, '--')) {
-                $w = substr($w, 2);
-            } else {
-                continue;
+        while (($word = array_shift($words)) !== null) {
+            // `-c name=value` as two words, or `-cname=value` / `--name=value` as one.
+            $assignment = $word === '-c' ? (array_shift($words) ?? '') : self::withoutSwitch($word);
+            $setting = $assignment === null ? null : self::setting($assignment);
+            if ($setting !== null) {
+                $settings[] = $setting;
             }
-            $eq = strpos($w, '=');
-            if ($eq === false || $eq === 0) {
-                continue;
-            }
-            // libpq accepts dashes for underscores in a setting's name.
-            $settings[] = [str_replace('-', '_', substr($w, 0, $eq)), substr($w, $eq + 1)];
         }
         return $settings;
     }
 
-    /** Apply the connection's `session_options` to its session. */
+    /** @return array<int, string> the words, with backslash escapes resolved */
+    private static function words(string $options): array
+    {
+        preg_match_all('/(?:\\\\.|[^\s\\\\])+/s', $options, $m);
+        return array_map(fn(string $w) => preg_replace('/\\\\(.)/s', '$1', $w), $m[0]);
+    }
+
+    /** `name=value` from `-cname=value` or `--name=value`; null for any other word. */
+    private static function withoutSwitch(string $word): ?string
+    {
+        if (str_starts_with($word, '--')) {
+            return substr($word, 2);
+        }
+        return str_starts_with($word, '-c') ? substr($word, 2) : null;
+    }
+
+    /** [name, value], or null when it is not an assignment. */
+    private static function setting(string $assignment): ?array
+    {
+        $eq = strpos($assignment, '=');
+        if ($eq === false || $eq === 0) {
+            return null;
+        }
+        // libpq accepts dashes for underscores in a setting's name.
+        return [str_replace('-', '_', substr($assignment, 0, $eq)), substr($assignment, $eq + 1)];
+    }
+
+    /** Apply a PostgreSQL connection's `session_options` to its session. */
     public static function apply(Connection $connection): void
     {
+        if ($connection->getDriverName() !== 'pgsql') {
+            return;
+        }
         $options = $connection->getConfig('session_options');
         if (!is_string($options) || $options === '') {
             return;
