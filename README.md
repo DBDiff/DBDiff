@@ -556,6 +556,8 @@ Pass `--format=native` to `migration:new` to override the auto-detected format.
   --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
 ```
 
+Each URL's own `sslmode` and `options` apply to that server's connection, as they do for psql and pg_dump — `?sslmode=require&options=-c%20default_transaction_read_only%3Don` keeps a session on the source read-only, for example.
+
 If your password contains special characters, use `dbdiff url:encode` (see [`url:encode`](#urlencode--password-encoder) in the Command-Line API section):
 
 ```bash
