@@ -138,9 +138,18 @@ class DsnParser
      * sqlite:///abs/path  → /abs/path   (absolute — starts with /)
      * sqlite://./rel/path → ./rel/path  (relative — starts with .)
      * sqlite://rel/path   → /rel/path   (treat as absolute for consistency)
+     *
+     * On Windows a drive path is kept as it is, whichever way it was written:
+     * sqlite:///C:/data/app.db and sqlite://C:/data/app.db both give
+     * C:/data/app.db. Prefixing a slash, as for a bare path, would give
+     * /C:/data/app.db, which Windows cannot open.
      */
-    private static function resolveSqlitePath(string $rawPath): string
+    public static function resolveSqlitePath(string $rawPath, bool $windows = PHP_OS_FAMILY === 'Windows'): string
     {
+        if ($windows && preg_match('#^/?([A-Za-z]:[/\\\\].*)$#s', $rawPath, $m)) {
+            return $m[1];
+        }
+
         if (str_starts_with($rawPath, '/') || str_starts_with($rawPath, '.')) {
             return $rawPath;
         }
