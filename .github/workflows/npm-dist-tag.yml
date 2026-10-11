@@ -104,44 +104,18 @@ jobs:
           fi
           echo "move=true" >> "$GITHUB_OUTPUT"
 
-      # Every package must already have the version, or nothing is moved: a
-      # root package whose platform binaries are tagged differently is worse
-      # than leaving the tag where it was.
-      - name: Check every package has the version
-        if: steps.check.outputs.move == 'true'
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          missing=""
-          for pkg_dir in packages/@dbdiff/cli-*/ packages/@dbdiff/cli/; do
-            name="$(node -p "require('./${pkg_dir}package.json').name")"
-            if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
-              echo "  ${name}@${VERSION} — published"
-            else
-              echo "::error::${name}@${VERSION} is not on npmjs.org"
-              missing="${missing} ${name}"
-            fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Nothing moved. Missing:${missing}"
-            exit 1
-          fi
-
-      # Platform packages first, the root last: the root is what users install,
-      # so it only moves once everything it depends on already has.
+      # The same script used to move tags locally: it checks every package has
+      # the version before moving any (a root package tagged differently from
+      # its platform binaries is worse than leaving the tag where it was), then
+      # moves the platform packages first and the root last.
       - name: Move the tag
         if: steps.check.outputs.move == 'true'
         env:
           VERSION: ${{ inputs.version }}
           TAG: ${{ inputs.tag }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          set -euo pipefail
-          for pkg_dir in packages/@dbdiff/cli-*/ packages/@dbdiff/cli/; do
-            name="$(node -p "require('./${pkg_dir}package.json').name")"
-            npm dist-tag add "${name}@${VERSION}" "$TAG"
-          done
+          scripts/npm-promote-latest.sh "$VERSION" "$TAG"
           {
             echo "### npm dist-tag"
             echo ""
