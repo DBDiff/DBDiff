@@ -194,10 +194,18 @@ class DiffCommandTest extends TestCase
         $params = $method->invoke($cmd, $input);
 
         $this->assertSame('native', $params->format);
-        $this->assertSame('schema', $params->type);
-        $this->assertSame('up',     $params->include);
+        // Left unset, so a config file's `type` and `include` can apply…
+        $this->assertNull($params->type);
+        $this->assertNull($params->include);
         $this->assertFalse($params->nocomments);
         $this->assertFalse($params->debug);
+
+        // …and the defaults come last.
+        $defaults = new \ReflectionMethod($cmd, 'applyDefaults');
+        $defaults->setAccessible(true);
+        $defaults->invoke($cmd, $params);
+        $this->assertSame('schema', $params->type);
+        $this->assertSame('up',     $params->include);
     }
 
     public function testBuildParamsCustomValues(): void

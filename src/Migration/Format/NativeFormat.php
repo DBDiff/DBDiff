@@ -9,6 +9,20 @@
  */
 class NativeFormat implements FormatInterface
 {
+    private bool $header = true;
+
+    /**
+     * The same format without its comment header, for `--nocomments`. The UP
+     * and DOWN markers stay: they are the file's structure, which tools split
+     * on, not commentary. The flag used to change nothing in this format.
+     */
+    public function withoutHeader(): self
+    {
+        $copy = clone $this;
+        $copy->header = false;
+        return $copy;
+    }
+
     public function render(string $up, string $down, string $description = '', string $version = ''): string
     {
         $header  = "-- DBDiff migration";
@@ -23,7 +37,7 @@ class NativeFormat implements FormatInterface
         }
         $header .= "\n";
 
-        $content  = $header . "\n";
+        $content  = $this->header ? $header . "\n" : '';
         $content .= "-- ==================== UP ====================\n\n";
         $content .= $up ? (rtrim($up) . "\n") : "-- (empty)\n";
         $content .= "\n-- ==================== DOWN ====================\n\n";

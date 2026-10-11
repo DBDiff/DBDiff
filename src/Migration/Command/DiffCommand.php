@@ -65,8 +65,8 @@ class DiffCommand extends Command
             ->addOption('format',      null, InputOption::VALUE_REQUIRED, "Output format [{$formatList}]", 'native')
             ->addOption('description', null, InputOption::VALUE_REQUIRED, 'Human-readable description for generated file names', '')
             ->addOption('template',    null, InputOption::VALUE_REQUIRED, 'Blade template file for native/custom output')
-            ->addOption('type',        null, InputOption::VALUE_REQUIRED, 'Diff type: schema (default), data, all', 'schema')
-            ->addOption('include',     null, InputOption::VALUE_REQUIRED, 'Include: up (default), down, both', 'up')
+            ->addOption('type',        null, InputOption::VALUE_REQUIRED, 'Diff type: schema (default), data, all')
+            ->addOption('include',     null, InputOption::VALUE_REQUIRED, 'Include: up (default), down, both')
             ->addOption('nocomments',  null, InputOption::VALUE_NONE,     'Suppress auto-generated comment headers')
             ->addOption('units',       null, InputOption::VALUE_NONE,
                 'Mark each change\'s statements as one unit (-- dbdiff:unit <Kind> <object> ... -- dbdiff:end), '
@@ -106,6 +106,7 @@ class DiffCommand extends Command
             if ($params->config || file_exists(getcwd() . '/.dbdiff')) {
                 $this->mergeFileConfig($params);
             }
+            $this->applyDefaults($params);
 
             // Apply PHP memory limit. The entry point (dbdiff / dbdiff.php) already
             // sets a 1G default; this lets the YAML config or --memory-limit flag
@@ -134,6 +135,16 @@ class DiffCommand extends Command
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
+     * Defaults for what neither the command line nor the config file set.
+     * Applied last, so a config file's `type` and `include` take effect.
+     */
+    private function applyDefaults(DefaultParams $params): void
+    {
+        $params->type    = $params->type ?: 'schema';
+        $params->include = $this->normaliseInclude((string) ($params->include ?: 'up'));
+    }
+
+    /**
      * Build a DefaultParams object from the raw console input options.
      * No validation occurs here — that happens in resolveConnections().
      */
@@ -141,8 +152,11 @@ class DiffCommand extends Command
     {
         $params              = new DefaultParams;
         $params->format      = strtolower($input->getOption('format'));
-        $params->type        = $input->getOption('type');
-        $params->include     = $this->normaliseInclude($input->getOption('include'));
+        // Only what was typed: a config file's `type` and `include` apply next,
+        // and the defaults last (applyDefaults). The options carried their
+        // defaults before, so the file's values never took effect.
+        $params->type        = $input->hasParameterOption('--type') ? $input->getOption('type') : null;
+        $params->include     = $input->hasParameterOption('--include') ? $this->normaliseInclude($input->getOption('include')) : null;
         $params->nocomments  = (bool) $input->getOption('nocomments');
         $params->units       = (bool) $input->getOption('units');
         $params->debug       = (bool) $input->getOption('debug');
@@ -192,7 +206,7 @@ class DiffCommand extends Command
         if ($s1url || $s2url) {
             $autoInput     = $this->applyServerUrls($params, $s1url, $s2url);
             $rawInput      = $input->getArgument('input');
-            $params->input = $rawInput ? $this->parseInput($rawInput) : $autoInput;
+            $params->input = $rawInput ? $this->parseInput($rawInput, $params->driver ?? '') : $autoInput;
 
             return;
         }
@@ -206,8 +220,8 @@ class DiffCommand extends Command
             );
         }
 
-        $params->input  = $this->parseInput($rawInput);
         $params->driver = $input->getOption('supabase') ? 'pgsql' : $input->getOption('driver');
+        $params->input  = $this->parseInput($rawInput, (string) $params->driver);
 
         if ($input->getOption('supabase')) {
             $params->sslmode = 'require';
@@ -234,7 +248,14 @@ class DiffCommand extends Command
             return false;
         }
 
-        $formatter = FormatRegistry::get($params->format);
+        // A template of your own, from --template or the config file, decides
+        // the output; otherwise the named format does.
+        $formatter = !empty($params->template)
+            ? new \DBDiff\Migration\Format\TemplateFormat($params->template, (bool) $params->nocomments)
+            : FormatRegistry::get($params->format);
+        if ($params->nocomments && $formatter instanceof \DBDiff\Migration\Format\NativeFormat) {
+            $formatter = $formatter->withoutHeader();
+        }
         $rendered  = $formatter->render(
             $result['up'],
             $result['down'],
@@ -321,14 +342,18 @@ class DiffCommand extends Command
         ];
     }
 
-    private function parseInput(string $input): array
+    private function parseInput(string $input, string $driver = ''): array
     {
         $parts  = explode(':', $input);
         if (count($parts) !== 2) {
             throw new \InvalidArgumentException("Input must be in the form source:target");
         }
-        $first  = explode('.', $parts[0]);
-        $second = explode('.', $parts[1]);
+        // A SQLite database is a file path, `server1./var/db/v1.db`, and its
+        // dots are part of it: split at the first only. Splitting at every dot
+        // read `v1.db` as database `v1` and table `db`.
+        $limit  = $driver === 'sqlite' ? 2 : PHP_INT_MAX;
+        $first  = explode('.', $parts[0], $limit);
+        $second = explode('.', $parts[1], $limit);
 
         if (count($first) !== count($second)) {
             throw new \InvalidArgumentException("Source and target must be of the same kind");
@@ -343,6 +368,11 @@ class DiffCommand extends Command
         }
 
         if (count($first) === 3) {
+            if ($first[2] !== $second[2]) {
+                throw new \InvalidArgumentException(
+                    "A table is compared with the table of the same name: {$first[2]} and {$second[2]} differ."
+                );
+            }
             return [
                 'kind'   => 'table',
                 'source' => ['server' => $first[0],  'db' => $first[1],  'table' => $first[2]],
