@@ -276,7 +276,7 @@ Download from [**GitHub Releases**](https://github.com/DBDiff/DBDiff/releases/la
 | macOS Apple Silicon | `dbdiff-darwin-arm64` |
 | macOS Intel | `dbdiff-darwin-x64` |
 | Windows x64 | `dbdiff-win32-x64.exe` |
-| Windows arm64 | `dbdiff-win32-arm64.exe` |
+| Windows 11 on Arm | `dbdiff-win32-arm64.exe` (the x64 build, run by Windows' built-in x64 emulation) |
 
 After downloading, make it executable (Linux/macOS) and optionally move it to your `PATH`:
 
