@@ -10,7 +10,7 @@ class DropViewSQL implements SQLGenInterface {
     protected $obj;
     protected SQLDialectInterface $dialect;
 
-    public function __construct($obj, SQLDialectInterface $dialect = null) {
+    public function __construct($obj, ?SQLDialectInterface $dialect = null) {
         $this->obj     = $obj;
         $this->dialect = $dialect ?? DialectRegistry::get();
     }

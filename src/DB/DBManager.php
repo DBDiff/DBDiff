@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB;
 
 use DBDiff\DB\Support\PostgresSessionOptions;
+use DBDiff\DB\Support\ServerSettings;
 
 use DBDiff\DB\Support\ComputedColumns;
 
@@ -51,6 +52,7 @@ class DBManager {
                 $config = $this->adapter->buildConnectionConfig([], $input['db']);
             } else {
                 $server = $params->{$input['server']};
+                ServerSettings::requireFor($server, $input['server']);
                 // --supabase / --sslmode supply an sslmode where the server's own
                 // URL does not name one.
                 if (isset($params->sslmode) && empty($server['sslmode'])) {
