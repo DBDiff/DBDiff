@@ -736,6 +736,29 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4b — Point npm `latest` at this release
+  #
+  # Pre-releases publish under their own tag (rc, beta …), so without this
+  # `npm install @dbdiff/cli` would keep resolving to an older version. Until a
+  # stable release exists, `latest` follows each new pre-release; after that
+  # it only follows stable releases — npm-dist-tag.yml skips the move rather
+  # than failing the release. The same workflow can be run by hand.
+  # ═══════════════════════════════════════════════════════════════════════════
+  npm-latest:
+    name: npm latest tag
+    needs: publish-npm
+    if: ${{ !cancelled() && needs.publish-npm.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/npm-dist-tag.yml
+    with:
+      version: ${{ github.event.inputs.version }}
+      tag: latest
+      skip-when-refused: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # JOB 4 — Build and push Docker images
   #
   # Two images per release:

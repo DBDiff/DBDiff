@@ -1,0 +1,149 @@
+name: Move npm dist-tag
+
+# Points an npm dist-tag (normally `latest`) at a published version, on the
+# root @dbdiff/cli package and every platform package together, so
+# `npm install @dbdiff/cli` and `npx @dbdiff/cli` pick it up.
+#
+# Run it by hand from the Actions tab, or let release.yml call it after each
+# publish. Until a stable (GA) release exists, `latest` follows the newest
+# pre-release. Once one does, `latest` belongs to stable releases only: a
+# pre-release is refused — a hard failure when run by hand, a skip when called
+# from the release workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published version to tag — no "v" prefix (e.g. 3.0.0-rc.25)'
+        required: true
+        type: string
+      tag:
+        description: 'dist-tag to move'
+        required: false
+        default: latest
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      tag:
+        required: false
+        default: latest
+        type: string
+      skip-when-refused:
+        description: 'Skip instead of failing when the move is not allowed'
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-dist-tag
+  cancel-in-progress: false
+
+jobs:
+  dist-tag:
+    name: ${{ inputs.tag }} → ${{ inputs.version }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node (npmjs.org)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check the move is allowed
+        id: check
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          SKIP_WHEN_REFUSED: ${{ inputs.skip-when-refused || false }}
+        run: |
+          set -euo pipefail
+          refuse() {
+            if [ "$SKIP_WHEN_REFUSED" = "true" ]; then
+              echo "::notice::Not moving '${TAG}': $1"
+              echo "move=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::Not moving '${TAG}': $1"
+            exit 1
+          }
+
+          case "$VERSION" in
+            v*) refuse "the version must not have a \"v\" prefix (got ${VERSION})" ;;
+          esac
+
+          if [ "$TAG" = "latest" ] && [[ "$VERSION" == *-* ]]; then
+            stable="$(npm view @dbdiff/cli versions --json \
+              | node -e 'const v = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log([].concat(v).filter(x => !x.includes("-")).join(" "))')"
+            if [ -n "$stable" ]; then
+              refuse "${VERSION} is a pre-release and a stable release already exists (${stable##* }) — latest stays with stable releases"
+            fi
+          fi
+
+          # A patch to an older line (3.0.x after 3.1.0) must not pull latest back.
+          if [ "$TAG" = "latest" ] && [[ "$VERSION" != *-* ]]; then
+            current="$(npm view @dbdiff/cli dist-tags.latest 2>/dev/null || true)"
+            if [ -n "$current" ] && [[ "$current" != *-* ]] && node -e '
+              const [a, b] = process.argv.slice(1).map(v => v.split(".").map(Number));
+              const older = (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) < 0;
+              process.exit(older ? 0 : 1);
+            ' "$VERSION" "$current"; then
+              refuse "${VERSION} is older than the current latest (${current})"
+            fi
+          fi
+          echo "move=true" >> "$GITHUB_OUTPUT"
+
+      # Every package must already have the version, or nothing is moved: a
+      # root package whose platform binaries are tagged differently is worse
+      # than leaving the tag where it was.
+      - name: Check every package has the version
+        if: steps.check.outputs.move == 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for pkg_dir in packages/@dbdiff/cli-*/ packages/@dbdiff/cli/; do
+            name="$(node -p "require('./${pkg_dir}package.json').name")"
+            if npm view "${name}@${VERSION}" version >/dev/null 2>&1; then
+              echo "  ${name}@${VERSION} — published"
+            else
+              echo "::error::${name}@${VERSION} is not on npmjs.org"
+              missing="${missing} ${name}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Nothing moved. Missing:${missing}"
+            exit 1
+          fi
+
+      # Platform packages first, the root last: the root is what users install,
+      # so it only moves once everything it depends on already has.
+      - name: Move the tag
+        if: steps.check.outputs.move == 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for pkg_dir in packages/@dbdiff/cli-*/ packages/@dbdiff/cli/; do
+            name="$(node -p "require('./${pkg_dir}package.json').name")"
+            npm dist-tag add "${name}@${VERSION}" "$TAG"
+          done
+          {
+            echo "### npm dist-tag"
+            echo ""
+            echo "\`${TAG}\` → \`${VERSION}\` on @dbdiff/cli and every platform package."
+          } >> "$GITHUB_STEP_SUMMARY"
