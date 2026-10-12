@@ -344,11 +344,47 @@ jobs:
           retention-days: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2b — Windows ARM64: the x64 build, proven on a real ARM64 machine
+  # (Windows 11 runs it under x64 emulation). Mirrors release.yml.
+  # ═══════════════════════════════════════════════════════════════════════════
+  verify-win32-arm64:
+    name: "Binary — win32-arm64 (x64 build, verified on ARM64)"
+    needs: build-binary
+    if: ${{ !cancelled() }}
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-win32-x64
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Smoke-test binary (Windows ARM64, x64 emulation)
+        shell: pwsh
+        run: |
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+            Write-Output "::error::expected an ARM64 runner, got $env:PROCESSOR_ARCHITECTURE"
+            exit 1
+          }
+          ./scripts/smoke-windows-binary.ps1 -Exe .\dbdiff.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbdiff-win32-arm64
+          path: dbdiff.exe
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # JOB 3 — npm dry-run publish + registry health check
   # ═══════════════════════════════════════════════════════════════════════════
   npm-dry-run:
     name: "npm dry-run publish"
-    needs: [build-phar, build-binary]
+    needs: [build-phar, build-binary, verify-win32-arm64]
     if: ${{ !cancelled() && needs.build-phar.result == 'success' }}
     runs-on: ubuntu-latest
 
@@ -416,6 +452,7 @@ jobs:
           copy_binary binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
           copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
           copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
+          copy_binary binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
       - name: Bundle PHAR into @dbdiff/cli
@@ -548,7 +585,7 @@ jobs:
             echo ""
             echo "| Platform | Status |"
             echo "|----------|--------|"
-            targets=("linux-x64" "linux-arm64" "linux-x64-musl" "linux-arm64-musl" "darwin-x64" "darwin-arm64" "win32-x64")
+            targets=("linux-x64" "linux-arm64" "linux-x64-musl" "linux-arm64-musl" "darwin-x64" "darwin-arm64" "win32-x64" "win32-arm64")
             for target in "${targets[@]}"; do
               if [ -d "binaries/dbdiff-${target}" ]; then
                 echo "| ${target} | ✅ Built |"
@@ -640,7 +677,7 @@ jobs:
             echo ""
             echo "| Platform | Status |"
             echo "|----------|--------|"
-            targets=("linux-x64" "linux-arm64" "linux-x64-musl" "linux-arm64-musl" "darwin-x64" "darwin-arm64" "win32-x64")
+            targets=("linux-x64" "linux-arm64" "linux-x64-musl" "linux-arm64-musl" "darwin-x64" "darwin-arm64" "win32-x64" "win32-arm64")
             for target in "${targets[@]}"; do
               if [ -d "binaries/dbdiff-${target}" ]; then
                 echo "| ${target} | ✅ Built |"

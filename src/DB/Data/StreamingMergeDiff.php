@@ -39,7 +39,7 @@ class StreamingMergeDiff
      * buffered query: faster than a cursor, and at roughly 90 bytes a row
      * still well inside the memory limit. Larger tables, and tables the
      * server has no row estimate for, are read through a cursor so memory
-     * stays flat. See RowStream and fitsInMemory().
+     * stays flat. See RowStream and RowEstimate.
      */
     private const BUFFER_ROWS = 1_000_000;
 
@@ -201,108 +201,91 @@ class StreamingMergeDiff
         $hashExpr = $this->buildHashExpression($hashCols);
         $pkCols   = $this->quoteCols($key);
         $pkSelect = implode(', ', $pkCols);
-        [$orderBy, $numeric] = $this->keyOrder($table, $key);
+        [$orderBy, $numeric] = (new KeyOrder($this->source, $this->driver))->of($table, $this->tableName($table), $key);
         $q        = $this->tableName($table);
 
-        $srcPdo  = $this->source->getPdo();
-        $tgtPdo  = $this->target->getPdo();
-        $shared  = $srcPdo === $tgtPdo;
-
-        $sql = "SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}";
-        // Read a batch at a time: see RowStream for why fetch() alone is not enough.
-        $bounded = $this->driver !== 'pgsql'
-            || !$this->fitsInMemory($this->source, $q)
-            || !$this->fitsInMemory($this->target, $q);
-        $src = new RowStream($srcPdo, $this->driver, $sql, 'stream_source', !$shared, $bounded);
+        [$src, $tgt] = $this->openStreams("SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}", $q, 'stream');
         try {
-            $tgt = new RowStream($tgtPdo, $this->driver, $sql, 'stream_target', !$shared, $bounded);
-        } catch (\Throwable $e) {
-            $src->close();
-            throw $e;
-        }
-
-        $insertPKs = [];
-        $deletePKs = [];
-        $updatePKs = [];
-
-        try {
-            $srcRow = $src->fetch();
-            $tgtRow = $tgt->fetch();
-
-            while ($srcRow !== false || $tgtRow !== false) {
-                if ($srcRow === false) {
-                    // Source exhausted → remaining target rows are deletes
-                    $deletePKs[] = Arr::only($tgtRow, $key);
-                    $tgtRow = $tgt->fetch();
-                } elseif ($tgtRow === false) {
-                    // Target exhausted → remaining source rows are inserts
-                    $insertPKs[] = Arr::only($srcRow, $key);
-                    $srcRow = $src->fetch();
-                } else {
-                    $cmp = $this->comparePK($srcRow, $tgtRow, $key, $numeric);
-                    if ($cmp < 0) {
-                        $insertPKs[] = Arr::only($srcRow, $key);
-                        $srcRow = $src->fetch();
-                    } elseif ($cmp > 0) {
-                        $deletePKs[] = Arr::only($tgtRow, $key);
-                        $tgtRow = $tgt->fetch();
-                    } else {
-                        // PKs match — compare hashes
-                        if ($srcRow['_hash'] !== $tgtRow['_hash']) {
-                            $updatePKs[] = Arr::only($srcRow, $key);
-                        }
-                        $srcRow = $src->fetch();
-                        $tgtRow = $tgt->fetch();
-                    }
-                }
-            }
+            return $this->mergeByKey($src, $tgt, $key, $numeric);
         } finally {
             // Reverse order: on a shared connection the source owns the transaction.
             $tgt->close();
             $src->close();
         }
-
-        return [$insertPKs, $deletePKs, $updatePKs];
     }
 
     /**
-     * Whether `$table` (already quoted) holds few enough rows to buffer.
+     * `$sql` on both sides, read a batch at a time — see RowStream for why
+     * fetch() alone is not enough. A PostgreSQL table small enough to buffer
+     * keeps the faster buffered read.
      *
-     * Estimated the way PostgreSQL's planner does: the rows per page seen by
-     * the last ANALYZE or VACUUM, times the pages the table has now — so a
-     * table that has grown since is not mistaken for its old size. With no
-     * statistics yet (reltuples -1, or no pages counted), or for anything but
-     * a plain table or materialised view (a partitioned parent has no pages
-     * of its own), there is no estimate, and the table is not assumed small.
+     * @return RowStream[] [source, target]; the caller closes them, target first.
      */
-    private function fitsInMemory(Connection $conn, string $table): bool
+    private function openStreams(string $sql, string $table, string $name): array
     {
+        $srcPdo  = $this->source->getPdo();
+        $tgtPdo  = $this->target->getPdo();
+        $shared  = $srcPdo === $tgtPdo;
+        $bounded = $this->driver !== 'pgsql'
+            || !RowEstimate::atMost($this->source, $table, self::BUFFER_ROWS)
+            || !RowEstimate::atMost($this->target, $table, self::BUFFER_ROWS);
+
+        $src = new RowStream($srcPdo, $this->driver, $sql, "{$name}_source", !$shared, $bounded);
         try {
-            $row = $conn->selectOne(
-                "SELECT c.relkind AS kind, c.reltuples::float8 AS tuples, c.relpages AS pages,
-                        pg_relation_size(c.oid) / current_setting('block_size')::int AS current_pages
-                   FROM pg_class c WHERE c.oid = to_regclass(?)",
-                [$table]
-            );
-        } catch (\Throwable) {
-            return false;
+            $tgt = new RowStream($tgtPdo, $this->driver, $sql, "{$name}_target", !$shared, $bounded);
+        } catch (\Throwable $e) {
+            $src->close();
+            throw $e;
         }
-        if ($row === null) {
-            return false;
+        return [$src, $tgt];
+    }
+
+    /**
+     * Walk two key-ordered `key…, _hash` streams together. `$numeric`:
+     * the key columns compared as numbers, see KeyOrder.
+     *
+     * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
+     */
+    private function mergeByKey(RowStream $src, RowStream $tgt, array $key, array $numeric): array
+    {
+        $insertPKs = [];
+        $deletePKs = [];
+        $updatePKs = [];
+
+        $srcRow = $src->fetch();
+        $tgtRow = $tgt->fetch();
+        while ($srcRow !== false || $tgtRow !== false) {
+            $cmp = $this->nextInOrder($srcRow, $tgtRow, $key, $numeric);
+            if ($cmp < 0) {
+                // Only the source has it
+                $insertPKs[] = Arr::only($srcRow, $key);
+                $srcRow = $src->fetch();
+            } elseif ($cmp > 0) {
+                // Only the target has it
+                $deletePKs[] = Arr::only($tgtRow, $key);
+                $tgtRow = $tgt->fetch();
+            } else {
+                // Both have it — compare hashes
+                if ($srcRow['_hash'] !== $tgtRow['_hash']) {
+                    $updatePKs[] = Arr::only($srcRow, $key);
+                }
+                $srcRow = $src->fetch();
+                $tgtRow = $tgt->fetch();
+            }
         }
-        // DBDiff's connections fetch arrays, a plain Laravel one objects.
-        $row = (array) $row;
-        if (!in_array($row['kind'], ['r', 'm'], true)) {
-            return false;
+        return [$insertPKs, $deletePKs, $updatePKs];
+    }
+
+    /** Which row comes first: negative the source's, positive the target's, 0 the same key. An exhausted side comes last. */
+    private function nextInOrder(array|false $srcRow, array|false $tgtRow, array $key, array $numeric): int
+    {
+        if ($srcRow === false) {
+            return 1;
         }
-        if ((int) $row['current_pages'] === 0) {
-            return true;
+        if ($tgtRow === false) {
+            return -1;
         }
-        if ((int) $row['pages'] <= 0 || (float) $row['tuples'] < 0) {
-            return false;
-        }
-        $estimate = (float) $row['tuples'] / (int) $row['pages'] * (int) $row['current_pages'];
-        return $estimate <= self::BUFFER_ROWS;
+        return $this->comparePK($srcRow, $tgtRow, $key, $numeric);
     }
 
     /**
@@ -337,7 +320,7 @@ class StreamingMergeDiff
      * Must order keys exactly as the hash query's ORDER BY does, or the merge
      * falls out of step and reports rows both sides have as an insert and a
      * delete. `$numeric` names the key columns compared as numbers (see
-     * keyOrder()); every other column compares byte by byte. Without it, a
+     * KeyOrder); every other column compares byte by byte. Without it, a
      * value that looks numeric is compared as a number — fine for an integer
      * key, wrong for a text key holding '9' and '10'.
      *
@@ -355,91 +338,6 @@ class StreamingMergeDiff
             }
         }
         return 0;
-    }
-
-    /**
-     * The hash query's ORDER BY, and which key columns comparePK() treats as
-     * numbers — chosen together so the database and the merge agree.
-     *
-     * A numeric key sorts natively and compares as a number. Anything else
-     * sorts by the bytes of its text, which is what strcmp() compares: under
-     * a linguistic collation (en_US, utf8mb4_0900_ai_ci) the database puts
-     * 'a' before 'B' where strcmp() puts 'B' first. A uuid keeps its native
-     * order, which is already its hex text's, so its index still serves.
-     *
-     * @return array{0: string, 1: string[]}
-     */
-    private function keyOrder(string $table, array $key): array
-    {
-        $kinds   = $this->keyKinds($table, $key);
-        $numeric = [];
-        $terms   = [];
-        foreach ($key as $col) {
-            $quoted = $this->quoteIdentifier($col);
-            $kind   = $kinds[$col] ?? 'text';
-            if ($kind === 'number') {
-                $numeric[] = $col;
-                $terms[]   = $quoted;
-            } elseif ($kind === 'uuid') {
-                $terms[] = $quoted;
-            } else {
-                $terms[] = match ($this->driver) {
-                    'pgsql'  => "({$quoted})::text COLLATE \"C\"",
-                    'mysql'  => "CAST({$quoted} AS BINARY)",
-                    default  => "CAST({$quoted} AS TEXT) COLLATE BINARY",
-                };
-            }
-        }
-        return [implode(', ', $terms), $numeric];
-    }
-
-    /**
-     * 'number', 'uuid' or 'text' for each key column, from the source's
-     * catalog. A column it cannot classify is 'text', the order that is
-     * always consistent with strcmp().
-     *
-     * @return array<string, string>
-     */
-    private function keyKinds(string $table, array $key): array
-    {
-        $kinds = [];
-        try {
-            if ($this->driver === 'pgsql') {
-                $rows = $this->source->select(
-                    "SELECT a.attname AS name, t.typcategory AS category, t.typname AS type
-                       FROM pg_attribute a
-                       JOIN pg_type d ON d.oid = a.atttypid
-                       -- A domain sorts as its base type.
-                       JOIN pg_type t ON t.oid = CASE WHEN d.typtype = 'd' THEN d.typbasetype ELSE d.oid END
-                      WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped",
-                    [$this->tableName($table)]
-                );
-                foreach ($rows as $row) {
-                    $row = (array) $row;
-                    $kinds[$row['name']] = $row['category'] === 'N' ? 'number' : ($row['type'] === 'uuid' ? 'uuid' : 'text');
-                }
-            } elseif ($this->driver === 'mysql') {
-                $rows = $this->source->select(
-                    'SELECT COLUMN_NAME AS name, DATA_TYPE AS type FROM information_schema.COLUMNS
-                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
-                    [$table]
-                );
-                $numberTypes = ['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'decimal', 'numeric', 'float', 'double', 'real', 'year'];
-                foreach ($rows as $row) {
-                    $row = array_change_key_case((array) $row, CASE_LOWER);
-                    $kinds[$row['name']] = in_array(strtolower($row['type']), $numberTypes, true) ? 'number' : 'text';
-                }
-            } else {
-                foreach ($this->source->select('PRAGMA table_info(' . $this->quoteIdentifier($table) . ')') as $row) {
-                    $row = (array) $row;
-                    // SQLite's own affinity rules: a declared type naming INT, REAL, FLOA, DOUB, NUM or DEC.
-                    $kinds[$row['name']] = preg_match('/INT|REAL|FLOA|DOUB|NUM|DEC/i', (string) $row['type']) ? 'number' : 'text';
-                }
-            }
-        } catch (\Throwable $e) {
-            Logger::info("Could not read key column types for `$table`; ordering keys as text: " . $e->getMessage());
-        }
-        return array_intersect_key($kinds, array_flip($key));
     }
 
     /**

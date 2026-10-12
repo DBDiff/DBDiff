@@ -415,35 +415,11 @@ jobs:
           } finally { $out.Dispose() }
           "{0:N1} MB" -f ((Get-Item dbdiff.exe).Length / 1MB)
 
+      # Starts, has its database drivers, and diffs SQLite correctly from both
+      # a drive-letter and a relative sqlite:// URL.
       - name: Smoke-test binary (Windows)
         shell: pwsh
-        run: |
-          .\dbdiff.exe --version
-          .\dbdiff.exe --help
-
-          # --version passes whether or not a single database driver made it in,
-          # which is how a driverless binary reached a release dry run. PDO
-          # reports a missing driver as exactly "could not find driver" and an
-          # unreachable server as a connection error, so a closed port
-          # distinguishes the two without needing a database.
-          foreach ($scheme in @('postgresql', 'mysql')) {
-            $out = (& .\dbdiff.exe diff `
-              --server1-url "${scheme}://u:p@127.0.0.1:1/x" `
-              --server2-url "${scheme}://u:p@127.0.0.1:1/y" 2>&1 | Out-String)
-            if ($out -match 'could not find driver') {
-              Write-Output "::error::$scheme driver missing from the binary"
-              Write-Output $out
-              exit 1
-            }
-            Write-Output "$scheme driver present"
-          }
-
-          # Every dbdiff.exe call above is expected to fail — the port is
-          # closed on purpose. GitHub's pwsh shell appends `exit $LASTEXITCODE`,
-          # so without this the step inherits that deliberate failure and reports
-          # a driver check that passed as a failed job. The bash version escapes
-          # the same trap with `|| true`.
-          exit 0
+        run: ./scripts/smoke-windows-binary.ps1 -Exe .\dbdiff.exe
 
       - name: Test the npm wrapper resolves the Windows binary
         shell: pwsh
@@ -452,4 +428,63 @@ jobs:
           New-Item -ItemType Directory -Force -Path node_modules\@dbdiff | Out-Null
           New-Item -ItemType Junction -Path node_modules\@dbdiff\cli-win32-x64 -Target (Resolve-Path packages\@dbdiff\cli-win32-x64) | Out-Null
           New-Item -ItemType Junction -Path node_modules\@dbdiff\cli          -Target (Resolve-Path packages\@dbdiff\cli)          | Out-Null
+          node packages\@dbdiff\cli\bin\dbdiff.js --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbdiff-win32-x64-ci
+          path: dbdiff.exe
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB — Windows ARM64
+  #
+  # static-php-cli cannot build PHP for Windows ARM64, so Windows on ARM ships
+  # the x64 build, which Windows 11 runs under its built-in x64 emulation. This
+  # proves that on a real ARM64 machine: the same smoke test as x64, then the
+  # npm wrapper running as native ARM64 Node resolving @dbdiff/cli-win32-arm64.
+  # ═══════════════════════════════════════════════════════════════════════════
+  windows-arm64-binary:
+    name: Windows ARM64 binary
+    needs: windows-binary
+    runs-on: windows-11-arm
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-windows-binary') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-win32-x64-ci
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          architecture: arm64
+
+      - name: Smoke-test binary (Windows ARM64, x64 emulation)
+        shell: pwsh
+        run: |
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+            Write-Output "::error::expected an ARM64 runner, got $env:PROCESSOR_ARCHITECTURE"
+            exit 1
+          }
+          ./scripts/smoke-windows-binary.ps1 -Exe .\dbdiff.exe
+
+      - name: Test the npm wrapper resolves the Windows ARM64 binary
+        shell: pwsh
+        run: |
+          $arch = node -p "process.arch"
+          if ($arch -ne 'arm64') {
+            Write-Output "::error::Node reports $arch; the wrapper would not pick the ARM64 package"
+            exit 1
+          }
+          Copy-Item dbdiff.exe packages\@dbdiff\cli-win32-arm64\dbdiff.exe -Force
+          New-Item -ItemType Directory -Force -Path node_modules\@dbdiff | Out-Null
+          New-Item -ItemType Junction -Path node_modules\@dbdiff\cli-win32-arm64 -Target (Resolve-Path packages\@dbdiff\cli-win32-arm64) | Out-Null
+          New-Item -ItemType Junction -Path node_modules\@dbdiff\cli            -Target (Resolve-Path packages\@dbdiff\cli)            | Out-Null
           node packages\@dbdiff\cli\bin\dbdiff.js --version

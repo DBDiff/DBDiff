@@ -66,7 +66,7 @@ npm downloads only the binary for your platform:
 | macOS Intel | `@dbdiff/cli-darwin-x64` |
 | macOS Apple Silicon | `@dbdiff/cli-darwin-arm64` |
 | Windows x64 | `@dbdiff/cli-win32-x64` |
-| Windows arm64 | `@dbdiff/cli-win32-arm64` |
+| Windows 11 on Arm | `@dbdiff/cli-win32-arm64` (the x64 build, run by Windows' built-in x64 emulation) |
 
 ## Links
 

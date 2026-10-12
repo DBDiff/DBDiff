@@ -1,0 +1,39 @@
+name: Dependency Security Audit
+
+# Checks composer.lock against the security advisories Packagist publishes,
+# the same data `composer audit` and `composer update` act on for users.
+#
+# Runs on every PR and push to master, and weekly so an advisory published
+# after a merge is caught without waiting for the next change.
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  composer-audit:
+    name: composer audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2
+      with:
+        php-version: '8.1'
+        tools: composer:v2
+        coverage: none
+
+    - name: Audit locked dependencies
+      # Fails on any advisory affecting a locked package (runtime or dev);
+      # abandoned packages are listed but do not fail the build.
+      run: composer audit --locked --abandoned=report
