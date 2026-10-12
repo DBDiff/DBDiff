@@ -14,6 +14,7 @@
  * (DB_HOST_POSTGRES, DB_HOST), and skips a driver whose server is not set.
  */
 
+use DBDiff\DB\Data\KeylessMergeDiff;
 use DBDiff\DB\Data\StreamingMergeDiff;
 use DBDiff\Diff\DeleteData;
 use DBDiff\Diff\InsertData;
@@ -232,7 +233,7 @@ class StreamingMergeServerTest extends TestCase
             "$dup, $dup, $dup, ('b', 3, NULL, NULL), ('withnull', NULL, NULL, NULL), ('extra', NULL, NULL, '{\"x\": [1]}')");
         $before = $this->rows($tgt);
 
-        $diffs   = (new StreamingMergeDiff($src, $tgt, $driver))->getKeylessDiff('log', ['msg', 'n', 'b', 'j']);
+        $diffs   = (new KeylessMergeDiff($src, $tgt, $driver))->getKeylessDiff('log', ['msg', 'n', 'b', 'j']);
         $dialect = $driver === 'pgsql' ? new PostgresDialect() : new MySQLDialect();
         $sql     = fn(string $dir) => array_map(fn($d) => ($d instanceof InsertData ? new InsertDataSQL($d, $dialect) : new DeleteDataSQL($d, $dialect))->{$dir}(), $diffs);
 
@@ -263,7 +264,7 @@ class StreamingMergeServerTest extends TestCase
 
         file_put_contents('/proc/self/clear_refs', '5');
         $before = self::rssKb('VmRSS');
-        $diff = (new StreamingMergeDiff($src, $tgt, $driver))->getKeylessDiff('ev', ['a', 'b']);
+        $diff = (new KeylessMergeDiff($src, $tgt, $driver))->getKeylessDiff('ev', ['a', 'b']);
         $grew = (self::rssKb('VmHWM') - $before) / 1024;
 
         $this->assertSame([], $diff, 'identical tables');

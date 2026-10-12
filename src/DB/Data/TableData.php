@@ -139,7 +139,7 @@ class TableData {
         if (array_diff($sourceColumns, $targetColumns) || array_diff($targetColumns, $sourceColumns)) {
             throw new DataException("Table `$table` has no key and different columns on each side; its rows cannot be matched");
         }
-        return (new StreamingMergeDiff($this->source, $this->target, $this->manager->getDriver()))
+        return (new KeylessMergeDiff($this->source, $this->target, $this->manager->getDriver()))
             ->getKeylessDiff($table, $sourceColumns);
     }
 
