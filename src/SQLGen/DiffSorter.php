@@ -18,6 +18,9 @@ class DiffSorter {
         "CreateSchema",
         // Before anything that may use one: a type, an operator class.
         "CreateExtension",
+        // A domain, a column or an index may be collated by one.
+        "CreateCollation",
+        "AlterCollation",
 
         "DropView",
         // Both depend on tables, so they go before any table is touched.
@@ -113,6 +116,7 @@ class DiffSorter {
         "DropCompositeType",
         "DropDomain",
         "DropEnum",
+        "DropCollation",
         // After everything that used it, before its schema.
         "DropExtension",
         "DropSchema",
@@ -133,6 +137,7 @@ class DiffSorter {
         // it (issue #238): the types first, and a routine a table's default,
         // constraint or index calls, so the tables and columns below can use
         // them...
+        "DropCollation",
         "DropEnum",
         "DropDomain",
         "DropCompositeType",
@@ -206,6 +211,10 @@ class DiffSorter {
         "CreateDomain",
         "CreateEnum",
         "CreateSequence",
+        // A changed collation is put back once the tables the UP created
+        // with it are gone: it cannot be replaced while a column uses it.
+        "AlterCollation",
+        "CreateCollation",
         "CreateExtension",
         "CreateSchema",
         // Last: after everything DOWN puts back.
