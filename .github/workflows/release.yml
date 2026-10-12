@@ -92,7 +92,7 @@ jobs:
   # linux-x64-musl / linux-arm64-musl → same runners, build inside Alpine container
   # darwin-x64 / darwin-arm64         → native macOS runners
   # win32-x64                          → native Windows x64 runner
-  #   (win32-arm64 is excluded — see matrix comment below)
+  #   (win32-arm64 reuses the x64 build — see the verify-win32-arm64 job)
   # ═══════════════════════════════════════════════════════════════════════════
   build-binary:
     name: Binary — ${{ matrix.target }}
@@ -143,10 +143,10 @@ jobs:
             artifact: dbdiff-darwin-arm64
 
           # ── Windows ───────────────────────────────────────────────────────
-          # win32-arm64 excluded: SPC hard-codes phpsdk-vs17-x64.bat which
-          # passes "x64_amd64" to vcvarsall.bat — invalid on ARM64 hosts.
-          # It also always downloads postgresql-16-windows-x64-binaries.zip
-          # regardless of runner arch.  Re-add once SPC gains ARM64 support.
+          # No win32-arm64 leg: SPC cannot build PHP for Windows ARM64 (it
+          # hard-codes the x64 SDK and x64 prebuilt libraries, and has no plans
+          # to support the target). verify-win32-arm64 below ships this x64
+          # build for Windows on ARM instead, once it has passed on ARM64.
           - target:   win32-x64
             # windows-latest rolled to windows-2025, where static-php-cli's
             # 7za|tar php-src extraction fails; pin to the last working image.
@@ -404,6 +404,46 @@ jobs:
           retention-days: 1
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2b — Windows ARM64
+  #
+  # Windows 11 on ARM runs x64 programs under its built-in emulation, so the
+  # x64 build is what Windows on ARM gets. This job proves it on a real ARM64
+  # machine — starts, has its drivers, diffs SQLite correctly — and only then
+  # re-uploads it as the win32-arm64 artifact the release and npm jobs use.
+  # ═══════════════════════════════════════════════════════════════════════════
+  verify-win32-arm64:
+    name: Binary — win32-arm64 (x64 build, verified on ARM64)
+    needs: build-binary
+    if: ${{ !cancelled() && needs.build-binary.result == 'success' }}
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dbdiff-win32-x64
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Smoke-test binary (Windows ARM64, x64 emulation)
+        shell: pwsh
+        run: |
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+            Write-Output "::error::expected an ARM64 runner, got $env:PROCESSOR_ARCHITECTURE"
+            exit 1
+          }
+          ./scripts/smoke-windows-binary.ps1 -Exe .\dbdiff.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbdiff-win32-arm64
+          path: dbdiff.exe
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # JOB 3 — Create GitHub Release + git tag
   #
   # Runs as soon as the PHAR succeeds, even if some binary builds failed.
@@ -412,12 +452,12 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   github-release:
     name: GitHub Release
-    needs: [build-phar, build-binary]
+    needs: [build-phar, build-binary, verify-win32-arm64]
     # Must check build-binary too. The matrix runs with fail-fast: false so that
     # one broken target does not cancel the rest, which means a partial build
     # completes "successfully" from the workflow's point of view. Gating only on
     # build-phar published v3.0.0-rc.5 with three platforms missing (#185).
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' && needs.verify-win32-arm64.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -497,10 +537,10 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   publish-npm:
     name: Publish npm packages
-    needs: [build-phar, build-binary, github-release]
+    needs: [build-phar, build-binary, verify-win32-arm64, github-release]
     # See the note on github-release above — build-binary must be checked here
     # too, or a partially built matrix still reaches the registries.
-    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' }}
+    if: ${{ !cancelled() && needs.build-phar.result == 'success' && needs.build-binary.result == 'success' && needs.verify-win32-arm64.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -567,6 +607,7 @@ jobs:
           copy_binary binaries/dbdiff-darwin-x64/dbdiff          packages/@dbdiff/cli-darwin-x64/dbdiff
           copy_binary binaries/dbdiff-darwin-arm64/dbdiff        packages/@dbdiff/cli-darwin-arm64/dbdiff
           copy_binary binaries/dbdiff-win32-x64/dbdiff.exe       packages/@dbdiff/cli-win32-x64/dbdiff.exe
+          copy_binary binaries/dbdiff-win32-arm64/dbdiff.exe     packages/@dbdiff/cli-win32-arm64/dbdiff.exe
           chmod +x packages/@dbdiff/cli-*/dbdiff || true
 
       # Last line of defence before anything reaches a registry. The job gate
@@ -576,17 +617,9 @@ jobs:
       # (#185). The copy step above only emits a ::warning:: in that case.
       - name: Verify every platform package has its binary
         run: |
-          # @dbdiff/cli-win32-arm64 is intentionally binary-less: SPC cannot
-          # build that target (see the matrix comment), so it ships as a
-          # PHAR-fallback skeleton and is exempt from this check.
-          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           missing=""
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
-            if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
-              echo "  ${pkg_name} — PHAR fallback, no binary expected"
-              continue
-            fi
             if [ -f "${pkg_dir}dbdiff" ] || [ -f "${pkg_dir}dbdiff.exe" ]; then
               echo "  ${pkg_name} — ok"
             else
@@ -615,17 +648,12 @@ jobs:
         continue-on-error: true
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           failed=0
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
             if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
-              if echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
-                echo "  No binary for ${pkg_name} — publishing as PHAR-fallback skeleton"
-              else
-                echo "::warning::No binary in ${pkg_dir} — skipping"
-                continue
-              fi
+              echo "::warning::No binary in ${pkg_dir} — skipping"
+              continue
             fi
             if npm view "${pkg_name}@${VERSION}" version &>/dev/null; then
               echo "  ${pkg_name}@${VERSION} already on registry — skipping"
@@ -692,13 +720,10 @@ jobs:
         continue-on-error: true
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          PHAR_FALLBACK_PKGS="@dbdiff/cli-win32-arm64"
           for pkg_dir in packages/@dbdiff/cli-*/; do
             pkg_name=$(node -e "console.log(require('./${pkg_dir}package.json').name)")
             if [ ! -f "${pkg_dir}dbdiff" ] && [ ! -f "${pkg_dir}dbdiff.exe" ]; then
-              if ! echo "$PHAR_FALLBACK_PKGS" | grep -qw "$pkg_name"; then
-                continue
-              fi
+              continue
             fi
             echo "Publishing ${pkg_name}@${VERSION} to GitHub Packages ..."
             npm publish "${pkg_dir}" --access public --tag "$NPM_TAG" 2>&1 || \

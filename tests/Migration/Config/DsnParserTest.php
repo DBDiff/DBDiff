@@ -103,6 +103,30 @@ class DsnParserTest extends TestCase
         $this->assertSame('/var/db.sqlite', $r['path']);
     }
 
+    /**
+     * A Windows drive path must reach PDO as it was written. A leading slash
+     * (/C:/data/app.db) is not a path Windows can open.
+     */
+    public function testSqliteWindowsDrivePathKeptOnWindows(): void
+    {
+        foreach ([
+            '/C:/data/app.db'      => 'C:/data/app.db',      // sqlite:///C:/data/app.db
+            'C:/data/app.db'       => 'C:/data/app.db',      // sqlite://C:/data/app.db
+            '/d:\\data\\app.db'    => 'd:\\data\\app.db',
+            'D:\\data\\app.db'     => 'D:\\data\\app.db',
+            './app.db'             => './app.db',
+            '/C:relative.db'       => '/C:relative.db',      // drive-relative: not a drive path we rewrite
+        ] as $raw => $expected) {
+            $this->assertSame($expected, DsnParser::resolveSqlitePath($raw, true), $raw);
+        }
+    }
+
+    public function testSqliteDriveLikePathUnchangedOffWindows(): void
+    {
+        $this->assertSame('/C:/data/app.db', DsnParser::resolveSqlitePath('/C:/data/app.db', false));
+        $this->assertSame('/C:/data/app.db', DsnParser::resolveSqlitePath('C:/data/app.db', false));
+    }
+
     public function testSqliteEmptyArrayKeysPresent(): void
     {
         $r = DsnParser::parse('sqlite:///tmp/test.db');

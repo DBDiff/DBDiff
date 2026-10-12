@@ -1,7 +1,7 @@
 {
   "name": "@dbdiff/cli-win32-arm64",
   "version": "2.0.0",
-  "description": "DBDiff CLI binary for Windows ARM64",
+  "description": "DBDiff CLI binary for Windows ARM64 (the x64 build, run by Windows 11's built-in x64 emulation)",
   "homepage": "https://github.com/DBDiff/DBDiff",
   "repository": {
     "type": "git",
