@@ -16,8 +16,12 @@ class MySQLAdapter implements DBAdapterInterface {
             'database'  => $db,
             'username'  => $server['user'],
             'password'  => $server['password'],
-            'charset'   => 'utf8',
-            'collation' => 'utf8_unicode_ci',
+            // utf8mb4, not utf8: MySQL's utf8 is utf8mb3, three bytes a
+            // character at most. Anything needing four — emoji, and many
+            // scripts and symbols outside the Basic Multilingual Plane — was
+            // read as '?', so a change between two of them went unseen.
+            'charset'   => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
         ];
     }
 
@@ -216,9 +220,17 @@ class MySQLAdapter implements DBAdapterInterface {
     private function fetchColMap(Connection $connection, string $db): array
     {
         $rows = $connection->select(
+            // Everything the full comparison reads from SHOW CREATE TABLE: a
+            // table differing only in a column's character set, collation,
+            // comment or generated expression hashed the same, and the
+            // pre-scan skipped it as unchanged.
             "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE,
                     COALESCE(COLUMN_DEFAULT, '') AS col_default,
-                    IS_NULLABLE, COALESCE(EXTRA, '') AS extra
+                    IS_NULLABLE, COALESCE(EXTRA, '') AS extra,
+                    COALESCE(CHARACTER_SET_NAME, '') AS charset,
+                    COALESCE(COLLATION_NAME, '') AS collation,
+                    COALESCE(COLUMN_COMMENT, '') AS comment,
+                    COALESCE(GENERATION_EXPRESSION, '') AS generation
              FROM INFORMATION_SCHEMA.COLUMNS
              WHERE TABLE_SCHEMA = ?
              ORDER BY TABLE_NAME, ORDINAL_POSITION",
@@ -228,7 +240,8 @@ class MySQLAdapter implements DBAdapterInterface {
         foreach ($rows as $row) {
             $map[$row['TABLE_NAME']][] =
                 $row['COLUMN_NAME'] . '|' . $row['COLUMN_TYPE'] . '|' .
-                $row['col_default']  . '|' . $row['IS_NULLABLE'] . '|' . $row['extra'];
+                $row['col_default']  . '|' . $row['IS_NULLABLE'] . '|' . $row['extra'] . '|' .
+                $row['charset'] . '|' . $row['collation'] . '|' . $row['comment'] . '|' . $row['generation'];
         }
         return $map;
     }

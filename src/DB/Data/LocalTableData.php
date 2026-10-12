@@ -93,7 +93,7 @@ class LocalTableData {
      *
      * SQLite only supports cross-database queries when the second file is
      * attached to the same connection.  MySQL-specific functions
-     * (CONVERT … USING utf8, CAST … AS CHAR CHARACTER SET utf8, SHA2) are
+     * (CONVERT … USING utf8mb4, CAST … AS CHAR CHARACTER SET utf8mb4, SHA2) are
      * replaced with SQLite-compatible equivalents.
      */
     private function getDiffSQLite(string $table, array $key): array
@@ -326,7 +326,7 @@ class LocalTableData {
                 if (in_array($el, $binaryCols)) {
                     return "HEX(`{$p}`.`{$el}`) as `{$el}`";
                 }
-                return "CONVERT(`{$p}`.`{$el}` USING utf8) as `{$el}`";
+                return "CONVERT(`{$p}`.`{$el}` USING utf8mb4) as `{$el}`";
             }, $arr);
         };
 
@@ -416,7 +416,7 @@ class LocalTableData {
                 if (in_array($el, $binaryCols)) {
                     return "HEX(IFNULL(`{$p}`.`{$el}`, ''))";
                 }
-                return "CAST(IFNULL(`{$p}`.`{$el}`, '\\0') AS CHAR CHARACTER SET utf8)";
+                return "CAST(IFNULL(`{$p}`.`{$el}`, '\\0') AS CHAR CHARACTER SET utf8mb4)";
             }, $arr);
         };
 
