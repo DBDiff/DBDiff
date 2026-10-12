@@ -37,6 +37,9 @@ use DBDiff\Diff\AlterSequence;
 use DBDiff\Diff\CreateCompositeType;
 use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\AlterCompositeType;
+use DBDiff\Diff\CreateCollation;
+use DBDiff\Diff\DropCollation;
+use DBDiff\Diff\AlterCollation;
 use DBDiff\Diff\CreateDomain;
 use DBDiff\Diff\DropDomain;
 use DBDiff\Diff\AlterDomain;
@@ -242,6 +245,12 @@ class DBSchema {
             // What the types and tables below may use: an extension's type or
             // operator class (an exclusion constraint's btree_gist).
             $extensions,
+            // What a column, a domain or an index may be collated by.
+            $this->diffNamedObjects(
+                PostgresObjectKinds::collations($source),
+                PostgresObjectKinds::collations($target),
+                CreateCollation::class, DropCollation::class, AlterCollation::class
+            ),
             // Like enums, a composite, a domain or a sequence can be referenced
             // by a column — by its type, or by a nextval() default — so
             // DiffSorter emits these ahead of the tables.

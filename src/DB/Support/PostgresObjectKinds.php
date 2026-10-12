@@ -151,6 +151,59 @@ final class PostgresObjectKinds {
      * rejects as "constraint already exists" and PG 18 as "redundant NOT NULL
      * constraint definition". typnotnull already carries it.
      */
+    /**
+     * The schema's collations, as [name => 'CREATE COLLATION ...'].
+     *
+     * A column, a domain or an index can name a collation of the schema
+     * being compared — a case-insensitive ICU collation, say. Without it the
+     * CREATE TABLE that uses it fails: 'collation "x" for encoding "UTF8"
+     * does not exist'. Read through to_jsonb because the columns moved
+     * between versions (an ICU locale is collcollate before PostgreSQL 15,
+     * colliculocale in 15 and 16, colllocale from 17; rules arrive in 16),
+     * and a collation must render the same on all of them, or two servers
+     * of different versions would differ by it.
+     */
+    public static function collations(Connection $connection): array {
+        $result = $connection->select(
+            "SELECT c.collname AS name, to_jsonb(c)::text AS spec
+               FROM pg_collation c
+               JOIN pg_namespace n ON n.oid = c.collnamespace
+              WHERE n.nspname = " . SchemaScope::literal($connection) . "
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_collation', 'c.oid') . "
+              ORDER BY c.collname"
+        );
+        $collations = [];
+        foreach ($result as $row) {
+            $row = (array) $row;
+            $collations[$row['name']] = self::renderCollation(
+                json_decode($row['spec'], true),
+                SchemaScope::name($connection, $row['name'])
+            );
+        }
+        return $collations;
+    }
+
+    /** `$name` arrives quoted, and qualified where it needs to be. */
+    private static function renderCollation(array $c, string $name): string {
+        $literal  = fn(string $v) => "'" . str_replace("'", "''", $v) . "'";
+        $provider = ['i' => 'icu', 'b' => 'builtin'][$c['collprovider']] ?? 'libc';
+        $options  = ["provider = $provider"];
+        if ($provider === 'libc' && $c['collcollate'] !== $c['collctype']) {
+            $options[] = 'lc_collate = ' . $literal((string) $c['collcollate']);
+            $options[] = 'lc_ctype = ' . $literal((string) $c['collctype']);
+        } else {
+            $locale    = $c['colllocale'] ?? $c['colliculocale'] ?? $c['collcollate'];
+            $options[] = 'locale = ' . $literal((string) $locale);
+        }
+        if (!empty($c['collicurules'])) {
+            $options[] = 'rules = ' . $literal($c['collicurules']);
+        }
+        if (($c['collisdeterministic'] ?? true) === false) {
+            $options[] = 'deterministic = false';
+        }
+        return 'CREATE COLLATION ' . $name . ' (' . implode(', ', $options) . ')';
+    }
+
     public static function domains(Connection $connection): array {
         $result = $connection->select(
             self::DOMAIN_SELECT . "

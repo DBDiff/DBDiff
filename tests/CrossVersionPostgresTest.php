@@ -32,6 +32,10 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         'check'   => "ALTER TABLE vt ADD CONSTRAINT c CHECK (status IN ('draft', 'active') AND a > b);",
         'policy'  => 'ALTER TABLE vt ENABLE ROW LEVEL SECURITY; CREATE POLICY p ON vt USING (a = 1 AND b = 2);',
         'index'   => 'CREATE INDEX i ON vt (id) WHERE a = 1 AND b = 2;',
+        // An ICU collation's locale moved between catalog columns (collcollate
+        // before 15, colliculocale in 15 and 16, colllocale from 17).
+        'collation' => "CREATE COLLATION vt_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
+                        ALTER TABLE vt ADD COLUMN folded text COLLATE vt_ci;",
         // A view recreated for nothing had its comments set again, which
         // read as comments changed although they were identical.
         'comments' => "CREATE VIEW vt_c AS SELECT vt.id, vt.name FROM vt WHERE vt.a = 1;
@@ -116,7 +120,7 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
     public function testARealChangeIsStillReported(string $kind): void
     {
         $source = $this->db("{$kind}_rs", self::BASE . self::KINDS[$kind]);
-        $target = $this->otherDb("{$kind}_rt", self::BASE . str_replace(['a = 1', 'a > 0', 'a > b'], ['a = 9', 'a > 9', 'a < b'], self::KINDS[$kind]));
+        $target = $this->otherDb("{$kind}_rt", self::BASE . str_replace(['a = 1', 'a > 0', 'a > b', 'ks-level2'], ['a = 9', 'a > 9', 'a < b', 'ks-level1'], self::KINDS[$kind]));
         $this->assertNotNull($this->upAcross($source, $target), "$kind: a real change was hidden as equivalent");
     }
 }
