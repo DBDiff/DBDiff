@@ -34,6 +34,15 @@ class StreamingMergeDiff
     /** Maximum PKs per batch-fetch query in Phase 2. */
     private const BATCH_SIZE = 500;
 
+    /**
+     * Up to about this many rows a side, a PostgreSQL table is hashed with a
+     * buffered query: faster than a cursor, and at roughly 90 bytes a row
+     * still well inside the memory limit. Larger tables, and tables the
+     * server has no row estimate for, are read through a cursor so memory
+     * stays flat. See RowStream and RowEstimate.
+     */
+    private const BUFFER_ROWS = 1_000_000;
+
     private Connection $source;
     private Connection $target;
     private string $driver;
@@ -195,54 +204,87 @@ class StreamingMergeDiff
         $orderBy  = implode(', ', $pkCols);
         $q        = $this->tableName($table);
 
+        [$src, $tgt] = $this->openStreams("SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}", $q, 'stream');
+        try {
+            return $this->mergeByKey($src, $tgt, $key);
+        } finally {
+            // Reverse order: on a shared connection the source owns the transaction.
+            $tgt->close();
+            $src->close();
+        }
+    }
+
+    /**
+     * `$sql` on both sides, read a batch at a time — see RowStream for why
+     * fetch() alone is not enough. A PostgreSQL table small enough to buffer
+     * keeps the faster buffered read.
+     *
+     * @return RowStream[] [source, target]; the caller closes them, target first.
+     */
+    private function openStreams(string $sql, string $table, string $name): array
+    {
         $srcPdo  = $this->source->getPdo();
         $tgtPdo  = $this->target->getPdo();
+        $shared  = $srcPdo === $tgtPdo;
+        $bounded = $this->driver !== 'pgsql'
+            || !RowEstimate::atMost($this->source, $table, self::BUFFER_ROWS)
+            || !RowEstimate::atMost($this->target, $table, self::BUFFER_ROWS);
 
-        $sql     = "SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}";
-        $srcStmt = $srcPdo->prepare($sql);
-        $srcStmt->execute();
-        $tgtStmt = $tgtPdo->prepare($sql);
-        $tgtStmt->execute();
+        $src = new RowStream($srcPdo, $this->driver, $sql, "{$name}_source", !$shared, $bounded);
+        try {
+            $tgt = new RowStream($tgtPdo, $this->driver, $sql, "{$name}_target", !$shared, $bounded);
+        } catch (\Throwable $e) {
+            $src->close();
+            throw $e;
+        }
+        return [$src, $tgt];
+    }
 
+    /**
+     * Walk two key-ordered `key…, _hash` streams together.
+     *
+     * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
+     */
+    private function mergeByKey(RowStream $src, RowStream $tgt, array $key): array
+    {
         $insertPKs = [];
         $deletePKs = [];
         $updatePKs = [];
 
-        $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-        $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
-
+        $srcRow = $src->fetch();
+        $tgtRow = $tgt->fetch();
         while ($srcRow !== false || $tgtRow !== false) {
-            if ($srcRow === false) {
-                // Source exhausted → remaining target rows are deletes
-                $deletePKs[] = Arr::only($tgtRow, $key);
-                $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
-            } elseif ($tgtRow === false) {
-                // Target exhausted → remaining source rows are inserts
+            $cmp = $this->nextInOrder($srcRow, $tgtRow, $key);
+            if ($cmp < 0) {
+                // Only the source has it
                 $insertPKs[] = Arr::only($srcRow, $key);
-                $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
+                $srcRow = $src->fetch();
+            } elseif ($cmp > 0) {
+                // Only the target has it
+                $deletePKs[] = Arr::only($tgtRow, $key);
+                $tgtRow = $tgt->fetch();
             } else {
-                $cmp = $this->comparePK($srcRow, $tgtRow, $key);
-                if ($cmp < 0) {
-                    $insertPKs[] = Arr::only($srcRow, $key);
-                    $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-                } elseif ($cmp > 0) {
-                    $deletePKs[] = Arr::only($tgtRow, $key);
-                    $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
-                } else {
-                    // PKs match — compare hashes
-                    if ($srcRow['_hash'] !== $tgtRow['_hash']) {
-                        $updatePKs[] = Arr::only($srcRow, $key);
-                    }
-                    $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-                    $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
+                // Both have it — compare hashes
+                if ($srcRow['_hash'] !== $tgtRow['_hash']) {
+                    $updatePKs[] = Arr::only($srcRow, $key);
                 }
+                $srcRow = $src->fetch();
+                $tgtRow = $tgt->fetch();
             }
         }
-
-        $srcStmt->closeCursor();
-        $tgtStmt->closeCursor();
-
         return [$insertPKs, $deletePKs, $updatePKs];
+    }
+
+    /** Which row comes first: negative the source's, positive the target's, 0 the same key. An exhausted side comes last. */
+    private function nextInOrder(array|false $srcRow, array|false $tgtRow, array $key): int
+    {
+        if ($srcRow === false) {
+            return 1;
+        }
+        if ($tgtRow === false) {
+            return -1;
+        }
+        return $this->comparePK($srcRow, $tgtRow, $key);
     }
 
     /**

@@ -43,6 +43,8 @@
             <directory suffix="PostgresTest.php">.</directory>
             <!-- Named for the thing it tests rather than the suffix. -->
             <file>./PostgresObjectKindsTest.php</file>
+            <!-- PostgreSQL and MySQL both; the Unit suite runs it in the MySQL jobs. -->
+            <file>./DataDiff/StreamingMergeServerTest.php</file>
         </testsuite>
         <!-- The shared corpus from @akal/pg-conformance (npm ci first).
              Its own suite so it runs once per PostgreSQL version, not once
