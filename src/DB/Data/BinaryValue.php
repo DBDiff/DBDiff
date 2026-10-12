@@ -36,10 +36,21 @@ class BinaryValue
     /**
      * Format "quoted_column = value" for WHERE / SET clauses.
      */
-    public static function formatCondition(string $quotedColumn, $value, ?SQLDialectInterface $dialect = null): string
+    public static function formatCondition(string $quotedColumn, $value, ?SQLDialectInterface $dialect = null, bool $asText = false): string
     {
         if ($value === null) {
             return "$quotedColumn IS NULL";
+        }
+        // A type with no plain `=` against the value as read. PostgreSQL json,
+        // xml, point… have no `=` at all, and are matched by their text, the
+        // form the value was read in. MySQL JSON compares unequal to a string,
+        // and its text is not stable either (Dolt reads `{"a":1}` but casts to
+        // `{"a": 1}`), so it is compared as JSON.
+        if ($asText && $dialect instanceof \DBDiff\SQLGen\Dialect\MySQLDialect) {
+            return "$quotedColumn = CAST(" . self::formatSQL($value, $dialect) . ' AS JSON)';
+        }
+        if ($asText && $dialect instanceof \DBDiff\SQLGen\Dialect\PostgresDialect) {
+            $quotedColumn = "$quotedColumn::text";
         }
         return "$quotedColumn = " . self::formatSQL($value, $dialect);
     }

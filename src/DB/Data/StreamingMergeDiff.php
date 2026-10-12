@@ -41,11 +41,11 @@ class StreamingMergeDiff
      * server has no row estimate for, are read through a cursor so memory
      * stays flat. See RowStream and RowEstimate.
      */
-    private const BUFFER_ROWS = 1_000_000;
+    protected const BUFFER_ROWS = 1_000_000;
 
-    private Connection $source;
-    private Connection $target;
-    private string $driver;
+    protected Connection $source;
+    protected Connection $target;
+    protected string $driver;
 
     public function __construct(Connection $source, Connection $target, string $driver)
     {
@@ -221,7 +221,7 @@ class StreamingMergeDiff
      *
      * @return RowStream[] [source, target]; the caller closes them, target first.
      */
-    private function openStreams(string $sql, string $table, string $name): array
+    protected function openStreams(string $sql, string $table, string $name): array
     {
         $srcPdo  = $this->source->getPdo();
         $tgtPdo  = $this->target->getPdo();
@@ -396,7 +396,7 @@ class StreamingMergeDiff
      * A table as the queries name it: in PostgreSQL, in the schema being
      * compared, which both connections share.
      */
-    private function tableName(string $table): string
+    protected function tableName(string $table): string
     {
         return $this->driver === 'pgsql' ? SchemaScope::name($this->source, $table) : $this->quoteIdentifier($table);
     }

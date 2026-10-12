@@ -14,12 +14,17 @@
  * (DB_HOST_POSTGRES, DB_HOST), and skips a driver whose server is not set.
  */
 
+use DBDiff\DB\Data\KeylessMergeDiff;
 use DBDiff\DB\Data\StreamingMergeDiff;
 use DBDiff\Diff\DeleteData;
 use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Params\DefaultParams;
 use DBDiff\Params\ParamsFactory;
+use DBDiff\SQLGen\Dialect\MySQLDialect;
+use DBDiff\SQLGen\Dialect\PostgresDialect;
+use DBDiff\SQLGen\DiffToSQL\DeleteDataSQL;
+use DBDiff\SQLGen\DiffToSQL\InsertDataSQL;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\StatementPrepared;
@@ -201,6 +206,101 @@ class StreamingMergeServerTest extends TestCase
         $this->assertSame(['10', 'a', 'apple'], $keys(InsertData::class), 'rows only the source has');
         $this->assertSame(['zz'], $keys(DeleteData::class), 'rows only the target has');
         $this->assertSame(['Cherry'], $keys(UpdateData::class), 'rows that differ');
+    }
+
+    /**
+     * A table with no key is matched on whole rows. Its diff used to page
+     * through both tables with ORDER BY every column — which a json column
+     * cannot be ordered by, so such a table could not be diffed at all — and
+     * held every row of both in memory, running out of the 1G limit at about
+     * half a million rows. A json value also has no `=`, so the DELETE that
+     * removes one copy of a row has to match it by its text.
+     *
+     * The generated UP must turn the target into the source, duplicates and
+     * NULLs included, and the DOWN must turn it back.
+     *
+     * @dataProvider drivers
+     */
+    public function testAKeylessTableRoundTrips(string $driver): void
+    {
+        $this->server($driver);
+        [$blob, $json] = $driver === 'pgsql' ? ['bytea', 'json'] : ['varbinary(8)', 'json'];
+        $bin = fn(string $hex) => $driver === 'pgsql' ? "'\\x$hex'" : "X'$hex'";
+        $ddl = "CREATE TABLE log (msg varchar(20), n int, b $blob, j $json)";
+        $dup = "('dup', 1, {$bin('00ff')}, '{\"a\": 1}')";
+        [$src, $tgt] = $this->keylessPair('kl', $ddl,
+            "$dup, ('a', 2, NULL, NULL), ('withnull', NULL, NULL, NULL), ('quote''s', 5, {$bin('01')}, '[1, 2]')",
+            "$dup, $dup, $dup, ('b', 3, NULL, NULL), ('withnull', NULL, NULL, NULL), ('extra', NULL, NULL, '{\"x\": [1]}')");
+        $before = $this->rows($tgt);
+
+        $diffs   = (new KeylessMergeDiff($src, $tgt, $driver))->getKeylessDiff('log', ['msg', 'n', 'b', 'j']);
+        $dialect = $driver === 'pgsql' ? new PostgresDialect() : new MySQLDialect();
+        $sql     = fn(string $dir) => array_map(fn($d) => ($d instanceof InsertData ? new InsertDataSQL($d, $dialect) : new DeleteDataSQL($d, $dialect))->{$dir}(), $diffs);
+
+        foreach ($sql('getUp') as $statement) {
+            $tgt->unprepared($statement);
+        }
+        $this->assertSame($this->rows($src), $this->rows($tgt), 'UP makes the target the source');
+
+        foreach (array_reverse($sql('getDown')) as $statement) {
+            $tgt->unprepared($statement);
+        }
+        $this->assertSame($before, $this->rows($tgt), 'DOWN restores the target');
+    }
+
+    /** @dataProvider drivers */
+    public function testAKeylessTableDoesNotHoldItsRowsInMemory(string $driver): void
+    {
+        if (!is_writable('/proc/self/clear_refs')) {
+            $this->markTestSkipped('needs Linux /proc to reset and read peak memory');
+        }
+        $this->server($driver);
+        $rows = 400_000;
+        $this->skipOnDolt();
+        $fill = $driver === 'pgsql'
+            ? "INSERT INTO ev SELECT g, 'event-' || g FROM generate_series(1, $rows) g"
+            : "INSERT INTO ev SELECT n, CONCAT('event-', n) FROM " . self::mysqlSeries($rows);
+        [$src, $tgt] = $this->keylessPair('klmem', 'CREATE TABLE ev (a int, b varchar(20))', null, null, $fill);
+
+        file_put_contents('/proc/self/clear_refs', '5');
+        $before = self::rssKb('VmRSS');
+        $diff = (new KeylessMergeDiff($src, $tgt, $driver))->getKeylessDiff('ev', ['a', 'b']);
+        $grew = (self::rssKb('VmHWM') - $before) / 1024;
+
+        $this->assertSame([], $diff, 'identical tables');
+        // Holding both tables' rows, as the keyless diff did, this was hundreds of MB.
+        $this->assertLessThan(25, $grew, sprintf('peak memory grew %.1f MB over %d rows a side', $grew, $rows));
+    }
+
+    /** Two databases holding table `$ddl`, filled by VALUES lists or by `$fill`. @return Connection[] */
+    private function keylessPair(string $case, string $ddl, ?string $sourceRows, ?string $targetRows, ?string $fill = null): array
+    {
+        $conns = [];
+        foreach (['s' => $sourceRows, 't' => $targetRows] as $side => $rows) {
+            $db = "dbdiff_sm_{$case}_{$side}";
+            $this->driver === 'pgsql'
+                ? $this->admin->exec("DROP DATABASE IF EXISTS $db WITH (FORCE)")
+                : $this->admin->exec("DROP DATABASE IF EXISTS `$db`");
+            $this->admin->exec($this->driver === 'pgsql' ? "CREATE DATABASE $db" : "CREATE DATABASE `$db`");
+            $this->created[] = $db;
+            $this->capsule->addConnection($this->config + ['database' => $db], $db);
+            $conn = $this->capsule->getConnection($db);
+            $table = preg_match('/CREATE TABLE (\w+)/', $ddl, $m) ? $m[1] : 't';
+            $conn->unprepared("$ddl;" . ($rows !== null ? " INSERT INTO $table VALUES $rows;" : '') . ($fill ? " $fill;" : ''));
+            $conns[] = $conn;
+        }
+        return $conns;
+    }
+
+    /** Every row of `log`, as text, sorted: a multiset that counts duplicates. */
+    private function rows(Connection $conn): array
+    {
+        $text = $this->driver === 'pgsql'
+            ? "concat_ws('|', msg, coalesce(n::text, 'N'), coalesce(encode(b, 'hex'), 'N'), coalesce(j::text, 'N'))"
+            : "concat_ws('|', msg, ifnull(n, 'N'), ifnull(hex(b), 'N'), ifnull(cast(j as char), 'N'))";
+        $rows = array_map(fn($r) => array_values((array) $r)[0], $conn->select("SELECT $text AS r FROM log"));
+        sort($rows);
+        return $rows;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

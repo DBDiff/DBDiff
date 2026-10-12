@@ -134,41 +134,13 @@ class TableData {
      * nothing in the migration, which read as no difference at all.
      */
     private function getKeylessDiff($table): array {
-        Logger::info("Table `$table` has no key: comparing whole rows");
         $sourceColumns = $this->manager->getDataColumns('source', $table);
         $targetColumns = $this->manager->getDataColumns('target', $table);
         if (array_diff($sourceColumns, $targetColumns) || array_diff($targetColumns, $sourceColumns)) {
             throw new DataException("Table `$table` has no key and different columns on each side; its rows cannot be matched");
         }
-
-        $count = function (string $side) use ($table): array {
-            $rows = [];
-            $iterator = $this->getIterator($side, $table);
-            while ($iterator->hasNext()) {
-                foreach ($iterator->next(ArrayDiff::$size) as $row) {
-                    ksort($row);
-                    $id = serialize($row);
-                    $rows[$id] ??= ['row' => $row, 'n' => 0];
-                    $rows[$id]['n']++;
-                }
-            }
-            return $rows;
-        };
-        $source = $count('source');
-        $target = $count('target');
-
-        $diffSequence = [];
-        foreach ($source as $id => ['row' => $row, 'n' => $n]) {
-            for ($i = $target[$id]['n'] ?? 0; $i < $n; $i++) {
-                $diffSequence[] = new InsertData($table, self::rowDiff($row, [], new \Diff\DiffOp\DiffOpAdd($row)));
-            }
-        }
-        foreach ($target as $id => ['row' => $row, 'n' => $n]) {
-            for ($i = $source[$id]['n'] ?? 0; $i < $n; $i++) {
-                $diffSequence[] = new DeleteData($table, self::rowDiff($row, [], new \Diff\DiffOp\DiffOpRemove($row)));
-            }
-        }
-        return $diffSequence;
+        return (new KeylessMergeDiff($this->source, $this->target, $this->manager->getDriver()))
+            ->getKeylessDiff($table, $sourceColumns);
     }
 
     private function checkKeys($table, $sourceKey, $targetKey) {

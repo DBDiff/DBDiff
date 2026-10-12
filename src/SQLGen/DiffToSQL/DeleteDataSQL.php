@@ -20,8 +20,9 @@ class DeleteDataSQL implements SQLGenInterface {
         $t    = $this->dialect->qualify($this->obj->table);
         $d    = $this->dialect;
         $keys = $this->obj->diff['keys'];
-        array_walk($keys, function (&$value, $column) use ($d) {
-            $value = BinaryValue::formatCondition($d->quote($column), $value, $d);
+        $text = $this->obj->diff['textMatch'] ?? [];
+        array_walk($keys, function (&$value, $column) use ($d, $text) {
+            $value = BinaryValue::formatCondition($d->quote($column), $value, $d, in_array($column, $text, true));
         });
         // A table with no key is matched on every column; delete one of
         // possibly several identical rows, not all of them.
