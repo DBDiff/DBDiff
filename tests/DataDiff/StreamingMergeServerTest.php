@@ -154,6 +154,54 @@ class StreamingMergeServerTest extends TestCase
         $this->assertLessThan(25, $grew, sprintf('peak memory grew %.1f MB over %d rows a side', $grew, $rows));
     }
 
+    /**
+     * The merge walks both tables in key order, so its comparison must agree
+     * with the server's ORDER BY. A text key under a linguistic collation
+     * (PostgreSQL's en_US, MySQL's utf8mb4_0900_ai_ci) sorts 'a' before 'B',
+     * where a byte comparison puts 'B' first, and '10' sorts before '9' as
+     * text but after it as a number. Either way the merge fell out of step and
+     * reported rows both sides have as a DELETE and an INSERT — harmless to
+     * the row, but an ON DELETE CASCADE child went with it.
+     *
+     * @dataProvider drivers
+     */
+    public function testTextKeysAreMatchedHoweverTheServerSortsThem(string $driver): void
+    {
+        $this->server($driver);
+        $collate = '';
+        if ($driver === 'pgsql') {
+            // The database default may be C, which sorts as bytes and hides the bug.
+            $icu = $this->admin->query("SELECT 1 FROM pg_collation WHERE collname = 'und-x-icu'")->fetchColumn();
+            $collate = $icu ? ' COLLATE "und-x-icu"' : '';
+        }
+        $type = $driver === 'pgsql' ? "text$collate" : 'varchar(20)';
+        $conns = [];
+        foreach (['s' => "('a',1),('B',2),('c',3),('9',4),('10',5),('apple',6),('Cherry',7),('e',8),('f',9)",
+                  't' => "('B',2),('c',3),('9',4),('Cherry',70),('e',8),('f',9),('zz',10)"] as $side => $rows) {
+            $db = "dbdiff_sm_text_{$side}";
+            $this->driver === 'pgsql'
+                ? $this->admin->exec("DROP DATABASE IF EXISTS $db WITH (FORCE)")
+                : $this->admin->exec("DROP DATABASE IF EXISTS `$db`");
+            $this->admin->exec($this->driver === 'pgsql' ? "CREATE DATABASE $db" : "CREATE DATABASE `$db`");
+            $this->created[] = $db;
+            $this->capsule->addConnection($this->config + ['database' => $db], $db);
+            $conn = $this->capsule->getConnection($db);
+            $conn->unprepared("CREATE TABLE t (code $type PRIMARY KEY, v int); INSERT INTO t VALUES $rows;");
+            $conns[] = $conn;
+        }
+
+        $diffs = (new StreamingMergeDiff($conns[0], $conns[1], $driver))->getDiff('t', ['code'], ['code', 'v'], ['code', 'v']);
+        $keys = function (string $class) use ($diffs): array {
+            $k = array_map(fn($d) => (string) $d->diff['keys']['code'], array_filter($diffs, fn($d) => $d instanceof $class));
+            sort($k);
+            return array_values($k);
+        };
+
+        $this->assertSame(['10', 'a', 'apple'], $keys(InsertData::class), 'rows only the source has');
+        $this->assertSame(['zz'], $keys(DeleteData::class), 'rows only the target has');
+        $this->assertSame(['Cherry'], $keys(UpdateData::class), 'rows that differ');
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private function merge(Connection $src, Connection $tgt): array

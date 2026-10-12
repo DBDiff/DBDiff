@@ -439,6 +439,39 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
         $this->assertEquals(0, $merge->comparePK(['a' => '1', 'b' => '1'], ['a' => '1', 'b' => '1'], ['a', 'b']));
     }
 
+    /**
+     * A text key holding numbers sorts as text in the database ('10' before
+     * '9'). The merge compared any numeric-looking pair as numbers, fell out
+     * of step, and reported rows both sides have as a delete and an insert.
+     */
+    public function testATextKeyHoldingNumbersIsMatchedAsText(): void
+    {
+        $ddl = 'CREATE TABLE t (code TEXT PRIMARY KEY, v INTEGER)';
+        $src = $this->createConnection('txtnum_src', $ddl, ["INSERT INTO t VALUES ('10', 1), ('9', 2), ('a', 3)"]);
+        $tgt = $this->createConnection('txtnum_tgt', $ddl, ["INSERT INTO t VALUES ('9', 2), ('a', 3)"]);
+
+        $diffs = (new StreamingMergeDiff($src, $tgt, 'sqlite'))->getDiff('t', ['code'], ['code', 'v'], ['code', 'v']);
+
+        $this->assertCount(1, $diffs, 'only the row the target lacks');
+        $this->assertInstanceOf(InsertData::class, $diffs[0]);
+        $this->assertSame('10', (string) $diffs[0]->diff['keys']['code']);
+    }
+
+    public function testComparePKFollowsTheKeyTypeWhenGiven(): void
+    {
+        $merge = new StreamingMergeDiff(
+            $this->createConnection('pkt_src', 'CREATE TABLE t (id TEXT PRIMARY KEY)'),
+            $this->createConnection('pkt_tgt', 'CREATE TABLE t (id TEXT PRIMARY KEY)'),
+            'sqlite'
+        );
+
+        // A text key compares byte by byte, as the database sorts it…
+        $this->assertLessThan(0, $merge->comparePK(['id' => '10'], ['id' => '9'], ['id'], []));
+        $this->assertLessThan(0, $merge->comparePK(['id' => 'B'], ['id' => 'a'], ['id'], []));
+        // …a numeric one as a number.
+        $this->assertGreaterThan(0, $merge->comparePK(['id' => '10'], ['id' => '9'], ['id'], ['id']));
+    }
+
     // ── Test: buildHashExpression generates valid SQL ──────────────────────
 
     public function testBuildHashExpressionSQLite(): void

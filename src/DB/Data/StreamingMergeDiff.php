@@ -201,7 +201,7 @@ class StreamingMergeDiff
         $hashExpr = $this->buildHashExpression($hashCols);
         $pkCols   = $this->quoteCols($key);
         $pkSelect = implode(', ', $pkCols);
-        $orderBy  = implode(', ', $pkCols);
+        [$orderBy, $numeric] = $this->keyOrder($table, $key);
         $q        = $this->tableName($table);
 
         $srcPdo  = $this->source->getPdo();
@@ -239,7 +239,7 @@ class StreamingMergeDiff
                     $insertPKs[] = Arr::only($srcRow, $key);
                     $srcRow = $src->fetch();
                 } else {
-                    $cmp = $this->comparePK($srcRow, $tgtRow, $key);
+                    $cmp = $this->comparePK($srcRow, $tgtRow, $key, $numeric);
                     if ($cmp < 0) {
                         $insertPKs[] = Arr::only($srcRow, $key);
                         $srcRow = $src->fetch();
@@ -333,23 +333,113 @@ class StreamingMergeDiff
 
     /**
      * Compare two PK tuples for merge-sort ordering.
-     * Returns < 0 if $a < $b, 0 if equal, > 0 if $a > $b.
+     *
+     * Must order keys exactly as the hash query's ORDER BY does, or the merge
+     * falls out of step and reports rows both sides have as an insert and a
+     * delete. `$numeric` names the key columns compared as numbers (see
+     * keyOrder()); every other column compares byte by byte. Without it, a
+     * value that looks numeric is compared as a number — fine for an integer
+     * key, wrong for a text key holding '9' and '10'.
+     *
+     * @param string[]|null $numeric
      */
-    public function comparePK(array $a, array $b, array $key): int
+    public function comparePK(array $a, array $b, array $key, ?array $numeric = null): int
     {
         foreach ($key as $col) {
             $av = $a[$col] ?? '';
             $bv = $b[$col] ?? '';
-            if (is_numeric($av) && is_numeric($bv)) {
-                $cmp = $av <=> $bv;
-            } else {
-                $cmp = strcmp((string) $av, (string) $bv);
-            }
+            $asNumber = $numeric === null ? is_numeric($av) && is_numeric($bv) : in_array($col, $numeric, true);
+            $cmp = $asNumber ? $av <=> $bv : strcmp((string) $av, (string) $bv);
             if ($cmp !== 0) {
                 return $cmp;
             }
         }
         return 0;
+    }
+
+    /**
+     * The hash query's ORDER BY, and which key columns comparePK() treats as
+     * numbers — chosen together so the database and the merge agree.
+     *
+     * A numeric key sorts natively and compares as a number. Anything else
+     * sorts by the bytes of its text, which is what strcmp() compares: under
+     * a linguistic collation (en_US, utf8mb4_0900_ai_ci) the database puts
+     * 'a' before 'B' where strcmp() puts 'B' first. A uuid keeps its native
+     * order, which is already its hex text's, so its index still serves.
+     *
+     * @return array{0: string, 1: string[]}
+     */
+    private function keyOrder(string $table, array $key): array
+    {
+        $kinds   = $this->keyKinds($table, $key);
+        $numeric = [];
+        $terms   = [];
+        foreach ($key as $col) {
+            $quoted = $this->quoteIdentifier($col);
+            $kind   = $kinds[$col] ?? 'text';
+            if ($kind === 'number') {
+                $numeric[] = $col;
+                $terms[]   = $quoted;
+            } elseif ($kind === 'uuid') {
+                $terms[] = $quoted;
+            } else {
+                $terms[] = match ($this->driver) {
+                    'pgsql'  => "({$quoted})::text COLLATE \"C\"",
+                    'mysql'  => "CAST({$quoted} AS BINARY)",
+                    default  => "CAST({$quoted} AS TEXT) COLLATE BINARY",
+                };
+            }
+        }
+        return [implode(', ', $terms), $numeric];
+    }
+
+    /**
+     * 'number', 'uuid' or 'text' for each key column, from the source's
+     * catalog. A column it cannot classify is 'text', the order that is
+     * always consistent with strcmp().
+     *
+     * @return array<string, string>
+     */
+    private function keyKinds(string $table, array $key): array
+    {
+        $kinds = [];
+        try {
+            if ($this->driver === 'pgsql') {
+                $rows = $this->source->select(
+                    "SELECT a.attname AS name, t.typcategory AS category, t.typname AS type
+                       FROM pg_attribute a
+                       JOIN pg_type d ON d.oid = a.atttypid
+                       -- A domain sorts as its base type.
+                       JOIN pg_type t ON t.oid = CASE WHEN d.typtype = 'd' THEN d.typbasetype ELSE d.oid END
+                      WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped",
+                    [$this->tableName($table)]
+                );
+                foreach ($rows as $row) {
+                    $row = (array) $row;
+                    $kinds[$row['name']] = $row['category'] === 'N' ? 'number' : ($row['type'] === 'uuid' ? 'uuid' : 'text');
+                }
+            } elseif ($this->driver === 'mysql') {
+                $rows = $this->source->select(
+                    'SELECT COLUMN_NAME AS name, DATA_TYPE AS type FROM information_schema.COLUMNS
+                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    [$table]
+                );
+                $numberTypes = ['tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint', 'decimal', 'numeric', 'float', 'double', 'real', 'year'];
+                foreach ($rows as $row) {
+                    $row = array_change_key_case((array) $row, CASE_LOWER);
+                    $kinds[$row['name']] = in_array(strtolower($row['type']), $numberTypes, true) ? 'number' : 'text';
+                }
+            } else {
+                foreach ($this->source->select('PRAGMA table_info(' . $this->quoteIdentifier($table) . ')') as $row) {
+                    $row = (array) $row;
+                    // SQLite's own affinity rules: a declared type naming INT, REAL, FLOA, DOUB, NUM or DEC.
+                    $kinds[$row['name']] = preg_match('/INT|REAL|FLOA|DOUB|NUM|DEC/i', (string) $row['type']) ? 'number' : 'text';
+                }
+            }
+        } catch (\Throwable $e) {
+            Logger::info("Could not read key column types for `$table`; ordering keys as text: " . $e->getMessage());
+        }
+        return array_intersect_key($kinds, array_flip($key));
     }
 
     /**
