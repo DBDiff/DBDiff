@@ -141,6 +141,7 @@ class StreamingMergeServerTest extends TestCase
             $this->markTestSkipped('needs Linux /proc to reset and read peak memory');
         }
         $this->server($driver);
+        $this->skipOnDolt();
         $rows = 400_000;
         [$src, $tgt] = $this->pair('memory', $rows);
 
@@ -222,14 +223,42 @@ class StreamingMergeServerTest extends TestCase
                 $conn->unprepared("CREATE TABLE t (id int PRIMARY KEY, name text, amount numeric(10,2), note text) WITH (autovacuum_enabled = false);
                     INSERT INTO t SELECT g, 'name-' || g, g / 7.0, CASE WHEN g % 3 = 0 THEN NULL ELSE 'n' || g END FROM generate_series(1, $rows) g;");
             } else {
-                $conn->unprepared("SET SESSION cte_max_recursion_depth = " . ($rows + 1));
                 $conn->unprepared("CREATE TABLE t (id int PRIMARY KEY, name varchar(64), amount decimal(10,2), note varchar(64));
-                    INSERT INTO t WITH RECURSIVE g(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $rows)
-                    SELECT n, CONCAT('name-', n), n / 7.0, IF(n % 3 = 0, NULL, CONCAT('n', n)) FROM g;");
+                    INSERT INTO t SELECT n, CONCAT('name-', n), n / 7.0, IF(n % 3 = 0, NULL, CONCAT('n', n)) FROM " . self::mysqlSeries($rows) . ";");
             }
             $conns[] = $conn;
         }
         return $conns;
+    }
+
+    /**
+     * `n` from 1 to `$rows`, as a derived table. A cross join of digits
+     * rather than a recursive CTE: Dolt ignores cte_max_recursion_depth and
+     * stops a recursive CTE long before the rows the memory tests need.
+     */
+    private static function mysqlSeries(int $rows): string
+    {
+        $digits = '(SELECT 0 d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4'
+            . ' UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)';
+        $places = max(1, (int) ceil(log10($rows + 1)));
+        $terms = $from = [];
+        for ($i = 0; $i < $places; $i++) {
+            $terms[] = "d$i.d * " . (10 ** $i);
+            $from[]  = "$digits d$i";
+        }
+        return '(SELECT ' . implode(' + ', $terms) . ' + 1 AS n FROM ' . implode(' CROSS JOIN ', $from)
+            . ' HAVING n <= ' . $rows . ') series';
+    }
+
+    /** Dolt speaks MySQL's protocol; a 400k-row load there is slow and proves nothing new. */
+    private function skipOnDolt(): void
+    {
+        try {
+            $this->admin->query('SELECT dolt_version()');
+        } catch (\PDOException) {
+            return;
+        }
+        $this->markTestSkipped('memory is measured against MySQL; Dolt shares the code path');
     }
 
     private function exec(Connection $conn, string $sql): void
