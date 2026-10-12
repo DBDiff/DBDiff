@@ -76,13 +76,19 @@ class RowStream
     /** The next row, or false when there are no more. */
     public function fetch(): array|false
     {
-        // Called once per row of each table: the common case comes first.
-        if ($this->position < $this->size) {
-            return $this->batch[$this->position++];
-        }
         if ($this->statement !== null) {
             return $this->statement->fetch(PDO::FETCH_ASSOC);
         }
+        // Called once per row of each table: the common case is one comparison.
+        if ($this->position === $this->size && !$this->nextBatch()) {
+            return false;
+        }
+        return $this->batch[$this->position++];
+    }
+
+    /** Fetch the cursor's next batch. False when there is none. */
+    private function nextBatch(): bool
+    {
         if ($this->exhausted || $this->fetch === null) {
             return false;
         }
@@ -92,7 +98,7 @@ class RowStream
         $this->size = count($this->batch);
         $this->position = 0;
         $this->exhausted = $this->size < self::BATCH;
-        return $this->size > 0 ? $this->batch[$this->position++] : false;
+        return $this->size > 0;
     }
 
     /** Release the cursor, transaction or connection mode this stream took. Safe to call twice. */

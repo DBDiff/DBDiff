@@ -39,7 +39,7 @@ class StreamingMergeDiff
      * buffered query: faster than a cursor, and at roughly 90 bytes a row
      * still well inside the memory limit. Larger tables, and tables the
      * server has no row estimate for, are read through a cursor so memory
-     * stays flat. See RowStream and fitsInMemory().
+     * stays flat. See RowStream and RowEstimate.
      */
     private const BUFFER_ROWS = 1_000_000;
 
@@ -204,105 +204,87 @@ class StreamingMergeDiff
         $orderBy  = implode(', ', $pkCols);
         $q        = $this->tableName($table);
 
-        $srcPdo  = $this->source->getPdo();
-        $tgtPdo  = $this->target->getPdo();
-        $shared  = $srcPdo === $tgtPdo;
-
-        $sql = "SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}";
-        // Read a batch at a time: see RowStream for why fetch() alone is not enough.
-        $bounded = $this->driver !== 'pgsql'
-            || !$this->fitsInMemory($this->source, $q)
-            || !$this->fitsInMemory($this->target, $q);
-        $src = new RowStream($srcPdo, $this->driver, $sql, 'stream_source', !$shared, $bounded);
+        [$src, $tgt] = $this->openStreams("SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}", $q, 'stream');
         try {
-            $tgt = new RowStream($tgtPdo, $this->driver, $sql, 'stream_target', !$shared, $bounded);
-        } catch (\Throwable $e) {
-            $src->close();
-            throw $e;
-        }
-
-        $insertPKs = [];
-        $deletePKs = [];
-        $updatePKs = [];
-
-        try {
-            $srcRow = $src->fetch();
-            $tgtRow = $tgt->fetch();
-
-            while ($srcRow !== false || $tgtRow !== false) {
-                if ($srcRow === false) {
-                    // Source exhausted → remaining target rows are deletes
-                    $deletePKs[] = Arr::only($tgtRow, $key);
-                    $tgtRow = $tgt->fetch();
-                } elseif ($tgtRow === false) {
-                    // Target exhausted → remaining source rows are inserts
-                    $insertPKs[] = Arr::only($srcRow, $key);
-                    $srcRow = $src->fetch();
-                } else {
-                    $cmp = $this->comparePK($srcRow, $tgtRow, $key);
-                    if ($cmp < 0) {
-                        $insertPKs[] = Arr::only($srcRow, $key);
-                        $srcRow = $src->fetch();
-                    } elseif ($cmp > 0) {
-                        $deletePKs[] = Arr::only($tgtRow, $key);
-                        $tgtRow = $tgt->fetch();
-                    } else {
-                        // PKs match — compare hashes
-                        if ($srcRow['_hash'] !== $tgtRow['_hash']) {
-                            $updatePKs[] = Arr::only($srcRow, $key);
-                        }
-                        $srcRow = $src->fetch();
-                        $tgtRow = $tgt->fetch();
-                    }
-                }
-            }
+            return $this->mergeByKey($src, $tgt, $key);
         } finally {
             // Reverse order: on a shared connection the source owns the transaction.
             $tgt->close();
             $src->close();
         }
-
-        return [$insertPKs, $deletePKs, $updatePKs];
     }
 
     /**
-     * Whether `$table` (already quoted) holds few enough rows to buffer.
+     * `$sql` on both sides, read a batch at a time — see RowStream for why
+     * fetch() alone is not enough. A PostgreSQL table small enough to buffer
+     * keeps the faster buffered read.
      *
-     * Estimated the way PostgreSQL's planner does: the rows per page seen by
-     * the last ANALYZE or VACUUM, times the pages the table has now — so a
-     * table that has grown since is not mistaken for its old size. With no
-     * statistics yet (reltuples -1, or no pages counted), or for anything but
-     * a plain table or materialised view (a partitioned parent has no pages
-     * of its own), there is no estimate, and the table is not assumed small.
+     * @return RowStream[] [source, target]; the caller closes them, target first.
      */
-    private function fitsInMemory(Connection $conn, string $table): bool
+    private function openStreams(string $sql, string $table, string $name): array
     {
+        $srcPdo  = $this->source->getPdo();
+        $tgtPdo  = $this->target->getPdo();
+        $shared  = $srcPdo === $tgtPdo;
+        $bounded = $this->driver !== 'pgsql'
+            || !RowEstimate::atMost($this->source, $table, self::BUFFER_ROWS)
+            || !RowEstimate::atMost($this->target, $table, self::BUFFER_ROWS);
+
+        $src = new RowStream($srcPdo, $this->driver, $sql, "{$name}_source", !$shared, $bounded);
         try {
-            $row = $conn->selectOne(
-                "SELECT c.relkind AS kind, c.reltuples::float8 AS tuples, c.relpages AS pages,
-                        pg_relation_size(c.oid) / current_setting('block_size')::int AS current_pages
-                   FROM pg_class c WHERE c.oid = to_regclass(?)",
-                [$table]
-            );
-        } catch (\Throwable) {
-            return false;
+            $tgt = new RowStream($tgtPdo, $this->driver, $sql, "{$name}_target", !$shared, $bounded);
+        } catch (\Throwable $e) {
+            $src->close();
+            throw $e;
         }
-        if ($row === null) {
-            return false;
+        return [$src, $tgt];
+    }
+
+    /**
+     * Walk two key-ordered `key…, _hash` streams together.
+     *
+     * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
+     */
+    private function mergeByKey(RowStream $src, RowStream $tgt, array $key): array
+    {
+        $insertPKs = [];
+        $deletePKs = [];
+        $updatePKs = [];
+
+        $srcRow = $src->fetch();
+        $tgtRow = $tgt->fetch();
+        while ($srcRow !== false || $tgtRow !== false) {
+            $cmp = $this->nextInOrder($srcRow, $tgtRow, $key);
+            if ($cmp < 0) {
+                // Only the source has it
+                $insertPKs[] = Arr::only($srcRow, $key);
+                $srcRow = $src->fetch();
+            } elseif ($cmp > 0) {
+                // Only the target has it
+                $deletePKs[] = Arr::only($tgtRow, $key);
+                $tgtRow = $tgt->fetch();
+            } else {
+                // Both have it — compare hashes
+                if ($srcRow['_hash'] !== $tgtRow['_hash']) {
+                    $updatePKs[] = Arr::only($srcRow, $key);
+                }
+                $srcRow = $src->fetch();
+                $tgtRow = $tgt->fetch();
+            }
         }
-        // DBDiff's connections fetch arrays, a plain Laravel one objects.
-        $row = (array) $row;
-        if (!in_array($row['kind'], ['r', 'm'], true)) {
-            return false;
+        return [$insertPKs, $deletePKs, $updatePKs];
+    }
+
+    /** Which row comes first: negative the source's, positive the target's, 0 the same key. An exhausted side comes last. */
+    private function nextInOrder(array|false $srcRow, array|false $tgtRow, array $key): int
+    {
+        if ($srcRow === false) {
+            return 1;
         }
-        if ((int) $row['current_pages'] === 0) {
-            return true;
+        if ($tgtRow === false) {
+            return -1;
         }
-        if ((int) $row['pages'] <= 0 || (float) $row['tuples'] < 0) {
-            return false;
-        }
-        $estimate = (float) $row['tuples'] / (int) $row['pages'] * (int) $row['current_pages'];
-        return $estimate <= self::BUFFER_ROWS;
+        return $this->comparePK($srcRow, $tgtRow, $key);
     }
 
     /**
