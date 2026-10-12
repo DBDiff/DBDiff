@@ -201,12 +201,12 @@ class StreamingMergeDiff
         $hashExpr = $this->buildHashExpression($hashCols);
         $pkCols   = $this->quoteCols($key);
         $pkSelect = implode(', ', $pkCols);
-        $orderBy  = implode(', ', $pkCols);
+        [$orderBy, $numeric] = (new KeyOrder($this->source, $this->driver))->of($table, $this->tableName($table), $key);
         $q        = $this->tableName($table);
 
         [$src, $tgt] = $this->openStreams("SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}", $q, 'stream');
         try {
-            return $this->mergeByKey($src, $tgt, $key);
+            return $this->mergeByKey($src, $tgt, $key, $numeric);
         } finally {
             // Reverse order: on a shared connection the source owns the transaction.
             $tgt->close();
@@ -241,11 +241,12 @@ class StreamingMergeDiff
     }
 
     /**
-     * Walk two key-ordered `key…, _hash` streams together.
+     * Walk two key-ordered `key…, _hash` streams together. `$numeric`:
+     * the key columns compared as numbers, see KeyOrder.
      *
      * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
      */
-    private function mergeByKey(RowStream $src, RowStream $tgt, array $key): array
+    private function mergeByKey(RowStream $src, RowStream $tgt, array $key, array $numeric): array
     {
         $insertPKs = [];
         $deletePKs = [];
@@ -254,7 +255,7 @@ class StreamingMergeDiff
         $srcRow = $src->fetch();
         $tgtRow = $tgt->fetch();
         while ($srcRow !== false || $tgtRow !== false) {
-            $cmp = $this->nextInOrder($srcRow, $tgtRow, $key);
+            $cmp = $this->nextInOrder($srcRow, $tgtRow, $key, $numeric);
             if ($cmp < 0) {
                 // Only the source has it
                 $insertPKs[] = Arr::only($srcRow, $key);
@@ -276,7 +277,7 @@ class StreamingMergeDiff
     }
 
     /** Which row comes first: negative the source's, positive the target's, 0 the same key. An exhausted side comes last. */
-    private function nextInOrder(array|false $srcRow, array|false $tgtRow, array $key): int
+    private function nextInOrder(array|false $srcRow, array|false $tgtRow, array $key, array $numeric): int
     {
         if ($srcRow === false) {
             return 1;
@@ -284,7 +285,7 @@ class StreamingMergeDiff
         if ($tgtRow === false) {
             return -1;
         }
-        return $this->comparePK($srcRow, $tgtRow, $key);
+        return $this->comparePK($srcRow, $tgtRow, $key, $numeric);
     }
 
     /**
@@ -315,18 +316,23 @@ class StreamingMergeDiff
 
     /**
      * Compare two PK tuples for merge-sort ordering.
-     * Returns < 0 if $a < $b, 0 if equal, > 0 if $a > $b.
+     *
+     * Must order keys exactly as the hash query's ORDER BY does, or the merge
+     * falls out of step and reports rows both sides have as an insert and a
+     * delete. `$numeric` names the key columns compared as numbers (see
+     * KeyOrder); every other column compares byte by byte. Without it, a
+     * value that looks numeric is compared as a number — fine for an integer
+     * key, wrong for a text key holding '9' and '10'.
+     *
+     * @param string[]|null $numeric
      */
-    public function comparePK(array $a, array $b, array $key): int
+    public function comparePK(array $a, array $b, array $key, ?array $numeric = null): int
     {
         foreach ($key as $col) {
             $av = $a[$col] ?? '';
             $bv = $b[$col] ?? '';
-            if (is_numeric($av) && is_numeric($bv)) {
-                $cmp = $av <=> $bv;
-            } else {
-                $cmp = strcmp((string) $av, (string) $bv);
-            }
+            $asNumber = $numeric === null ? is_numeric($av) && is_numeric($bv) : in_array($col, $numeric, true);
+            $cmp = $asNumber ? $av <=> $bv : strcmp((string) $av, (string) $bv);
             if ($cmp !== 0) {
                 return $cmp;
             }
