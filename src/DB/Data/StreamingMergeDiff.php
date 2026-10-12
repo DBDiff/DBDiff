@@ -34,6 +34,15 @@ class StreamingMergeDiff
     /** Maximum PKs per batch-fetch query in Phase 2. */
     private const BATCH_SIZE = 500;
 
+    /**
+     * Up to about this many rows a side, a PostgreSQL table is hashed with a
+     * buffered query: faster than a cursor, and at roughly 90 bytes a row
+     * still well inside the memory limit. Larger tables, and tables the
+     * server has no row estimate for, are read through a cursor so memory
+     * stays flat. See RowStream and fitsInMemory().
+     */
+    private const BUFFER_ROWS = 1_000_000;
+
     private Connection $source;
     private Connection $target;
     private string $driver;
@@ -197,52 +206,103 @@ class StreamingMergeDiff
 
         $srcPdo  = $this->source->getPdo();
         $tgtPdo  = $this->target->getPdo();
+        $shared  = $srcPdo === $tgtPdo;
 
-        $sql     = "SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}";
-        $srcStmt = $srcPdo->prepare($sql);
-        $srcStmt->execute();
-        $tgtStmt = $tgtPdo->prepare($sql);
-        $tgtStmt->execute();
+        $sql = "SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}";
+        // Read a batch at a time: see RowStream for why fetch() alone is not enough.
+        $bounded = $this->driver !== 'pgsql'
+            || !$this->fitsInMemory($this->source, $q)
+            || !$this->fitsInMemory($this->target, $q);
+        $src = new RowStream($srcPdo, $this->driver, $sql, 'stream_source', !$shared, $bounded);
+        try {
+            $tgt = new RowStream($tgtPdo, $this->driver, $sql, 'stream_target', !$shared, $bounded);
+        } catch (\Throwable $e) {
+            $src->close();
+            throw $e;
+        }
 
         $insertPKs = [];
         $deletePKs = [];
         $updatePKs = [];
 
-        $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-        $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
+        try {
+            $srcRow = $src->fetch();
+            $tgtRow = $tgt->fetch();
 
-        while ($srcRow !== false || $tgtRow !== false) {
-            if ($srcRow === false) {
-                // Source exhausted → remaining target rows are deletes
-                $deletePKs[] = Arr::only($tgtRow, $key);
-                $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
-            } elseif ($tgtRow === false) {
-                // Target exhausted → remaining source rows are inserts
-                $insertPKs[] = Arr::only($srcRow, $key);
-                $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-            } else {
-                $cmp = $this->comparePK($srcRow, $tgtRow, $key);
-                if ($cmp < 0) {
-                    $insertPKs[] = Arr::only($srcRow, $key);
-                    $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-                } elseif ($cmp > 0) {
+            while ($srcRow !== false || $tgtRow !== false) {
+                if ($srcRow === false) {
+                    // Source exhausted → remaining target rows are deletes
                     $deletePKs[] = Arr::only($tgtRow, $key);
-                    $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
+                    $tgtRow = $tgt->fetch();
+                } elseif ($tgtRow === false) {
+                    // Target exhausted → remaining source rows are inserts
+                    $insertPKs[] = Arr::only($srcRow, $key);
+                    $srcRow = $src->fetch();
                 } else {
-                    // PKs match — compare hashes
-                    if ($srcRow['_hash'] !== $tgtRow['_hash']) {
-                        $updatePKs[] = Arr::only($srcRow, $key);
+                    $cmp = $this->comparePK($srcRow, $tgtRow, $key);
+                    if ($cmp < 0) {
+                        $insertPKs[] = Arr::only($srcRow, $key);
+                        $srcRow = $src->fetch();
+                    } elseif ($cmp > 0) {
+                        $deletePKs[] = Arr::only($tgtRow, $key);
+                        $tgtRow = $tgt->fetch();
+                    } else {
+                        // PKs match — compare hashes
+                        if ($srcRow['_hash'] !== $tgtRow['_hash']) {
+                            $updatePKs[] = Arr::only($srcRow, $key);
+                        }
+                        $srcRow = $src->fetch();
+                        $tgtRow = $tgt->fetch();
                     }
-                    $srcRow = $srcStmt->fetch(\PDO::FETCH_ASSOC);
-                    $tgtRow = $tgtStmt->fetch(\PDO::FETCH_ASSOC);
                 }
             }
+        } finally {
+            // Reverse order: on a shared connection the source owns the transaction.
+            $tgt->close();
+            $src->close();
         }
 
-        $srcStmt->closeCursor();
-        $tgtStmt->closeCursor();
-
         return [$insertPKs, $deletePKs, $updatePKs];
+    }
+
+    /**
+     * Whether `$table` (already quoted) holds few enough rows to buffer.
+     *
+     * Estimated the way PostgreSQL's planner does: the rows per page seen by
+     * the last ANALYZE or VACUUM, times the pages the table has now — so a
+     * table that has grown since is not mistaken for its old size. With no
+     * statistics yet (reltuples -1, or no pages counted), or for anything but
+     * a plain table or materialised view (a partitioned parent has no pages
+     * of its own), there is no estimate, and the table is not assumed small.
+     */
+    private function fitsInMemory(Connection $conn, string $table): bool
+    {
+        try {
+            $row = $conn->selectOne(
+                "SELECT c.relkind AS kind, c.reltuples::float8 AS tuples, c.relpages AS pages,
+                        pg_relation_size(c.oid) / current_setting('block_size')::int AS current_pages
+                   FROM pg_class c WHERE c.oid = to_regclass(?)",
+                [$table]
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        if ($row === null) {
+            return false;
+        }
+        // DBDiff's connections fetch arrays, a plain Laravel one objects.
+        $row = (array) $row;
+        if (!in_array($row['kind'], ['r', 'm'], true)) {
+            return false;
+        }
+        if ((int) $row['current_pages'] === 0) {
+            return true;
+        }
+        if ((int) $row['pages'] <= 0 || (float) $row['tuples'] < 0) {
+            return false;
+        }
+        $estimate = (float) $row['tuples'] / (int) $row['pages'] * (int) $row['current_pages'];
+        return $estimate <= self::BUFFER_ROWS;
     }
 
     /**
