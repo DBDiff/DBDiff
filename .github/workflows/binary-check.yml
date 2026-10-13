@@ -307,8 +307,10 @@ jobs:
           ln -s "$(pwd)/packages/@dbdiff/cli-linux-x64-musl" node_modules/@dbdiff/cli-linux-x64-musl
           expect() { grep -q '^DBDiff ' <<< "$1" || { echo "::error::$2: $1"; exit 1; }; echo "ok: $2"; }
 
-          # Alpine with the musl package, as npm installs it there.
-          expect "$(docker run --rm -v "$PWD:/w" -w /w node:22-alpine node packages/@dbdiff/cli/bin/dbdiff.js --version 2>&1)" "Alpine, musl package"
+          # Alpine with the musl package, as npm installs it there. Mounted at
+          # the same path, so node_modules' absolute symlinks still resolve.
+          docker pull -q node:22-alpine >/dev/null
+          expect "$(docker run --rm -v "$PWD:$PWD" -w "$PWD" node:22-alpine node packages/@dbdiff/cli/bin/dbdiff.js --version 2>&1)" "Alpine, musl package"
           # glibc with only the musl package: the static musl build runs too.
           expect "$(node packages/@dbdiff/cli/bin/dbdiff.js --version 2>&1)" "glibc, musl package only"
           # A binary unpacked without its executable bit is made runnable.
