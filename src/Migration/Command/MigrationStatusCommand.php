@@ -25,6 +25,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'migration:status', description: 'Show applied vs pending migration status')]
 class MigrationStatusCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void

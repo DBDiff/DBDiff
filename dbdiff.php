@@ -42,6 +42,12 @@ $app->addCommands([
 // `server1.db1` was rejected as an unknown namespace; an argument shaped like
 // `server.db:server.db` that is not a command gets `diff` put in front of it.
 $app->setDefaultCommand('diff');
+// The last line of defence: a PHP error outside any command is reported as
+// Symfony reports an exception, not dumped. Commands report their own — see
+// ReportsErrors.
+if (method_exists($app, 'setCatchErrors')) {
+    $app->setCatchErrors(true);
+}
 
 $app->run(new \Symfony\Component\Console\Input\ArgvInput(
     \DBDiff\Params\LegacyInvocation::withDiff($_SERVER['argv'], fn(string $name) => $app->has($name))

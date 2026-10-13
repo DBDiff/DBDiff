@@ -23,6 +23,7 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 #[AsCommand(name: 'migration:repair', description: 'Remove failed migration entries so they can be retried')]
 class MigrationRepairCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void
