@@ -27,6 +27,22 @@ class AlterView {
      */
     public ?array $privileges = null;
 
+    /**
+     * Whether CREATE OR REPLACE VIEW can put the new definition in place, by
+     * direction — see ViewReplacementPlan.
+     *
+     * @var array{up?: bool, down?: bool}
+     */
+    public array $inPlace = [];
+
+    /**
+     * What has to stand aside while the view is dropped and created again,
+     * by direction: `drop` and `recreate` dependant sets, the `skip` keys
+     * another diff creates later, and the view's own `triggers` to put back
+     * — see ViewReplacementPlan.
+     */
+    public array $replacement = [];
+
     public $sourceDefinition;
     public $targetDefinition;
 

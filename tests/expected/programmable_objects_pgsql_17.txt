@@ -22,8 +22,7 @@ $function$;
 CREATE VIEW "product_names" AS SELECT id,
     name
    FROM products;
-DROP VIEW IF EXISTS "expensive_products";
-CREATE VIEW "expensive_products" AS SELECT id,
+CREATE OR REPLACE VIEW "expensive_products" AS SELECT id,
     name,
     price
    FROM products

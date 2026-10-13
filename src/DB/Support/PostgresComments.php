@@ -108,6 +108,25 @@ final class PostgresComments
                 || $diff instanceof AlterDomain || $diff instanceof AlterCompositeType) {
                 $relations[$diff->name] = true;
             }
+            // What a replaced view's bracket drops and puts back — see
+            // ViewReplacementPlan.
+            if ($diff instanceof AlterView || $diff instanceof AlterMatView) {
+                foreach ($diff->replacement as $replacement) {
+                    foreach ($replacement['triggers'] as $trigger) {
+                        $keys["trigger|{$diff->name}.{$trigger['name']}"] = true;
+                    }
+                    foreach ($replacement['recreate']['views'] ?? [] as $view) {
+                        $keys['view|' . $view['name']] = true;
+                        $relations[$view['name']] = true;
+                        foreach ($view['triggers'] ?? [] as $trigger) {
+                            $keys["trigger|{$view['name']}.{$trigger['name']}"] = true;
+                        }
+                    }
+                    foreach ($replacement['recreate']['policies'] ?? [] as $policy) {
+                        $keys["policy|{$policy['table']}.{$policy['name']}"] = true;
+                    }
+                }
+            }
         }
         return [$keys, $relations];
     }
