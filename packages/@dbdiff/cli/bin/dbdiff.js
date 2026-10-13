@@ -22,57 +22,73 @@ const PLATFORM_PACKAGES = {
 };
 
 /**
- * Returns true when the current Linux system is musl-based (e.g. Alpine).
- * Checks /proc/version and ldd output — both are available on Alpine.
+ * Whether this Linux uses musl (Alpine) rather than glibc.
+ *
+ * Node reports the glibc it runs on, and nothing on musl — the check
+ * detect-libc relies on. This used to read /proc/version, which in a
+ * container describes the host's kernel, and `ldd --version`, which on
+ * Alpine exits non-zero: execSync threw, the answer was "glibc", and every
+ * Alpine install — every node:alpine image — fell back to PHP.
  */
 function isMusl() {
-  // Fast path: check /proc/version which contains "musl" on Alpine kernels
+  const fs = require('fs');
   try {
-    const fs = require('fs');
-    const procVersion = fs.readFileSync('/proc/version', 'utf8');
-    if (procVersion.toLowerCase().includes('musl')) return true;
+    if (process.report) {
+      process.report.excludeNetwork = true; // skip the slow network lookups
+      const header = process.report.getReport().header;
+      if (header) return !header.glibcVersionRuntime;
+    }
   } catch {
-    // /proc/version may be absent in some minimal environments
+    // fall through to the filesystem
   }
-
-  // Fallback: ask ldd
   try {
-    const { execSync } = require('child_process');
-    const ldd = execSync('ldd --version 2>&1', { encoding: 'utf8', timeout: 2000 });
-    return ldd.toLowerCase().includes('musl');
+    if (fs.existsSync('/etc/alpine-release')) return true;
+    return fs.readdirSync('/lib').some((name) => name.startsWith('ld-musl-'));
   } catch {
     return false;
   }
 }
 
-function getPlatformKey() {
+function getPlatformKeys() {
   const platform = process.platform; // 'linux', 'darwin', 'win32'
   const arch = process.arch;         // 'x64', 'arm64'
-  let key = `${platform}-${arch}`;
+  if (platform !== 'linux') return [`${platform}-${arch}`];
 
-  // On Linux, distinguish musl (Alpine) from glibc (Ubuntu/Debian/RHEL)
-  if (platform === 'linux' && isMusl()) {
-    key = `linux-${arch}-musl`;
-  }
-
-  return key;
+  // Both Linux builds are fully static, so either runs anywhere: prefer the
+  // one built for this libc, and take the other if only it was installed —
+  // npm installs by the libc it detects, which need not agree with ours.
+  const glibc = `linux-${arch}`;
+  const musl = `linux-${arch}-musl`;
+  return isMusl() ? [musl, glibc] : [glibc, musl];
 }
 
 function getBinaryPath(pkg) {
+  const fs = require('fs');
   const binaryName = process.platform === 'win32' ? 'dbdiff.exe' : 'dbdiff';
   try {
     const pkgDir = path.dirname(require.resolve(`${pkg}/package.json`));
     const binPath = path.join(pkgDir, binaryName);
     // Return null when the platform package is installed but contains no binary
     // (can happen if a platform build failed during release).
-    return require('fs').existsSync(binPath) ? binPath : null;
+    if (!fs.existsSync(binPath)) return null;
+    // An archive tool that drops permissions (some unzip implementations,
+    // bundles copied across filesystems) leaves the binary unrunnable.
+    if (process.platform !== 'win32') {
+      try {
+        fs.accessSync(binPath, fs.constants.X_OK);
+      } catch {
+        fs.chmodSync(binPath, 0o755);
+      }
+    }
+    return binPath;
   } catch {
     return null;
   }
 }
 
-const key = getPlatformKey();
-const pkg = PLATFORM_PACKAGES[key] ?? null;
+const keys = getPlatformKeys();
+const candidates = keys.map((key) => PLATFORM_PACKAGES[key]).filter(Boolean);
+const pkg = candidates[0] ?? null;
 
 if (!pkg) {
   process.stderr.write(
@@ -82,7 +98,7 @@ if (!pkg) {
   process.exit(1);
 }
 
-const binaryPath = getBinaryPath(pkg);
+const binaryPath = candidates.map(getBinaryPath).find(Boolean) ?? null;
 
 // If no native binary is available, fall back to the PHAR bundled in this
 // package and run it with system PHP.  DBDiff targets PHP developers so php
