@@ -45,63 +45,91 @@ use Illuminate\Database\Connection;
  * down.
  */
 final class ViewReplacementPlan {
+    /** What (re)creates a view, a policy or a trigger in each direction. */
+    private const CREATES = [
+        'up' => [
+            'views'    => [CreateView::class, AlterView::class, CreateMatView::class, AlterMatView::class],
+            'onTables' => [CreatePolicy::class, AlterPolicy::class, CreateTrigger::class, AlterTrigger::class],
+        ],
+        'down' => [
+            'views'    => [DropView::class, AlterView::class, DropMatView::class, AlterMatView::class],
+            'onTables' => [DropPolicy::class, AlterPolicy::class, DropTrigger::class, AlterTrigger::class],
+        ],
+    ];
+
+    private string $scope;
+
+    /** @var array<string, array{source: ?array, target: ?array}> each changed view, as each side has it */
+    private array $read = [];
+
+    /** @var array{up: array<string, true>, down: array<string, true>} views that must not be replaced in place */
+    private array $forced = ['up' => [], 'down' => []];
+
+    /** @param array<int, object> $diffs */
+    private function __construct(private array $diffs, private Connection $source, private Connection $target) {
+        $this->scope = SchemaScope::of($source);
+    }
 
     /** @param array<int, object> $diffs */
     public static function apply(array $diffs, Connection $source, Connection $target): void {
-        $views = array_values(array_filter($diffs, fn($d) => $d instanceof AlterView || $d instanceof AlterMatView));
-        if ($views === []) {
-            return;
+        $views = array_values(array_filter($diffs, [self::class, 'isView']));
+        if ($views !== []) {
+            (new self($diffs, $source, $target))->run($views);
         }
-        $scope = SchemaScope::of($source);
-        // Planned again over every schema once each has been on its own —
-        // see MultiSchemaDiff.
+    }
+
+    /** @param array<int, AlterView|AlterMatView> $views */
+    private function run(array $views): void {
         foreach ($views as $diff) {
+            // Planned again over every schema once each has been on its own —
+            // see MultiSchemaDiff.
             $diff->replacement = [];
             if ($diff instanceof AlterView) {
                 $diff->inPlace = [];
             }
+            $this->read[$this->key($diff)] = [
+                'source' => self::read($this->source, $diff),
+                'target' => self::read($this->target, $diff),
+            ];
         }
+        $late = $this->lateCreates();
+        $this->order(array_merge($views, array_column($late, 'diff')), $late);
 
-        $read = [];
-        foreach ($views as $diff) {
-            $read[self::key($diff, $scope)] = ['source' => self::read($source, $diff), 'target' => self::read($target, $diff)];
-        }
-        $late = self::lateCreates($diffs, $read, $source, $scope);
-        self::order(array_merge($views, array_column($late, 'diff')), $read, $late, $scope);
-
-        $forced = ['up' => self::droppedByColumnChange($diffs), 'down' => []];
-        $sorter = new DiffSorter();
+        $this->forced['up'] = self::droppedByColumnChange($this->diffs);
         // The UP runs against the target as it is and leads to the source;
         // the DOWN the other way round.
-        foreach (['up' => ['target', 'source'], 'down' => ['source', 'target']] as $direction => [$from, $to]) {
-            $sorted = $sorter->sort($diffs, $direction);
-            foreach ($sorted as $position => $diff) {
-                $isView = $diff instanceof AlterView || $diff instanceof AlterMatView;
-                if (!$isView || ($direction === 'down' && $diff->downHandledElsewhere)) {
-                    continue;
-                }
-                $sides = $read[self::key($diff, $scope)];
-                if ($sides[$from] !== null && $sides[$to] !== null) {
-                    self::plan($diff, $direction, $sides[$from], $sides[$to], $sorted, $position, $forced, $scope);
-                }
+        $this->planDirection('up', 'target', 'source');
+        $this->planDirection('down', 'source', 'target');
+
+        $this->leaveToViews($views);
+    }
+
+    private function planDirection(string $direction, string $from, string $to): void {
+        $sorted = (new DiffSorter())->sort($this->diffs, $direction);
+        foreach ($sorted as $position => $diff) {
+            if (!self::isView($diff) || ($direction === 'down' && $diff->downHandledElsewhere)) {
+                continue;
+            }
+            $sides = $this->read[$this->key($diff)];
+            if ($sides[$from] !== null && $sides[$to] !== null) {
+                $this->plan($diff, $direction, $sides[$from], $sides[$to],
+                    array_slice($sorted, 0, $position), array_slice($sorted, $position + 1));
             }
         }
-
-        self::leaveToViews($diffs, $views, $scope);
     }
 
     /**
      * Put one changed view in place in one direction: in place when it can,
      * otherwise with what reads it dropped around it.
      *
-     * @param array $have     the view as the migration finds it
-     * @param array $want     the view as the migration leaves it
-     * @param array $sorted   every diff, in the order this direction runs them
-     * @param array $forced   views that must not be replaced in place, by direction
+     * @param array $have    the view as the migration finds it
+     * @param array $want    the view as the migration leaves it
+     * @param array $before  the diffs this direction runs before it
+     * @param array $after   and after it
      */
-    private static function plan(object $diff, string $direction, array $have, array $want, array $sorted, int $position, array &$forced, string $scope): void {
-        $key = self::key($diff, $scope);
-        $earlier = $direction === 'down' ? self::revertedBefore(array_slice($sorted, 0, $position), $key, $want, $scope) : [];
+    private function plan(object $diff, string $direction, array $have, array $want, array $before, array $after): void {
+        $key = $this->key($diff);
+        $earlier = $direction === 'down' ? $this->revertedBefore($before, $key, $want) : [];
         // What reads the view and is reverted before it would read its old
         // columns too soon: it only comes off there, and the bracket below
         // puts it back.
@@ -114,14 +142,14 @@ final class ViewReplacementPlan {
         }
         if ($diff instanceof AlterView) {
             $diff->inPlace[$direction] = self::extendsColumns($want['columns'], $have['columns'])
-                && !isset($forced[$direction][$key])
+                && !isset($this->forced[$direction][$key])
                 && $earlier === [];
             if ($diff->inPlace[$direction]) {
                 return;
             }
         }
 
-        $later = self::createdAfter(array_slice($sorted, $position + 1), $direction, $scope);
+        $later = $this->createdAfter($after, $direction);
         // Whatever reads the view on either side: one the change stops
         // reading still does until its own diff runs.
         $drop = ColumnDependantPlan::mergeDependants($have['dependants'], $want['dependants']);
@@ -137,7 +165,7 @@ final class ViewReplacementPlan {
         // A changed view this drops is gone by the time its own diff runs,
         // so that diff has to create it whole.
         foreach ($drop['views'] as $view) {
-            $forced[$direction][$view['schema'] . '.' . $view['name']] = true;
+            $this->forced[$direction][$view['schema'] . '.' . $view['name']] = true;
         }
     }
 
@@ -147,18 +175,16 @@ final class ViewReplacementPlan {
      *
      * @return array<int, AlterPolicy|AlterTrigger|AlterMatView>
      */
-    private static function revertedBefore(array $before, string $key, array $want, string $scope): array {
+    private function revertedBefore(array $before, string $key, array $want): array {
         $reads = ColumnDependantPlan::keysOf($want['dependants']);
         foreach ($want['triggers'] as $trigger) {
             $reads[$key . '.' . $trigger['name']] = true;
         }
-        return array_values(array_filter($before, function ($diff) use ($reads, $scope) {
-            if ($diff instanceof AlterMatView) {
-                return !$diff->downHandledElsewhere && isset($reads[self::key($diff, $scope)]);
-            }
-            return ($diff instanceof AlterPolicy || $diff instanceof AlterTrigger)
-                && empty($diff->downDropOnly)
-                && isset($reads[($diff->schema ?? $scope) . '.' . $diff->table . '.' . $diff->name]);
+        return array_values(array_filter($before, fn($diff) => match (true) {
+            $diff instanceof AlterMatView => !$diff->downHandledElsewhere && isset($reads[$this->key($diff)]),
+            $diff instanceof AlterPolicy, $diff instanceof AlterTrigger
+                => empty($diff->downDropOnly) && isset($reads[$this->tableKey($diff)]),
+            default => false,
         }));
     }
 
@@ -169,21 +195,20 @@ final class ViewReplacementPlan {
      *
      * @return array<string, array{diff: CreateView, dependants: array}>
      */
-    private static function lateCreates(array $diffs, array $read, Connection $source, string $scope): array {
+    private function lateCreates(): array {
         $reading = [];
-        foreach ($read as $sides) {
+        foreach ($this->read as $sides) {
             foreach ($sides['source']['dependants']['views'] ?? [] as $view) {
                 $reading[$view['schema'] . '.' . $view['name']] = true;
             }
         }
         $late = [];
-        foreach ($diffs as $diff) {
-            $key = $diff instanceof CreateView ? self::key($diff, $scope) : null;
-            if ($key !== null && isset($reading[$key])) {
+        foreach ($this->diffs as $diff) {
+            if ($diff instanceof CreateView && isset($reading[$this->key($diff)])) {
                 $diff->late = true;
-                $late[$key] = [
+                $late[$this->key($diff)] = [
                     'diff'       => $diff,
-                    'dependants' => PostgresColumnDependants::ofRelation($source, $diff->schema ?? $scope, $diff->name),
+                    'dependants' => PostgresColumnDependants::ofRelation($this->source, $diff->schema ?? $this->scope, $diff->name),
                 ];
             }
         }
@@ -197,39 +222,49 @@ final class ViewReplacementPlan {
      *
      * @param array<int, object> $nodes
      */
-    private static function order(array $nodes, array $read, array $late, string $scope): void {
+    private function order(array $nodes, array $late): void {
         $readers = [];
-        foreach ($read as $key => $sides) {
-            foreach ($sides as $side) {
-                foreach ($side['dependants']['views'] ?? [] as $view) {
+        $sets = array_merge(
+            array_map(fn($sides) => [$sides['source']['dependants'] ?? [], $sides['target']['dependants'] ?? []], $this->read),
+            array_map(fn($create) => [$create['dependants']], $late)
+        );
+        foreach ($sets as $key => $dependantSets) {
+            foreach ($dependantSets as $dependants) {
+                foreach ($dependants['views'] ?? [] as $view) {
                     $readers[$key][] = $view['schema'] . '.' . $view['name'];
                 }
             }
         }
-        foreach ($late as $key => $create) {
-            foreach ($create['dependants']['views'] as $view) {
-                $readers[$key][] = $view['schema'] . '.' . $view['name'];
-            }
-        }
 
-        $rank = [];
-        foreach ($nodes as $diff) {
-            $rank[self::key($diff, $scope)] = 0;
+        $rank = array_fill_keys(array_map(fn($diff) => $this->key($diff), $nodes), 0);
+        // One pass per level at most; the bound keeps a cycle across the two
+        // sides from looping.
+        $passes = 0;
+        while ($passes++ <= count($nodes) && self::raise($rank, $readers)) {
+            // Each pass settles one more level.
         }
-        for ($pass = 0, $changed = true; $changed && $pass <= count($nodes); $pass++) {
-            $changed = false;
-            foreach ($readers as $key => $dependants) {
-                foreach ($dependants as $dependant) {
-                    if (isset($rank[$dependant]) && $rank[$dependant] <= $rank[$key]) {
-                        $rank[$dependant] = $rank[$key] + 1;
-                        $changed = true;
-                    }
+        foreach ($nodes as $diff) {
+            $diff->sortOrder = -$rank[$this->key($diff)];
+        }
+    }
+
+    /**
+     * Rank every view above what it reads, once over; whether anything moved.
+     *
+     * @param array<string, int> $rank
+     * @param array<string, string[]> $readers
+     */
+    private static function raise(array &$rank, array $readers): bool {
+        $moved = false;
+        foreach ($readers as $key => $dependants) {
+            foreach ($dependants as $dependant) {
+                if (isset($rank[$dependant]) && $rank[$dependant] <= $rank[$key]) {
+                    $rank[$dependant] = $rank[$key] + 1;
+                    $moved = true;
                 }
             }
         }
-        foreach ($nodes as $diff) {
-            $diff->sortOrder = -$rank[self::key($diff, $scope)];
-        }
+        return $moved;
     }
 
     /**
@@ -238,33 +273,30 @@ final class ViewReplacementPlan {
      *
      * @return array<string, true>
      */
-    private static function createdAfter(array $diffs, string $direction, string $scope): array {
-        $views = $direction === 'up'
-            ? [CreateView::class, AlterView::class, CreateMatView::class, AlterMatView::class]
-            : [DropView::class, AlterView::class, DropMatView::class, AlterMatView::class];
-        $onTables = $direction === 'up'
-            ? [CreatePolicy::class, AlterPolicy::class, CreateTrigger::class, AlterTrigger::class]
-            : [DropPolicy::class, AlterPolicy::class, DropTrigger::class, AlterTrigger::class];
+    private function createdAfter(array $diffs, string $direction): array {
         $keys = [];
         foreach ($diffs as $diff) {
-            if ($direction === 'down' && !empty($diff->downHandledElsewhere)) {
-                continue;
-            }
-            if (in_array(get_class($diff), $views, true)) {
-                $keys[self::key($diff, $scope)] = true;
-            } elseif (in_array(get_class($diff), $onTables, true)
-                && !($direction === 'down' && !empty($diff->downDropOnly))) {
-                $keys[($diff->schema ?? $scope) . '.' . $diff->table . '.' . $diff->name] = true;
-            } elseif ($diff instanceof AlterTableChangeColumn && $diff->dependants !== null) {
-                // A column change puts back what reads the column, as the
-                // side it leads to has it.
-                $keys += array_diff_key(
-                    ColumnDependantPlan::keysOf($diff->dependants),
-                    $direction === 'up' ? $diff->upSkip : []
-                );
-            }
+            $keys += $this->createdBy($diff, $direction);
         }
         return $keys;
+    }
+
+    /** @return array<string, true> */
+    private function createdBy(object $diff, string $direction): array {
+        $class = get_class($diff);
+        return match (true) {
+            $direction === 'down' && !empty($diff->downHandledElsewhere) => [],
+            in_array($class, self::CREATES[$direction]['views'], true) => [$this->key($diff) => true],
+            in_array($class, self::CREATES[$direction]['onTables'], true)
+                => $direction === 'down' && !empty($diff->downDropOnly) ? [] : [$this->tableKey($diff) => true],
+            // A column change puts back what reads the column, as the side it
+            // leads to has it.
+            $diff instanceof AlterTableChangeColumn && $diff->dependants !== null => array_diff_key(
+                ColumnDependantPlan::keysOf($diff->dependants),
+                $direction === 'up' ? $diff->upSkip : []
+            ),
+            default => [],
+        };
     }
 
     /**
@@ -275,18 +307,18 @@ final class ViewReplacementPlan {
      *
      * @param array<int, AlterView|AlterMatView> $views
      */
-    private static function leaveToViews(array $diffs, array $views, string $scope): void {
+    private function leaveToViews(array $views): void {
         $byKey = [];
         foreach ($views as $diff) {
-            $byKey[self::key($diff, $scope)] = $diff;
+            $byKey[$this->key($diff)] = $diff;
         }
-        foreach ($diffs as $diff) {
+        foreach ($this->diffs as $diff) {
             if (!($diff instanceof AlterTableChangeColumn) || $diff->dependants === null) {
                 continue;
             }
             foreach (array_keys(ColumnDependantPlan::keysOf($diff->dependants)) as $key) {
                 $view = $byKey[$key] ?? null;
-                if ($view !== null && isset($diff->upSkip[$key]) && isset($view->replacement['up'])) {
+                if (isset($diff->upSkip[$key], $view->replacement['up'])) {
                     $diff->upSkip += ColumnDependantPlan::keysOf($view->replacement['up']['drop']);
                 }
             }
@@ -308,7 +340,6 @@ final class ViewReplacementPlan {
         return $keys;
     }
 
-    /** @return array{columns: array, dependants: array, triggers: array}|null */
     private static function read(Connection $connection, object $diff): ?array {
         $schema = $diff->schema ?? SchemaScope::of($connection);
         $name   = PostgresSchemaHelper::qualifiedName($schema, $diff->name);
@@ -345,7 +376,16 @@ final class ViewReplacementPlan {
         return count($new) >= count($old) && array_slice($new, 0, count($old)) === $old;
     }
 
-    private static function key(object $diff, string $scope): string {
-        return ($diff->schema ?? $scope) . '.' . $diff->name;
+    private function key(object $diff): string {
+        return ($diff->schema ?? $this->scope) . '.' . $diff->name;
+    }
+
+    /** A policy's or trigger's key: `schema.table.name`. */
+    private function tableKey(object $diff): string {
+        return ($diff->schema ?? $this->scope) . '.' . $diff->table . '.' . $diff->name;
+    }
+
+    private static function isView(object $diff): bool {
+        return $diff instanceof AlterView || $diff instanceof AlterMatView;
     }
 }
