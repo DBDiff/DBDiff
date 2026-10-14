@@ -93,9 +93,13 @@ abstract class PostgresRoundTripTestCase extends TestCase
         );
     }
 
+    /** Databases connected to read-only, the way a production URL may be. */
+    protected array $readOnly = [];
+
     protected function url(string $db): string
     {
-        return "postgres://{$this->user}:{$this->pass}@{$this->host}:{$this->port}/$db";
+        return "postgres://{$this->user}:{$this->pass}@{$this->host}:{$this->port}/$db"
+            . (in_array($db, $this->readOnly, true) ? '?options=-c%20default_transaction_read_only%3Don' : '');
     }
 
     /**
