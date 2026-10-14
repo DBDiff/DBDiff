@@ -49,6 +49,10 @@ class DiffSorter {
         // CreationOrderPlan. Any other routine stays with the programmable
         // objects below, after the tables its body may read.
         "CreateRoutineEarly",
+        // After both: its subtype may be a domain, and its subtype_diff a
+        // routine of the schema.
+        "CreateRangeType",
+        "AlterRangeType",
         "AlterSequence",
 
         "AddTable",
@@ -114,6 +118,7 @@ class DiffSorter {
         "DropRoutineEarly",
         "DropSequence",
         "DropCompositeType",
+        "DropRangeType",
         "DropDomain",
         "DropEnum",
         "DropCollation",
@@ -143,6 +148,7 @@ class DiffSorter {
         "DropCompositeType",
         "DropSequence",
         "DropRoutineEarly",
+        "DropRangeType",
 
         "AlterRoutine",
         // Policies and the RLS flags come off before the tables they sit on.
@@ -205,14 +211,18 @@ class DiffSorter {
         // DOWN of any new type, domain or sequence with a new column using it,
         // and of any new routine a reverted view or default still called
         // (issue #238).
+        // A range type before the routine its subtype_diff names.
+        "CreateRangeType",
         "CreateRoutine",
         "CreateRoutineEarly",
         "CreateCompositeType",
         "CreateDomain",
         "CreateEnum",
         "CreateSequence",
-        // A changed collation is put back once the tables the UP created
-        // with it are gone: it cannot be replaced while a column uses it.
+        // A changed collation or range type is put back once the tables the
+        // UP created with it are gone: neither can be replaced while a
+        // column uses it.
+        "AlterRangeType",
         "AlterCollation",
         "CreateCollation",
         "CreateExtension",

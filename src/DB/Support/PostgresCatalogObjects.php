@@ -1,0 +1,93 @@
+<?php namespace DBDiff\DB\Support;
+
+use Illuminate\Database\Connection;
+
+/**
+ * Object kinds read straight from the catalog, each as
+ * [key => ['create' => ..., 'drop' => ..., 'table' => ?string]] — see the
+ * SchemaObject diffs.
+ *
+ * Kinds that belong to the database rather than a schema — an event
+ * trigger, a cast, a foreign server — are read with the schema their
+ * function or type is in, or with `public`, so a diff over several schemas
+ * names each once.
+ */
+final class PostgresCatalogObjects {
+
+    /** Whether this connection's scope is the one database-wide objects are read with. */
+    private static function holdsDatabaseObjects(Connection $connection): bool {
+        return SchemaScope::of($connection) === 'public';
+    }
+
+    private static function ident(string $name): string {
+        return '"' . str_replace('"', '""', $name) . '"';
+    }
+
+    private static function literal(string $value): string {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    /**
+     * Range types: `CREATE TYPE r AS RANGE (subtype = ...)`.
+     *
+     * Each option is written only where it is not what PostgreSQL would pick
+     * by itself, so a type reads the same however it was declared. Read
+     * through to_jsonb: the multirange column arrived in PostgreSQL 14.
+     */
+    public static function rangeTypes(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT t.typname AS name,
+                    format_type(r.rngsubtype, NULL) AS subtype,
+                    CASE WHEN r.rngsubopc <> (SELECT o.oid FROM pg_opclass o JOIN pg_am a ON a.oid = o.opcmethod
+                                               WHERE a.amname = 'btree' AND o.opcintype = r.rngsubtype AND o.opcdefault LIMIT 1)
+                         THEN (SELECT quote_ident(n2.nspname) || '.' || quote_ident(o.opcname) FROM pg_opclass o
+                                 JOIN pg_namespace n2 ON n2.oid = o.opcnamespace WHERE o.oid = r.rngsubopc) END AS opclass,
+                    CASE WHEN r.rngcollation <> 0 AND r.rngcollation <> st.typcollation
+                         THEN (SELECT quote_ident(cn.nspname) || '.' || quote_ident(c.collname) FROM pg_collation c
+                                 JOIN pg_namespace cn ON cn.oid = c.collnamespace WHERE c.oid = r.rngcollation) END AS collation,
+                    NULLIF(r.rngcanonical, 0)::regproc::text AS canonical,
+                    NULLIF(r.rngsubdiff, 0)::regproc::text AS subdiff,
+                    (SELECT mt.typname FROM pg_type mt WHERE mt.oid = (to_jsonb(r) ->> 'rngmultitypid')::oid) AS multirange
+               FROM pg_range r
+               JOIN pg_type t ON t.oid = r.rngtypid
+               JOIN pg_type st ON st.oid = r.rngsubtype
+              WHERE t.typnamespace = " . SchemaScope::oid($connection) . "
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_type', 't.oid') . "
+              ORDER BY t.typname"
+        );
+        $types = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $options = ['subtype = ' . $row['subtype']];
+            if ($row['opclass'] !== null) {
+                $options[] = 'subtype_opclass = ' . $row['opclass'];
+            }
+            if ($row['collation'] !== null) {
+                $options[] = 'collation = ' . $row['collation'];
+            }
+            if ($row['canonical'] !== null) {
+                $options[] = 'canonical = ' . $row['canonical'];
+            }
+            if ($row['subdiff'] !== null) {
+                $options[] = 'subtype_diff = ' . $row['subdiff'];
+            }
+            if ($row['multirange'] !== null && $row['multirange'] !== self::defaultMultirangeName($row['name'])) {
+                $options[] = 'multirange_type_name = ' . self::ident($row['multirange']);
+            }
+            $name = SchemaScope::name($connection, $row['name']);
+            $types[$row['name']] = [
+                'create' => "CREATE TYPE $name AS RANGE (" . implode(', ', $options) . ')',
+                'drop'   => "DROP TYPE IF EXISTS $name",
+            ];
+        }
+        return $types;
+    }
+
+    /** What PostgreSQL names a range type's multirange when not told. */
+    private static function defaultMultirangeName(string $range): string {
+        $at = strpos($range, 'range');
+        return $at === false
+            ? $range . '_multirange'
+            : substr($range, 0, $at) . 'multirange' . substr($range, $at + 5);
+    }
+}

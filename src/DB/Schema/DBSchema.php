@@ -37,6 +37,10 @@ use DBDiff\Diff\AlterSequence;
 use DBDiff\Diff\CreateCompositeType;
 use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\AlterCompositeType;
+use DBDiff\Diff\CreateRangeType;
+use DBDiff\Diff\DropRangeType;
+use DBDiff\Diff\AlterRangeType;
+use DBDiff\DB\Support\PostgresCatalogObjects;
 use DBDiff\Diff\CreateCollation;
 use DBDiff\Diff\DropCollation;
 use DBDiff\Diff\AlterCollation;
@@ -261,6 +265,12 @@ class DBSchema {
                 PostgresObjectKinds::compositeTypes($target),
                 CreateCompositeType::class, DropCompositeType::class, AlterCompositeType::class
             ),
+            // A column can be typed by a range type, as by a composite.
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::rangeTypes($source),
+                PostgresCatalogObjects::rangeTypes($target),
+                CreateRangeType::class, DropRangeType::class, AlterRangeType::class
+            ),
             $this->diffNamedObjects(
                 PostgresObjectKinds::domains($source),
                 PostgresObjectKinds::domains($target),
@@ -326,6 +336,30 @@ class DBSchema {
             }
         }
 
+        return $diffs;
+    }
+
+    /**
+     * Diff two [key => ['create' => ..., 'drop' => ...]] maps — see
+     * PostgresCatalogObjects — into Create/Drop/Alter diffs.
+     *
+     * @param  class-string $createClass
+     * @param  class-string $dropClass
+     * @param  class-string $alterClass
+     */
+    private function diffSchemaObjects(array $source, array $target, string $createClass, string $dropClass, string $alterClass): array {
+        $diffs = [];
+        foreach (array_diff_key($source, $target) as $key => $object) {
+            $diffs[] = new $createClass($key, $object);
+        }
+        foreach (array_diff_key($target, $source) as $key => $object) {
+            $diffs[] = new $dropClass($key, $object);
+        }
+        foreach (array_intersect_key($source, $target) as $key => $object) {
+            if ($object['create'] !== $target[$key]['create']) {
+                $diffs[] = new $alterClass($key, $object, $target[$key]);
+            }
+        }
         return $diffs;
     }
 

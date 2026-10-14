@@ -360,6 +360,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              WHERE n.nspname = " . SchemaScope::literal($connection) . "
                AND p.prokind IN ('f', 'p')
                AND " . PostgresSchemaHelper::notExtensionMember('pg_proc', 'p.oid') . "
+               -- What PostgreSQL makes for a type itself, a range's
+               -- constructors: they come and go with the type.
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                                WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid
+                                  AND d.refclassid = 'pg_type'::regclass AND d.deptype = 'i')
              ORDER BY p.oid::regprocedure::text"
         );
         $routines = [];
