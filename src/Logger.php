@@ -14,4 +14,8 @@ class Logger {
     public static function info($msg) {
         echo "\033[0;36mℹ ".$msg."\033[0m\n";
     }
+
+    public static function warning($msg) {
+        echo "\033[0;33m⚠ ".$msg."\033[0m\n";
+    }
 }

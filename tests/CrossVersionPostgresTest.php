@@ -83,10 +83,11 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
     }
 
     /** The UP from `$source` on this server to `$target` on the other, or null when identical. */
-    private function upAcross(string $source, string $target): ?string
+    private function upAcross(string $source, string $target, bool $targetReadOnly = false): ?string
     {
         $out = tempnam(sys_get_temp_dir(), $this->prefix . '_') . '.sql';
-        $otherUrl = "postgres://{$this->user}:{$this->pass}@{$this->otherHost}:{$this->otherPort}/$target";
+        $otherUrl = "postgres://{$this->user}:{$this->pass}@{$this->otherHost}:{$this->otherPort}/$target"
+            . ($targetReadOnly ? '?options=-c%20default_transaction_read_only%3Don' : '');
         exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/dbdiff.php')
             . ' diff --nocomments --allow-destructive'
             . ' --server1-url=' . escapeshellarg($this->url($source))
@@ -122,5 +123,38 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         $source = $this->db("{$kind}_rs", self::BASE . self::KINDS[$kind]);
         $target = $this->otherDb("{$kind}_rt", self::BASE . str_replace(['a = 1', 'a > 0', 'a > b', 'ks-level2'], ['a = 9', 'a > 9', 'a < b', 'ks-level1'], self::KINDS[$kind]));
         $this->assertNotNull($this->upAcross($source, $target), "$kind: a real change was hidden as equivalent");
+    }
+
+    /**
+     * A read-only server cannot render a definition, so the other renders
+     * both: the target, or here the source when it is the target that is
+     * read-only.
+     *
+     * @dataProvider kinds
+     */
+    public function testTheSameObjectOverAReadOnlyTargetIsIdentical(string $kind): void
+    {
+        $sql = self::BASE . self::KINDS[$kind];
+        $source = $this->db("{$kind}_ros", $sql);
+        $target = $this->otherDb("{$kind}_rot", $sql);
+        $this->assertNull($this->upAcross($source, $target, true), "$kind: a read-only target turned the same definition into a change");
+    }
+
+    /** @dataProvider kinds */
+    public function testTheSameObjectOverAReadOnlySourceIsIdentical(string $kind): void
+    {
+        $sql = self::BASE . self::KINDS[$kind];
+        $source = $this->db("{$kind}_rss", $sql);
+        $target = $this->otherDb("{$kind}_rst", $sql);
+        $this->readOnly = [$source];
+        $this->assertNull($this->upAcross($source, $target), "$kind: a read-only source turned the same definition into a change");
+    }
+
+    /** @dataProvider kinds */
+    public function testARealChangeIsStillReportedOverAReadOnlyTarget(string $kind): void
+    {
+        $source = $this->db("{$kind}_rrs", self::BASE . self::KINDS[$kind]);
+        $target = $this->otherDb("{$kind}_rrt", self::BASE . str_replace(['a = 1', 'a > 0', 'a > b', 'ks-level2'], ['a = 9', 'a > 9', 'a < b', 'ks-level1'], self::KINDS[$kind]));
+        $this->assertNotNull($this->upAcross($source, $target, true), "$kind: a real change was hidden as equivalent");
     }
 }
