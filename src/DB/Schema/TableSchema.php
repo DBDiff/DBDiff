@@ -6,6 +6,8 @@ use Diff\Differ\ListDiffer;
 use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
+use DBDiff\Diff\AlterTableReplicaIdentity;
+use DBDiff\Diff\AlterTableColumnStatistics;
 use DBDiff\Diff\AlterTableColumnStorage;
 use DBDiff\Diff\AlterTableCollation;
 use DBDiff\SQLGen\Dialect\PostgresDialect;
@@ -447,6 +449,29 @@ class TableSchema {
         $targetOptions = $targetSchema['reloptions'] ?? null;
         if ($sourceOptions !== $targetOptions) {
             $diffs[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
+        }
+
+        // What logical replication sends of an old row: Supabase Realtime
+        // gets a deleted or updated row's previous values only under FULL.
+        $sourceIdentity = $sourceSchema['replicaIdentity'] ?? 'DEFAULT';
+        $targetIdentity = $targetSchema['replicaIdentity'] ?? 'DEFAULT';
+        if ($sourceIdentity !== $targetIdentity) {
+            $diffs[] = new AlterTableReplicaIdentity($table, $sourceIdentity, $targetIdentity);
+        }
+
+        // Statistics targets, for the columns on the source.
+        $sourceStats = $sourceSchema['statistics'] ?? [];
+        $targetStats = $targetSchema['statistics'] ?? [];
+        $targetColumns = $targetSchema['columns'] ?? [];
+        foreach (array_keys(($sourceSchema['columns'] ?? []) + $targetStats) as $column) {
+            if (!isset($sourceSchema['columns'][$column])) {
+                continue;
+            }
+            $want = $sourceStats[$column] ?? -1;
+            $have = $targetStats[$column] ?? -1;
+            if ($want !== $have) {
+                $diffs[] = new AlterTableColumnStatistics($table, $column, $want, $have, !isset($targetColumns[$column]));
+            }
         }
 
         return $diffs;

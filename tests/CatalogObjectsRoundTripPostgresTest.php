@@ -32,4 +32,31 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
         // The constructors PostgreSQL makes with the type are not copied as functions.
         $this->assertStringNotContainsString('CREATE OR REPLACE FUNCTION public.floatrange', $up);
     }
+
+    public function testReplicaIdentityAndStatisticsTargets(): void
+    {
+        $settings = fn(string $db) => $this->rows($db,
+            "SELECT c.relname, c.relreplident::text AS identity,
+                    (SELECT ic.relname FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+                      WHERE i.indrelid = c.oid AND i.indisreplident) AS identity_index,
+                    (SELECT string_agg(a.attname || '=' || a.attstattarget, ',' ORDER BY a.attname) FROM pg_attribute a
+                      WHERE a.attrelid = c.oid AND a.attnum > 0 AND COALESCE(a.attstattarget, -1) >= 0) AS statistics
+               FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' ORDER BY 1");
+        $this->assertRoundTrip(
+            'replident',
+            "CREATE TABLE messages (id int PRIMARY KEY, body text, room int);
+             ALTER TABLE messages REPLICA IDENTITY FULL;
+             ALTER TABLE messages ALTER COLUMN room SET STATISTICS 500;
+             CREATE TABLE keyed (id int NOT NULL, code text NOT NULL);
+             CREATE UNIQUE INDEX keyed_code ON keyed (code);
+             ALTER TABLE keyed REPLICA IDENTITY USING INDEX keyed_code;
+             CREATE TABLE added (id int PRIMARY KEY, v int);
+             ALTER TABLE added REPLICA IDENTITY FULL;
+             ALTER TABLE added ALTER COLUMN v SET STATISTICS 250;",
+            "CREATE TABLE messages (id int PRIMARY KEY, body text, room int);
+             ALTER TABLE messages ALTER COLUMN body SET STATISTICS 50;
+             CREATE TABLE keyed (id int NOT NULL, code text NOT NULL);",
+            $settings
+        );
+    }
 }

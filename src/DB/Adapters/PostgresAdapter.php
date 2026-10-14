@@ -124,6 +124,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         return $bulk[$table] ?? [
             'engine' => null, 'collation' => null,
             'unlogged' => false, 'reloptions' => null, 'inheritedColumns' => [], 'storage' => [],
+            'replicaIdentity' => 'DEFAULT', 'statistics' => [],
             'columns' => [], 'keys' => [], 'constraints' => [],
         ];
     }
@@ -213,10 +214,17 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         }
 
         // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
-        // so it trails the statement instead.
-        foreach (PostgresSchemaHelper::storageStatements(
-            SchemaScope::name($connection, $table),
-            PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? []
+        // so it trails the statement instead, as do the replica identity and
+        // statistics targets, which CREATE TABLE has no clause for.
+        $attrs = PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? [];
+        $name  = SchemaScope::name($connection, $table);
+        foreach (array_merge(
+            PostgresSchemaHelper::storageStatements($name, $attrs),
+            PostgresSchemaHelper::tableSettingStatements(
+                $name,
+                PostgresSchemaHelper::relationMeta($connection, [$table])[$table]['replicaIdentity'] ?? 'DEFAULT',
+                PostgresSchemaHelper::columnStatistics($attrs)
+            )
         ) as $stmt) {
             $ddl .= ";\n$stmt";
         }
@@ -448,7 +456,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                             format_type(a.atttypid, a.atttypmod)                 || '|' ||
                             COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
                             a.attstorage::text                                   || '|' ||
-                            COALESCE(NULLIF(a.attcompression::text, ''), ''),
+                            COALESCE(NULLIF(a.attcompression::text, ''), '')     || '|' ||
+                            COALESCE(a.attstattarget, -1)::text,
                             ';' ORDER BY ordinal_position
                         ) AS col_str
                  FROM " . PostgresCatalogColumns::SQL . " isc
@@ -523,7 +532,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
              -- table whose only difference is one of them (issue #229).
              rel_data AS (
                  SELECT c.relname AS table_name,
-                        c.relpersistence::text || '|' ||
+                        c.relpersistence::text || '|' || c.relreplident::text || '|' ||
                         COALESCE(" . PostgresSchemaHelper::canonicalReloptions('c.reloptions', ',') . ", '') AS rel_sig
                  FROM pg_class c
                  JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -686,6 +695,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                 )),
                 'unlogged'    => $relMeta[$t]['unlogged']   ?? false,
                 'reloptions'  => $relMeta[$t]['reloptions'] ?? null,
+                'replicaIdentity' => $relMeta[$t]['replicaIdentity'] ?? 'DEFAULT',
+                'statistics'  => PostgresSchemaHelper::columnStatistics($attrByCol[$t] ?? []),
                 'columns'     => $columns[$t]     ?? [],
                 'keys'        => $keys[$t]        ?? [],
                 'constraints' => $constraints[$t] ?? [],

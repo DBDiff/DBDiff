@@ -73,6 +73,7 @@ class DiffSorter {
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
         "AlterTableColumnStorage",
+        "AlterTableColumnStatistics",
         "AlterTableDropColumn",
 
         "AlterTableAddKey",
@@ -80,6 +81,8 @@ class DiffSorter {
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
+        // USING INDEX names an index or key the lines above may create.
+        "AlterTableReplicaIdentity",
 
         "InsertData",
         "UpdateData",
@@ -185,10 +188,13 @@ class DiffSorter {
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
         "AlterTableColumnStorage",
+        "AlterTableColumnStatistics",
         "AlterTableDropColumn",
 
         "AlterTableChangeKey",
         "AlterTableDropKey",
+        // Once the index it may name is back.
+        "AlterTableReplicaIdentity",
 
         "AlterTableDropConstraint",
 
