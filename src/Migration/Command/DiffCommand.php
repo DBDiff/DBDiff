@@ -39,6 +39,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'diff', description: 'Compute a schema/data diff between two databases')]
 class DiffCommand extends Command
 {
+    use ReportsErrors;
     protected function configure(): void
     {
         $formatList = implode(', ', FormatRegistry::keys());
@@ -127,8 +128,7 @@ class DiffCommand extends Command
 
             return Command::SUCCESS;
         } catch (\Throwable $e) {
-            $output->writeln("<error>{$e->getMessage()}</error>");
-            return Command::FAILURE;
+            return ErrorReport::write($output, $e);
         }
     }
 

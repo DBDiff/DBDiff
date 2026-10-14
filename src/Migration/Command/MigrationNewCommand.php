@@ -27,6 +27,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'migration:new', description: 'Scaffold a new migration file pair')]
 class MigrationNewCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void
