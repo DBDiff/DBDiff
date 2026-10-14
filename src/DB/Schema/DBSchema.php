@@ -175,6 +175,8 @@ class DBSchema {
             // A view the migration replaces keeps its grants.
             PostgresViewGrants::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             ColumnDependantPlan::apply($diffs);
+            // A changed view others read is replaced around them.
+            ViewReplacementPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             EnumSwapPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             CreationOrderPlan::apply($diffs, $this->manager->getDB('source'), $this->manager->getDB('target'));
             // Last, knowing what the changes above drop and recreate.

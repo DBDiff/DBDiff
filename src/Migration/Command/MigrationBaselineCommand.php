@@ -24,6 +24,7 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 #[AsCommand(name: 'migration:baseline', description: 'Mark the current DB state as the migration baseline')]
 class MigrationBaselineCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void

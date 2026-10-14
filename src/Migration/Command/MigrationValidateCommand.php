@@ -20,6 +20,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'migration:validate', description: 'Verify on-disk checksums match the history table')]
 class MigrationValidateCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void

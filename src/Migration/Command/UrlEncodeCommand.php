@@ -27,6 +27,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'url:encode', description: 'Percent-encode a password for safe use in a --server-url connection string')]
 class UrlEncodeCommand extends Command
 {
+    use ReportsErrors;
     protected function configure(): void
     {
         $this

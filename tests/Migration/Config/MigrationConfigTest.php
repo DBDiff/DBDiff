@@ -354,6 +354,21 @@ YAML);
         $this->assertSame('/some/path', $cfg->resolveMigrationsDir());
     }
 
+    public function testResolveMigrationsDirKeepsAParentDirectory(): void
+    {
+        $cfg = new MigrationConfig(null, ['migrations_dir' => '../db/migrations']);
+
+        $this->assertSame(getcwd() . '/../db/migrations', $cfg->resolveMigrationsDir());
+    }
+
+    public function testResolveMigrationsDirKeepsAWindowsPath(): void
+    {
+        foreach (['C:\\db\\migrations', 'C:/db/migrations', '\\\\server\\share\\migrations'] as $dir) {
+            $cfg = new MigrationConfig(null, ['migrations_dir' => $dir]);
+            $this->assertSame($dir, $cfg->resolveMigrationsDir());
+        }
+    }
+
     // ── Supabase auto-detection ───────────────────────────────────────────────
 
     public function testDefaultMigrationFormatIsNative(): void

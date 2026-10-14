@@ -180,11 +180,12 @@ class MigrationConfig
     {
         $dir = $this->migrationsDir;
 
-        if (!str_starts_with($dir, '/')) {
-            $dir = getcwd() . '/' . ltrim($dir, './');
+        // Absolute: /x, C:\x or C:/x, \\server\share.
+        if (!preg_match('#^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\)#', $dir)) {
+            $dir = getcwd() . '/' . (str_starts_with($dir, './') ? substr($dir, 2) : $dir);
         }
 
-        return rtrim($dir, '/');
+        return rtrim($dir, '/\\') ?: $dir;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

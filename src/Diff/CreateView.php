@@ -14,6 +14,8 @@ class CreateView {
     public $source = null;
     public $target = null;
     public ?int $sortOrder = null;
+    /** Created among the changed views it reads — see ViewReplacementPlan. */
+    public bool $late = false;
 
     public $definition;
 

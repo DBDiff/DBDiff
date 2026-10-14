@@ -1,5 +1,7 @@
 <?php namespace DBDiff\Migration\Runner;
 
+use DBDiff\Migration\Exceptions\MigrationException;
+
 use DBDiff\Migration\Config\MigrationConfig;
 use DBDiff\SQLGen\DiffToSQL\AlterEnumSQL;
 use Illuminate\Database\Capsule\Manager as Capsule;
@@ -56,6 +58,12 @@ class MigrationRunner
     public function up(?string $target = null): array
     {
         $dir     = $this->config->resolveMigrationsDir();
+        // Otherwise a mistyped path reads as "all migrations are up to date".
+        if (!is_dir($dir)) {
+            throw new MigrationException(
+                "No migrations directory at $dir. Create one with `dbdiff migration:new`, or point --migrations-dir (or migrations.dir in dbdiff.yml) at yours."
+            );
+        }
         $all     = MigrationFile::scanDir($dir);
         $applied = $this->history->getAppliedVersions();
         $results = [];

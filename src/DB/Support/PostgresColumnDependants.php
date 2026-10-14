@@ -40,17 +40,42 @@ final class PostgresColumnDependants {
      * @return array{views: array<int, array<string, mixed>>, policies: array<int, array<string, string>>, triggers: array<int, array<string, string>>, generated: array<int, array<string, mixed>>, defaultGrantees: string[]}
      */
     public static function find(Connection $connection, string $table, string $column, bool $regenerate = false): array {
-        $views    = self::views($connection, $table, $column);
+        $seed     = self::targetColumnCte($connection);
+        $views    = self::views($connection, $seed, 'tc.rel_oid = d.refobjid AND d.refobjsubid = tc.attnum', [$table, $column]);
         $viewOids = array_map(fn(array $v) => (int) $v['oid'], $views);
 
-        $dependants = [
+        return self::withDefaultGrantees($connection, [
             'views'    => array_map([self::class, 'withoutOid'], $views),
-            'policies' => self::policies($connection, $table, $column, $viewOids),
+            'policies' => self::policies($connection, $seed, [$table, $column], $viewOids),
             'triggers' => self::triggers($connection, $table, $column),
             'generated' => self::generatedColumns($connection, $table, $column, $regenerate),
             'defaultGrantees' => [],
-        ];
+        ]);
+    }
 
+    /**
+     * What stands in the way of dropping a view or materialised view: the
+     * views built on it, at any depth, and the policies reading it or them.
+     * Each comes with everything needed to put it back, as find() gives it.
+     *
+     * @return array{views: array<int, array<string, mixed>>, policies: array<int, array<string, string>>, triggers: array{}, generated: array{}, defaultGrantees: string[]}
+     */
+    public static function ofRelation(Connection $connection, string $schema, string $name): array {
+        $seed     = 'target_col AS (SELECT to_regclass(?)::oid AS rel_oid, NULL::int2 AS attnum)';
+        $bindings = [PostgresSchemaHelper::qualifiedName($schema, $name)];
+        $views    = self::views($connection, $seed, 'tc.rel_oid = d.refobjid', $bindings);
+        $viewOids = array_map(fn(array $v) => (int) $v['oid'], $views);
+
+        return self::withDefaultGrantees($connection, [
+            'views'    => array_map([self::class, 'withoutOid'], $views),
+            'policies' => self::policies($connection, $seed, $bindings, $viewOids, true),
+            'triggers' => [],
+            'generated' => [],
+            'defaultGrantees' => [],
+        ]);
+    }
+
+    private static function withDefaultGrantees(Connection $connection, array $dependants): array {
         if ($dependants['views'] !== []) {
             $dependants['defaultGrantees'] = array_column($connection->select(
                 "SELECT DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
@@ -137,15 +162,19 @@ final class PostgresColumnDependants {
      * Views and materialised views reading the column, directly or through
      * another view, with everything needed to put each back as it was.
      */
-    private static function views(Connection $connection, string $table, string $column): array {
+    /**
+     * @param string $seed     the `target_col (rel_oid, attnum)` CTE
+     * @param string $match    how a view's rewrite rule reading it is recognised
+     */
+    private static function views(Connection $connection, string $seed, string $match, array $bindings): array {
         $rows = $connection->select(
-            "WITH RECURSIVE " . self::targetColumnCte($connection) . ",
+            "WITH RECURSIVE " . $seed . ",
              deps AS (
                  SELECT DISTINCT dependent.oid AS view_oid, 1 AS depth
                  FROM pg_depend d
                  JOIN pg_rewrite r       ON r.oid = d.objid
                  JOIN pg_class dependent ON dependent.oid = r.ev_class
-                 JOIN target_col tc      ON tc.rel_oid = d.refobjid AND d.refobjsubid = tc.attnum
+                 JOIN target_col tc      ON $match
                  WHERE d.classid = 'pg_rewrite'::regclass
                    AND d.refclassid = 'pg_class'::regclass
                    AND dependent.oid <> tc.rel_oid
@@ -197,7 +226,7 @@ final class PostgresColumnDependants {
              JOIN pg_class c     ON c.oid = deepest.view_oid
              JOIN pg_namespace n ON n.oid = c.relnamespace
              ORDER BY deepest.depth, n.nspname, c.relname",
-            [$table, $column]
+            $bindings
         );
 
         $views = [];
@@ -230,11 +259,12 @@ final class PostgresColumnDependants {
      *
      * @param int[] $viewOids
      */
-    private static function policies(Connection $connection, string $table, string $column, array $viewOids): array {
+    private static function policies(Connection $connection, string $seed, array $bindings, array $viewOids, bool $wholeRelation = false): array {
         $viewList = $viewOids === [] ? '0' : implode(',', array_map('intval', $viewOids));
+        $reads    = $wholeRelation ? 'tc.rel_oid = d.refobjid' : 'tc.rel_oid = d.refobjid AND tc.attnum = d.refobjsubid';
 
         $rows = $connection->select(
-            "WITH " . self::targetColumnCte($connection) . "
+            "WITH " . $seed . "
              SELECT DISTINCT n.nspname AS schema, c.relname AS table_name, p.polname AS name,
                     p.polpermissive AS permissive,
                     CASE p.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
@@ -249,12 +279,12 @@ final class PostgresColumnDependants {
              JOIN pg_policy p    ON p.oid = d.objid
              JOIN pg_class c     ON c.oid = p.polrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             LEFT JOIN target_col tc ON tc.rel_oid = d.refobjid AND tc.attnum = d.refobjsubid
+             LEFT JOIN target_col tc ON $reads
              WHERE d.classid = 'pg_policy'::regclass
                AND d.refclassid = 'pg_class'::regclass
                AND (tc.rel_oid IS NOT NULL OR d.refobjid IN ($viewList))
              ORDER BY n.nspname, c.relname, p.polname",
-            [$table, $column]
+            $bindings
         );
 
         $policies = [];

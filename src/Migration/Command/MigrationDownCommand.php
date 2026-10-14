@@ -18,6 +18,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'migration:down', description: 'Roll back the last applied migration(s)')]
 class MigrationDownCommand extends Command
 {
+    use ReportsErrors;
     use ConfigOptionTrait;
 
     protected function configure(): void

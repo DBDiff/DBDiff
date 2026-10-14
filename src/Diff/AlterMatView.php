@@ -27,6 +27,14 @@ class AlterMatView {
      */
     public ?array $privileges = null;
 
+    /**
+     * What has to stand aside while the view is dropped and created again,
+     * by direction: `drop` and `recreate` dependant sets, the `skip` keys
+     * another diff creates later, and the view's own `triggers` to put back
+     * — see ViewReplacementPlan.
+     */
+    public array $replacement = [];
+
     public $sourceDefinition;
     public $targetDefinition;
 
