@@ -60,6 +60,8 @@ final class MultiSchemaDiff
 
         $this->rankTables($schemaDiff, AddTable::class, 'source');
         $this->rankTables($schemaDiff, DropTable::class, 'target');
+        // A view in one schema can read a changed view in another.
+        ViewReplacementPlan::apply($schemaDiff, $this->manager->getDB('source'), $this->manager->getDB('target'));
 
         return ['schema' => $schemaDiff, 'data' => $dataDiff];
     }

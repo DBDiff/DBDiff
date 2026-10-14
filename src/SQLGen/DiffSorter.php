@@ -247,9 +247,16 @@ class DiffSorter {
         return $this->compareSamePriority($a, $b, $direction, $sqlGenClassA);
     }
 
-    /** The class name a diff sorts as; an early routine has its own slot (SUB_SLOTS). */
+    /**
+     * The class name a diff sorts as; an early routine has its own slot
+     * (SUB_SLOTS), and a new view reading a changed one sorts among the
+     * changed views, by dependency — see ViewReplacementPlan.
+     */
     private static function orderClass(object $diff): string {
         $class = (new \ReflectionClass($diff))->getShortName();
+        if ($class === 'CreateView' && !empty($diff->late)) {
+            return 'AlterView';
+        }
         return in_array($class, ['CreateRoutine', 'DropRoutine'], true) && !empty($diff->early)
             ? $class . 'Early'
             : $class;

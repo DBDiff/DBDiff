@@ -76,4 +76,50 @@ class ExpressionEquivalencePostgresTest extends PostgresRoundTripTestCase
 
         $this->assertNotNull($this->up($source, $target), "$kind: a changed list was hidden as equivalent");
     }
+
+    /**
+     * A read-only connection cannot create the scratch objects a definition
+     * is rendered in, so the other server renders both sides — on the same
+     * version, or across versions, whichever of the two can.
+     *
+     * @dataProvider kinds
+     */
+    public function testARenderedCopyIsIdenticalOverAReadOnlySource(string $kind): void
+    {
+        $source = $this->db("{$kind}_ros", self::AS_WRITTEN[$kind]);
+        $target = $this->db("{$kind}_rot", self::AS_RENDERED[$kind]);
+        $this->readOnly = [$source];
+
+        $this->assertNull($this->up($source, $target), "$kind: a read-only source turned an equivalent definition into a change");
+    }
+
+    /** @dataProvider kinds */
+    public function testARenderedCopyIsIdenticalOverAReadOnlyTarget(string $kind): void
+    {
+        $source = $this->db("{$kind}_rws", self::AS_WRITTEN[$kind]);
+        $target = $this->db("{$kind}_rwt", self::AS_RENDERED[$kind]);
+        $this->readOnly = [$target];
+
+        $this->assertNull($this->up($source, $target), "$kind: a read-only target turned an equivalent definition into a change");
+    }
+
+    /** With neither able to render, a definition that reads differently is reported, not hidden. */
+    public function testNeitherSideRenderingReportsTheDifference(): void
+    {
+        $source = $this->db('ro_both_s', self::AS_WRITTEN['check']);
+        $target = $this->db('ro_both_t', self::AS_RENDERED['check']);
+        $this->readOnly = [$source, $target];
+
+        $this->assertNotNull($this->up($source, $target));
+    }
+
+    /** @dataProvider kinds */
+    public function testARealChangeIsStillReportedOverAReadOnlySource(string $kind): void
+    {
+        $source = $this->db("{$kind}_rors", self::AS_WRITTEN[$kind]);
+        $target = $this->db("{$kind}_rort", str_replace("'active'", "'archived'", self::AS_RENDERED[$kind]));
+        $this->readOnly = [$source];
+
+        $this->assertNotNull($this->up($source, $target), "$kind: a changed list was hidden as equivalent");
+    }
 }

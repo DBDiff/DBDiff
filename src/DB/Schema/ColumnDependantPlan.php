@@ -139,7 +139,7 @@ final class ColumnDependantPlan {
      *
      * @return array<string, true>
      */
-    private static function keysOf(array $dependants): array {
+    public static function keysOf(array $dependants): array {
         $keys = [];
         foreach ($dependants['views'] ?? [] as $view) {
             $keys[$view['schema'] . '.' . $view['name']] = true;
