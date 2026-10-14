@@ -51,13 +51,13 @@ final class PostgresExpressionEquivalence {
      */
     public static function dropEquivalent(array $diffs, Connection $source, Connection $target): array {
         self::$rendered = [];
-        self::$renders = [];
+        PostgresRenderers::reset();
         self::renderViewsAhead($diffs, $source, $target);
         try {
             return array_values(array_filter($diffs, fn($diff) => self::isRealChange($diff, $source, $target)));
         } finally {
             self::$rendered = [];
-            self::$renders = [];
+            PostgresRenderers::reset();
         }
     }
 
@@ -84,31 +84,32 @@ final class PostgresExpressionEquivalence {
      * @param array<int, object> $diffs
      */
     private static function renderViewsAhead(array $diffs, Connection $source, Connection $target): void {
-        $want = [spl_object_id($source) => [], spl_object_id($target) => []];
-        $renderer = null;
+        $pairs = [];
         foreach ($diffs as $diff) {
             $pair = self::definitions($diff);
-            if ($pair === null || $pair[0] !== 'view') {
-                continue;
+            if ($pair !== null && $pair[0] === 'view') {
+                $pairs[] = [self::viewParts($pair[2])[1] ?? null, self::viewParts($pair[3])[1] ?? null];
             }
-            [, , $sourceDef, $targetDef] = $pair;
-            $sourceBody = self::viewParts($sourceDef)[1] ?? null;
-            $targetBody = self::viewParts($targetDef)[1] ?? null;
-            if ($sourceBody !== null) {
-                $want[spl_object_id($source)][$sourceBody] = true;
+        }
+        if ($pairs === []) {
+            return;
+        }
+        // Each side renders its own; and where it cannot (read-only, no TEMP,
+        // another major version), both go to the one server that renders the
+        // comparison — see PostgresRenderers::choose().
+        $renderer = PostgresRenderers::choose($source, $target);
+        $want = [spl_object_id($source) => [], spl_object_id($target) => []];
+        $add = function (Connection $on, ?string $body) use (&$want) {
+            if ($body !== null) {
+                $want[spl_object_id($on)][$body] = true;
             }
-            if ($targetBody !== null) {
-                $want[spl_object_id($target)][$targetBody] = true;
-            }
-            // Where each side cannot render its own (read-only, no TEMP, another
-            // major version), both bodies go to the one server that renders
-            // the comparison — see renderer().
-            $renderer ??= self::renderer($source, $target);
-            if ($renderer !== false && $renderer !== null && $sourceBody !== null) {
-                $want[spl_object_id($renderer)][$sourceBody] = true;
-            }
-            if ($renderer !== false && $renderer !== null && $targetBody !== null) {
-                $want[spl_object_id($renderer)][$targetBody] = true;
+        };
+        foreach ($pairs as [$sourceBody, $targetBody]) {
+            $add($source, $sourceBody);
+            $add($target, $targetBody);
+            if ($renderer instanceof Connection) {
+                $add($renderer, $sourceBody);
+                $add($renderer, $targetBody);
             }
         }
         foreach ([$source, $target] as $connection) {
@@ -175,85 +176,37 @@ final class PostgresExpressionEquivalence {
             return true;
         }
         [$kind, $table, $sourceDef, $targetDef] = $pair;
-        $renderer = self::renderer($source, $target);
-        if ($renderer === false) {
-            // Each side renders its own: same version, both able to.
-            $a = self::canonical($source, $kind, $table, $sourceDef);
-            $b = self::canonical($target, $kind, $table, $targetDef);
-            if ($a !== null && $b !== null) {
-                return $a !== $b;
-            }
-            $renderer = self::canRender($target) ? $target : $source;
+        $verdict = self::compareRendered($source, $target, $kind, $table, $sourceDef, $targetDef);
+        if ($verdict === null) {
+            // Neither server could render both: compare as written. Better a
+            // change shown than one hidden — and applying needs a writable
+            // target, which would have rendered it.
+            Logger::warning(sprintf(
+                '%s %s: the definitions differ as written, and neither server could render both to tell whether they mean the same (a read-only connection, or no TEMP privilege)',
+                $kind,
+                trim(($diff->table ?? '') . ' ' . ($diff->name ?? ''))
+            ));
         }
-        if ($renderer !== null) {
-            $a = self::canonical($renderer, $kind, $table, $sourceDef);
-            $b = self::canonical($renderer, $kind, $table, $targetDef);
-            if ($a !== null && $b !== null) {
-                return $a !== $b;
-            }
-        }
-        // Neither server could render both: compare as written. Better a
-        // change shown than one hidden — and applying needs a writable target,
-        // which would have rendered it.
-        Logger::warning(sprintf(
-            '%s %s: the definitions differ as written, and neither server could render both to tell whether they mean the same (a read-only connection, or no TEMP privilege)',
-            $kind,
-            trim(($diff->table ?? '') . ' ' . ($diff->name ?? ''))
-        ));
-        return true;
+        return $verdict ?? true;
     }
 
     /**
-     * Where a pair of definitions is rendered to be compared.
-     *
-     * false: each on its own server — the same major version, and both can
-     * create the temporary objects rendering needs. Otherwise one server
-     * renders both, since across versions (PostgreSQL 16 dropped the table
-     * qualifiers 15 writes in a view) or with only one side able to render,
-     * only one server's renderings are comparable: the target if it can,
-     * else the source. null: neither can.
-     *
-     * A read-only source used to leave equivalent definitions reported as
-     * changes — a CHECK rewritten as `= ANY (ARRAY[...])` by a dump and
-     * restore, a view with DISTINCT ON — because the target-side rendering
-     * was tried only across major versions.
+     * Whether the two renderings differ, on the server PostgresRenderers
+     * chooses; null when no server could render both.
      */
-    private static function renderer(Connection $source, Connection $target): Connection|false|null {
-        if (self::major($source) === self::major($target) && self::canRender($source) && self::canRender($target)) {
-            return false;
+    private static function compareRendered(Connection $source, Connection $target, string $kind, ?string $table, string $sourceDef, string $targetDef): ?bool {
+        $differ = fn(?string $a, ?string $b) => $a !== null && $b !== null ? $a !== $b : null;
+        $verdict = null;
+        $renderer = PostgresRenderers::choose($source, $target);
+        if ($renderer === false) {
+            // Each side renders its own: same version, both able to.
+            $verdict = $differ(self::canonical($source, $kind, $table, $sourceDef), self::canonical($target, $kind, $table, $targetDef));
+            $renderer = PostgresRenderers::canRender($target) ? $target : $source;
         }
-        if (self::canRender($target)) {
-            return $target;
+        if ($verdict === null && $renderer !== null) {
+            $verdict = $differ(self::canonical($renderer, $kind, $table, $sourceDef), self::canonical($renderer, $kind, $table, $targetDef));
         }
-        return self::canRender($source) ? $source : null;
-    }
-
-    /** @var array<int, bool> whether a connection can create temporary objects */
-    private static array $renders = [];
-
-    private static function canRender(Connection $connection): bool {
-        return self::$renders[spl_object_id($connection)] ??= self::probe($connection);
-    }
-
-    private static function probe(Connection $connection): bool {
-        $pdo = $connection->getPdo();
-        $pdo->beginTransaction();
-        try {
-            $pdo->exec('CREATE TEMP TABLE pg_temp.dbdiff_render_probe (x int)');
-            return true;
-        } catch (\Throwable) {
-            return false;
-        } finally {
-            $pdo->rollBack();
-        }
-    }
-
-    /** @var array<int, int> server major version, per connection */
-    private static array $majors = [];
-
-    private static function major(Connection $connection): int {
-        $key = spl_object_id($connection);
-        return self::$majors[$key] ??= intdiv((int) $connection->selectOne('SHOW server_version_num')['server_version_num'], 10000);
+        return $verdict;
     }
 
     /**
