@@ -16,6 +16,8 @@
 	When used alongside a <a href="#compatible-migration-tools">compatible database migration tool</a>, it can help enable database version control within your team or enterprise.
 </p>
 
+> **Using Supabase?** [SupaForge](https://github.com/akalsoftware/supaforge) runs DBDiff for the schema and covers the rest of a project too — RLS, storage, auth config, Edge Functions, cron, webhooks and more — with a preview before anything is applied: `npx @akal/supaforge init`.
+
 
 ## Features
 
@@ -30,7 +32,7 @@
   `--schemas` / `--ignore-schemas`
 - Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
-- Diffs tables, partitions, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, row level security policies, comments, extensions, and data — with deterministic, predictable output
+- Diffs tables, partitions, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, collations, row level security policies, comments, extensions, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
 - Built-in migration runner: `migration:up`, `down`, `status`, `validate`, `repair`, `baseline`
 - Works with [Flyway, Liquibase, Laravel Migrations, and more](#compatible-migration-tools)
