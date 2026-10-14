@@ -21,22 +21,19 @@ final class ErrorReport {
 
     /** The message, one paragraph, for a person to read. */
     public static function message(\Throwable $e): string {
-        if ($e instanceof QueryException) {
-            $cause = $e->getPrevious()?->getMessage() ?? $e->getMessage();
-            $cause = self::withoutQuery($cause);
-            $where = self::connectionLabel($e->connectionName ?? null);
-            return $where !== null ? "$cause (on the $where)" : $cause;
-        }
-        if ($e instanceof \PDOException) {
-            return self::withoutQuery($e->getMessage());
-        }
         $message = trim($e->getMessage());
-        if (self::isExpected($e)) {
-            return $message !== '' ? $message : get_class($e);
+        if ($e instanceof QueryException) {
+            $cause = self::withoutQuery($e->getPrevious()?->getMessage() ?? $message);
+            $where = self::connectionLabel($e->connectionName ?? null);
+            $message = $where !== null ? "$cause (on the $where)" : $cause;
+        } elseif ($e instanceof \PDOException) {
+            $message = self::withoutQuery($message);
+        } elseif (!self::isExpected($e)) {
+            $message = 'Unexpected error (' . self::shortClass($e) . ')'
+                . ($message !== '' ? ": $message" : '')
+                . ' — re-run with -v for details, and please report it if it persists';
         }
-        return 'Unexpected error (' . self::shortClass($e) . ')'
-            . ($message !== '' ? ": $message" : '')
-            . ' — re-run with -v for details, and please report it if it persists';
+        return $message !== '' ? $message : get_class($e);
     }
 
     /**
