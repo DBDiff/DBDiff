@@ -141,6 +141,14 @@ class DefaultParams {
     public bool $allowDestructive = false;
 
     /*
+     PostgreSQL: 'auto' (default) treats a column the source lacks and one it
+     adds, with the same definition and no other such pair in the table, as a
+     rename — keeping the data — rather than a drop and an add. 'off' never
+     does. See ColumnRenames.
+    */
+    public string $renames = 'auto';
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

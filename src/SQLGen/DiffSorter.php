@@ -76,6 +76,9 @@ class DiffSorter {
         "AlterRangeType",
         "AlterSequence",
 
+        // Before what names the table by its new name.
+        "AlterTableRename",
+        "AlterSequenceRename",
         "AddTable",
         // With the types its columns may use.
         "CreateForeignTable",
@@ -93,6 +96,10 @@ class DiffSorter {
         // index with it, and a DROP INDEX after it would fail.
         "AlterTableDropKey",
 
+        // Before anything that names the column by its new name.
+        "AlterTableRenameColumn",
+        "AlterTableRenameKey",
+        "AlterTableRenameConstraint",
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
@@ -189,6 +196,16 @@ class DiffSorter {
         // back: they may name a label it restores, and a label swap takes
         // their current versions aside and back (EnumSwapPlan).
         "AlterEnum",
+
+        // Names back as the target has them, first: a view or policy the
+        // DOWN puts back reads the column by its old name, and what reads it
+        // now follows a rename.
+        "AlterTableRenameColumn",
+        "AlterTableRenameKey",
+        "AlterTableRenameConstraint",
+        // After the renames above, which name it by its new name.
+        "AlterSequenceRename",
+        "AlterTableRename",
 
         // What the UP dropped is recreated in the order the UP would create
         // it (issue #238): the types first, and a routine a table's default,

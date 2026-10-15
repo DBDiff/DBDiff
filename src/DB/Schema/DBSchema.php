@@ -141,6 +141,18 @@ class DBSchema {
         $addedTables = array_values(array_diff($sourceTables, $targetTables));
         $deletedTables = array_values(array_diff($targetTables, $sourceTables));
 
+        // A table renamed, not dropped and created: its rows stay.
+        $adapter = $this->manager->getAdapter();
+        if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off' && $adapter instanceof BulkSchemaAdapterInterface) {
+            [$renamedTables, $renameDiffs] = TableRenames::plan(
+                $addedTables, $deletedTables, $adapter, $this->manager->getDB('source'), $this->manager->getDB('target')
+            );
+            $addedTables   = array_values(array_diff($addedTables, array_keys($renamedTables)));
+            $deletedTables = array_values(array_diff($deletedTables, array_values($renamedTables)));
+            $diffs = array_merge($diffs, $renameDiffs);
+            $tableSchema->tableRenames = $renamedTables;
+        }
+
         // Topological sort so parents are created before children
         if (!empty($addedTables)) {
             $sourceFkMap  = $this->manager->getForeignKeyMap('source');
