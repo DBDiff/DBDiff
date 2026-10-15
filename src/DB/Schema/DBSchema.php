@@ -46,6 +46,9 @@ use DBDiff\Diff\AlterEventTrigger;
 use DBDiff\Diff\CreateRule;
 use DBDiff\Diff\DropRule;
 use DBDiff\Diff\AlterRule;
+use DBDiff\Diff\CreateAggregate;
+use DBDiff\Diff\DropAggregate;
+use DBDiff\Diff\AlterAggregate;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -310,6 +313,11 @@ class DBSchema {
                 PostgresObjectKinds::rowSecurity($target),
                 $sourceTables,
                 $targetTables
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::aggregates($source),
+                PostgresCatalogObjects::aggregates($target),
+                CreateAggregate::class, DropAggregate::class, AlterAggregate::class
             ),
             $this->diffSchemaObjects(
                 PostgresCatalogObjects::rules($source),

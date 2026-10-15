@@ -101,6 +101,9 @@ class DiffSorter {
         // CreateRoutine used to sit last, after the objects depending on it.
         "CreateRoutine",
         "AlterRoutine",
+        // Built on routines, and a view may call one.
+        "CreateAggregate",
+        "AlterAggregate",
         "CreateView",
         "AlterView",
         // After views: a materialised view may select from one.
@@ -128,6 +131,7 @@ class DiffSorter {
         // because other objects depend on it" (issue #238). Dependants first:
         // a routine can take a type, a composite can hold a domain, and a
         // domain or a composite can be built on an enum.
+        "DropAggregate",
         "DropRoutine",
         "DropRoutineEarly",
         "DropSequence",
@@ -223,6 +227,10 @@ class DiffSorter {
         // ...and, once the tables are back, the routines whose bodies may read
         // them, then the views, triggers and policies that read or call them.
         "DropRoutine",
+        // Once the views the UP created with it are gone, and before the
+        // ones the DOWN puts back.
+        "AlterAggregate",
+        "DropAggregate",
         "DropView",
         "DropMatView",
         "DropTrigger",
@@ -237,7 +245,8 @@ class DiffSorter {
         // DOWN of any new type, domain or sequence with a new column using it,
         // and of any new routine a reverted view or default still called
         // (issue #238).
-        // A range type before the routine its subtype_diff names.
+        // An aggregate, and a range type, before the routines they name.
+        "CreateAggregate",
         "CreateRangeType",
         "CreateRoutine",
         "CreateRoutineEarly",

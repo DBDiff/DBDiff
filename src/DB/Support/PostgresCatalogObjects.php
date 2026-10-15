@@ -251,4 +251,85 @@ final class PostgresCatalogObjects {
         }
         return $out;
     }
+
+    /**
+     * Aggregates. pg_get_functiondef refuses one, so the definition is put
+     * together from pg_aggregate — read through to_jsonb, whose columns grew
+     * between versions — with each option written where it is set.
+     */
+    public static function aggregates(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT p.oid::regprocedure::text AS key,
+                    p.proname AS name,
+                    pg_get_function_arguments(p.oid) AS args,
+                    pg_get_function_identity_arguments(p.oid) AS identity,
+                    p.proparallel::text AS parallel,
+                    to_jsonb(a) AS spec,
+                    format_type(a.aggtranstype, NULL) AS stype,
+                    CASE WHEN a.aggmtranstype <> 0 THEN format_type(a.aggmtranstype, NULL) END AS mstype,
+                    CASE WHEN a.aggsortop <> 0 THEN
+                        (SELECT 'OPERATOR(' || quote_ident(n.nspname) || '.' || o.oprname || ')'
+                           FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace WHERE o.oid = a.aggsortop) END AS sortop,
+                    (SELECT json_object_agg(f.k, f.v) FROM (
+                        SELECT k, (to_jsonb(a) ->> k)::regproc::text AS v
+                          FROM unnest(ARRAY['aggtransfn','aggfinalfn','aggcombinefn','aggserialfn','aggdeserialfn',
+                                            'aggmtransfn','aggminvtransfn','aggmfinalfn']) AS k
+                         WHERE COALESCE(to_jsonb(a) ->> k, '-') <> '-') f) AS functions
+               FROM pg_aggregate a
+               JOIN pg_proc p ON p.oid = a.aggfnoid
+              WHERE p.pronamespace = " . SchemaScope::oid($connection) . "
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_proc', 'p.oid') . "
+              ORDER BY 1"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $row  = (array) $row;
+            $spec = json_decode((string) $row['spec'], true);
+            $fn   = json_decode((string) ($row['functions'] ?? 'null'), true) ?? [];
+            $modify = fn(?string $code) => ['r' => 'READ_ONLY', 's' => 'SHAREABLE', 'w' => 'READ_WRITE'][$code ?? ''] ?? null;
+            $options = ['SFUNC = ' . $fn['aggtransfn'], 'STYPE = ' . $row['stype']];
+            $add = function (string $option, $value) use (&$options) {
+                if ($value !== null && $value !== '' && $value !== 0) {
+                    $options[] = "$option = $value";
+                }
+            };
+            $add('SSPACE', (int) ($spec['aggtransspace'] ?? 0) ?: null);
+            $add('FINALFUNC', $fn['aggfinalfn'] ?? null);
+            if (isset($fn['aggfinalfn'])) {
+                if (!empty($spec['aggfinalextra'])) {
+                    $options[] = 'FINALFUNC_EXTRA';
+                }
+                $add('FINALFUNC_MODIFY', $modify($spec['aggfinalmodify'] ?? null));
+            }
+            $add('COMBINEFUNC', $fn['aggcombinefn'] ?? null);
+            $add('SERIALFUNC', $fn['aggserialfn'] ?? null);
+            $add('DESERIALFUNC', $fn['aggdeserialfn'] ?? null);
+            $add('INITCOND', isset($spec['agginitval']) ? self::literal($spec['agginitval']) : null);
+            $add('MSFUNC', $fn['aggmtransfn'] ?? null);
+            $add('MINVFUNC', $fn['aggminvtransfn'] ?? null);
+            if (isset($fn['aggmtransfn'])) {
+                $add('MSTYPE', $row['mstype']);
+                $add('MSSPACE', (int) ($spec['aggmtransspace'] ?? 0) ?: null);
+                $add('MFINALFUNC', $fn['aggmfinalfn'] ?? null);
+                if (isset($fn['aggmfinalfn'])) {
+                    if (!empty($spec['aggmfinalextra'])) {
+                        $options[] = 'MFINALFUNC_EXTRA';
+                    }
+                    $add('MFINALFUNC_MODIFY', $modify($spec['aggmfinalmodify'] ?? null));
+                }
+                $add('MINITCOND', isset($spec['aggminitval']) ? self::literal($spec['aggminitval']) : null);
+            }
+            $add('SORTOP', $row['sortop']);
+            $add('PARALLEL', ['s' => 'SAFE', 'r' => 'RESTRICTED'][$row['parallel']] ?? null);
+            if (($spec['aggkind'] ?? 'n') === 'h') {
+                $options[] = 'HYPOTHETICAL';
+            }
+            $name = SchemaScope::name($connection, $row['name']);
+            $out[$row['key']] = [
+                'create' => "CREATE AGGREGATE $name(" . $row['args'] . ') (' . implode(', ', $options) . ')',
+                'drop'   => "DROP AGGREGATE IF EXISTS $name(" . $row['identity'] . ')',
+            ];
+        }
+        return $out;
+    }
 }

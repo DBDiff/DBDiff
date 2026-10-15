@@ -117,4 +117,27 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
             fn(string $db) => $this->rows($db, "SELECT tablename, rulename, definition FROM pg_rules WHERE schemaname = 'public' ORDER BY 1, 2")
         );
     }
+
+    public function testAggregates(): void
+    {
+        $fns = "CREATE FUNCTION add_int(int, int) RETURNS int LANGUAGE sql IMMUTABLE AS 'SELECT \$1 + \$2';
+                CREATE FUNCTION sub_int(int, int) RETURNS int LANGUAGE sql IMMUTABLE AS 'SELECT \$1 - \$2';
+                CREATE FUNCTION halve(int) RETURNS numeric LANGUAGE sql IMMUTABLE AS 'SELECT \$1 / 2.0';";
+        $this->assertRoundTrip(
+            'agg',
+            $fns . "CREATE AGGREGATE my_sum(int) (SFUNC = add_int, STYPE = int, INITCOND = '0', COMBINEFUNC = add_int, PARALLEL = SAFE,
+                        MSFUNC = add_int, MINVFUNC = sub_int, MSTYPE = int, MINITCOND = '0');
+                    CREATE AGGREGATE half_sum(int) (SFUNC = add_int, STYPE = int, FINALFUNC = halve, INITCOND = '0');
+                    CREATE AGGREGATE my_max(int) (SFUNC = int4larger, STYPE = int, SORTOP = >);
+                    CREATE TABLE t (n int); CREATE VIEW totals AS SELECT my_sum(n), half_sum(n) FROM t;",
+            $fns . "CREATE AGGREGATE half_sum(int) (SFUNC = add_int, STYPE = int, FINALFUNC = halve);
+                    CREATE AGGREGATE old_agg(int) (SFUNC = add_int, STYPE = int);",
+            fn(string $db) => $this->rows($db,
+                "SELECT p.oid::regprocedure::text AS agg, to_jsonb(a) - 'aggfnoid' - 'aggtransfn' - 'aggfinalfn' - 'aggcombinefn'
+                        - 'aggmtransfn' - 'aggminvtransfn' - 'aggsortop' - 'aggtranstype' - 'aggmtranstype' AS spec,
+                        a.aggtransfn::text, a.aggfinalfn::text, a.aggcombinefn::text, a.aggsortop::regoperator::text
+                   FROM pg_aggregate a JOIN pg_proc p ON p.oid = a.aggfnoid
+                  WHERE p.pronamespace = 'public'::regnamespace ORDER BY 1")
+        );
+    }
 }
