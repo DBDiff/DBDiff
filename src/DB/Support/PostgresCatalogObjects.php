@@ -332,4 +332,37 @@ final class PostgresCatalogObjects {
         }
         return $out;
     }
+
+    /**
+     * Extended statistics objects (`CREATE STATISTICS`), the planner's
+     * cross-column statistics, with a statistics target where one is set
+     * (-1, or NULL from PostgreSQL 17, is the default).
+     */
+    public static function statistics(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT s.stxname AS name, c.relname AS relation,
+                    pg_get_statisticsobjdef(s.oid) AS definition,
+                    COALESCE((to_jsonb(s) ->> 'stxstattarget')::int, -1) AS target
+               FROM pg_statistic_ext s
+               JOIN pg_class c ON c.oid = s.stxrelid
+              WHERE s.stxnamespace = " . SchemaScope::oid($connection) . "
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_statistic_ext', 's.oid') . "
+              ORDER BY s.stxname"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $row  = (array) $row;
+            $name = SchemaScope::name($connection, $row['name']);
+            $create = $row['definition'];
+            if ((int) $row['target'] >= 0) {
+                $create .= ";\nALTER STATISTICS $name SET STATISTICS " . (int) $row['target'];
+            }
+            $out[$row['name']] = [
+                'create' => $create,
+                'drop'   => "DROP STATISTICS IF EXISTS $name",
+                'table'  => $row['relation'],
+            ];
+        }
+        return $out;
+    }
 }

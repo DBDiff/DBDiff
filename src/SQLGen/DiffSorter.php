@@ -35,6 +35,7 @@ class DiffSorter {
         "DropPolicy",
         "DropTrigger",
         "DropRule",
+        "DropStatistics",
 
         "AlterTableDropConstraint",
 
@@ -114,6 +115,9 @@ class DiffSorter {
         // A rule may name any table or view in its action.
         "CreateRule",
         "AlterRule",
+        // On columns the table changes above may add.
+        "CreateStatistics",
+        "AlterStatistics",
 
         // Last: both need their table to exist, and enabling RLS without the
         // policies would leave the table denying every row.
@@ -179,6 +183,8 @@ class DiffSorter {
         "AlterPolicy",
         "CreatePolicy",
         "AlterRowSecurity",
+        "AlterStatistics",
+        "CreateStatistics",
         "AlterRule",
         "CreateRule",
         "AlterTrigger",
@@ -235,6 +241,7 @@ class DiffSorter {
         "DropMatView",
         "DropTrigger",
         "DropRule",
+        "DropStatistics",
         "DropPolicy",
 
         // What the UP created goes last, once nothing reverted above still

@@ -49,6 +49,9 @@ use DBDiff\Diff\AlterRule;
 use DBDiff\Diff\CreateAggregate;
 use DBDiff\Diff\DropAggregate;
 use DBDiff\Diff\AlterAggregate;
+use DBDiff\Diff\CreateStatistics;
+use DBDiff\Diff\DropStatistics;
+use DBDiff\Diff\AlterStatistics;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -318,6 +321,11 @@ class DBSchema {
                 PostgresCatalogObjects::aggregates($source),
                 PostgresCatalogObjects::aggregates($target),
                 CreateAggregate::class, DropAggregate::class, AlterAggregate::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::statistics($source),
+                PostgresCatalogObjects::statistics($target),
+                CreateStatistics::class, DropStatistics::class, AlterStatistics::class
             ),
             $this->diffSchemaObjects(
                 PostgresCatalogObjects::rules($source),

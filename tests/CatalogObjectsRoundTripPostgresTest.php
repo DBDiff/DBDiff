@@ -140,4 +140,21 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
                   WHERE p.pronamespace = 'public'::regnamespace ORDER BY 1")
         );
     }
+
+    public function testStatisticsObjects(): void
+    {
+        $this->assertRoundTrip(
+            'stx',
+            "CREATE TABLE addr (id int PRIMARY KEY, city text, zip text, country text);
+             CREATE STATISTICS addr_city_zip (dependencies, ndistinct) ON city, zip FROM addr;
+             ALTER STATISTICS addr_city_zip SET STATISTICS 500;
+             CREATE STATISTICS addr_country (mcv) ON country, city FROM addr;",
+            "CREATE TABLE addr (id int PRIMARY KEY, city text, zip text, country text);
+             CREATE STATISTICS addr_city_zip (ndistinct) ON city, zip FROM addr;
+             CREATE STATISTICS addr_old ON city, country FROM addr;",
+            fn(string $db) => $this->rows($db,
+                "SELECT stxname, pg_get_statisticsobjdef(oid) AS def, COALESCE((to_jsonb(s) ->> 'stxstattarget')::int, -1) AS target
+                   FROM pg_statistic_ext s WHERE stxnamespace = 'public'::regnamespace ORDER BY 1")
+        );
+    }
 }
