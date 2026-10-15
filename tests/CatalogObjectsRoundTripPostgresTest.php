@@ -184,4 +184,23 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
             $state
         );
     }
+
+    public function testCasts(): void
+    {
+        $types = "CREATE DOMAIN flag AS int; CREATE TYPE mood AS ENUM ('sad', 'happy');
+                  CREATE FUNCTION flag_to_bool(flag) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT \$1 <> 0';
+                  CREATE FUNCTION mood_to_int(mood) RETURNS int LANGUAGE sql IMMUTABLE AS 'SELECT CASE \$1 WHEN ''sad'' THEN 0 ELSE 1 END';";
+        $this->assertRoundTrip(
+            'cast',
+            $types . "CREATE CAST (flag AS boolean) WITH FUNCTION flag_to_bool(flag) AS ASSIGNMENT;
+                      CREATE CAST (mood AS int) WITH FUNCTION mood_to_int(mood);
+                      CREATE CAST (mood AS text) WITH INOUT AS IMPLICIT;
+                      CREATE VIEW moods AS SELECT 'happy'::mood::int AS n;",
+            $types . "CREATE CAST (flag AS boolean) WITH FUNCTION flag_to_bool(flag);
+                      CREATE CAST (mood AS varchar) WITH INOUT;",
+            fn(string $db) => $this->rows($db,
+                "SELECT format_type(castsource, NULL) AS s, format_type(casttarget, NULL) AS t, castmethod::text, castcontext::text,
+                        castfunc::regprocedure::text FROM pg_cast WHERE oid >= 16384 ORDER BY 1, 2")
+        );
+    }
 }

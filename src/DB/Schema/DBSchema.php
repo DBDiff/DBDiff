@@ -58,6 +58,9 @@ use DBDiff\Diff\AlterTextSearchDictionary;
 use DBDiff\Diff\CreateTextSearchConfiguration;
 use DBDiff\Diff\DropTextSearchConfiguration;
 use DBDiff\Diff\AlterTextSearchConfiguration;
+use DBDiff\Diff\CreateCast;
+use DBDiff\Diff\DropCast;
+use DBDiff\Diff\AlterCast;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -333,6 +336,11 @@ class DBSchema {
                 PostgresObjectKinds::rowSecurity($target),
                 $sourceTables,
                 $targetTables
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::casts($source),
+                PostgresCatalogObjects::casts($target),
+                CreateCast::class, DropCast::class, AlterCast::class
             ),
             $this->diffSchemaObjects(
                 PostgresCatalogObjects::aggregates($source),

@@ -433,4 +433,42 @@ final class PostgresCatalogObjects {
         }
         return $out;
     }
+
+    /**
+     * User-defined casts. A cast belongs to the database, so it is read with
+     * the schema of its function, or of its source type when it has none;
+     * the built-in ones (oid below FirstNormalObjectId) and an extension's
+     * are not the user's.
+     */
+    public static function casts(Connection $connection): array {
+        $scope = SchemaScope::oid($connection);
+        $rows = $connection->select(
+            "SELECT format_type(c.castsource, NULL) AS source, format_type(c.casttarget, NULL) AS target,
+                    c.castmethod::text AS method, c.castcontext::text AS context,
+                    CASE WHEN c.castfunc <> 0 THEN c.castfunc::regprocedure::text END AS function
+               FROM pg_cast c
+               LEFT JOIN pg_proc p ON p.oid = c.castfunc
+               JOIN pg_type st ON st.oid = c.castsource
+              WHERE c.oid >= 16384
+                AND COALESCE(p.pronamespace, st.typnamespace) = $scope
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_cast', 'c.oid') . "
+              ORDER BY 1, 2"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $row  = (array) $row;
+            $pair = "({$row['source']} AS {$row['target']})";
+            $how  = match ($row['method']) {
+                'f'     => ' WITH FUNCTION ' . $row['function'],
+                'i'     => ' WITH INOUT',
+                default => ' WITHOUT FUNCTION',
+            };
+            $context = ['a' => ' AS ASSIGNMENT', 'i' => ' AS IMPLICIT'][$row['context']] ?? '';
+            $out[$row['source'] . ' AS ' . $row['target']] = [
+                'create' => "CREATE CAST $pair$how$context",
+                'drop'   => "DROP CAST IF EXISTS $pair",
+            ];
+        }
+        return $out;
+    }
 }

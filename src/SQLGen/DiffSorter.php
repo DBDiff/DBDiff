@@ -111,6 +111,8 @@ class DiffSorter {
         // Built on routines, and a view may call one.
         "CreateAggregate",
         "AlterAggregate",
+        "CreateCast",
+        "AlterCast",
         "CreateView",
         "AlterView",
         // After views: a materialised view may select from one.
@@ -142,6 +144,7 @@ class DiffSorter {
         // a routine can take a type, a composite can hold a domain, and a
         // domain or a composite can be built on an enum.
         "DropAggregate",
+        "DropCast",
         "DropRoutine",
         "DropRoutineEarly",
         "DropSequence",
@@ -247,6 +250,8 @@ class DiffSorter {
         // ones the DOWN puts back.
         "AlterAggregate",
         "DropAggregate",
+        "AlterCast",
+        "DropCast",
         "DropView",
         "DropMatView",
         "DropTrigger",
@@ -264,6 +269,7 @@ class DiffSorter {
         // (issue #238).
         // An aggregate, and a range type, before the routines they name.
         "CreateAggregate",
+        "CreateCast",
         "CreateRangeType",
         "CreateRoutine",
         "CreateRoutineEarly",
