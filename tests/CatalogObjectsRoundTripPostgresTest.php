@@ -252,4 +252,20 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
             $state
         );
     }
+
+    public function testKindsNotComparedAreNamed(): void
+    {
+        $this->diff(
+            $this->db('unc_s', "CREATE FUNCTION txt_eq_ci(text, text) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT lower(\$1) = lower(\$2)';
+                                CREATE OPERATOR === (LEFTARG = text, RIGHTARG = text, FUNCTION = txt_eq_ci);
+                                CREATE TABLE t (id int); CREATE PUBLICATION dbdiff_cat_pub FOR TABLE t;"),
+            $this->db('unc_t', 'CREATE TABLE t (id int);')
+        );
+        $this->assertStringContainsString('Operator objects are not compared (source 1, target 0: ===)', $this->lastLog);
+        $this->assertStringContainsString('Publication objects are not compared (source 1, target 0: dbdiff_cat_pub)', $this->lastLog);
+
+        // Nothing of the kind on either side, nothing said.
+        $this->diff($this->db('unc_a', 'CREATE TABLE t (id int);'), $this->db('unc_b', 'CREATE TABLE t (id int, v int);'));
+        $this->assertStringNotContainsString('not compared', $this->lastLog);
+    }
 }

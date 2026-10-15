@@ -74,6 +74,7 @@ use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
 use DBDiff\DB\Support\PostgresCatalogObjects;
+use DBDiff\DB\Support\PostgresUncompared;
 use DBDiff\Diff\CreateCollation;
 use DBDiff\Diff\DropCollation;
 use DBDiff\Diff\AlterCollation;
@@ -202,6 +203,8 @@ class DBSchema {
         // way collation and charset above are asked for only of MySQL.
         if ($driver === 'pgsql') {
             $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+            // What is not compared at all is named rather than passed over.
+            PostgresUncompared::report($this->manager->getDB('source'), $this->manager->getDB('target'));
             // Before anything plans around them: a "change" that is the same
             // definition rendered twice is not one (issue #234).
             $diffs = PostgresExpressionEquivalence::dropEquivalent(
