@@ -16,6 +16,10 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "CreateSchema",
+        // Before the objects the migration creates, which take them.
+        "DropDefaultPrivileges",
+        "AlterDefaultPrivileges",
+        "CreateDefaultPrivileges",
         // Before anything that may use one: a type, an operator class.
         "CreateExtension",
         // A domain, a column or an index may be collated by one.
@@ -134,6 +138,9 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "DropSchema",
+        "CreateDefaultPrivileges",
+        "AlterDefaultPrivileges",
+        "DropDefaultPrivileges",
         "DropExtension",
 
         // Before the routines, views, policies and triggers the DOWN puts

@@ -37,6 +37,9 @@ use DBDiff\Diff\AlterSequence;
 use DBDiff\Diff\CreateCompositeType;
 use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\AlterCompositeType;
+use DBDiff\Diff\CreateDefaultPrivileges;
+use DBDiff\Diff\DropDefaultPrivileges;
+use DBDiff\Diff\AlterDefaultPrivileges;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -251,6 +254,13 @@ class DBSchema {
             // What the types and tables below may use: an extension's type or
             // operator class (an exclusion constraint's btree_gist).
             $extensions,
+            // What a role's new objects are granted — set before the tables
+            // the migration creates, so they are created the source's way.
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::defaultPrivileges($source),
+                PostgresCatalogObjects::defaultPrivileges($target),
+                CreateDefaultPrivileges::class, DropDefaultPrivileges::class, AlterDefaultPrivileges::class
+            ),
             // What a column, a domain or an index may be collated by.
             $this->diffNamedObjects(
                 PostgresObjectKinds::collations($source),

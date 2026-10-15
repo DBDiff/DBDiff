@@ -59,4 +59,30 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
             $settings
         );
     }
+
+    public function testDefaultPrivileges(): void
+    {
+        $roles = "DO \$\$ BEGIN CREATE ROLE dbdiff_cat_api NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;
+                  DO \$\$ BEGIN CREATE ROLE dbdiff_cat_svc NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;";
+        $acl = fn(string $db) => $this->rows($db,
+            "SELECT pg_get_userbyid(defaclrole) AS role, defaclnamespace::regnamespace::text AS schema,
+                    defaclobjtype::text AS kind, defaclacl::text AS acl
+               FROM pg_default_acl ORDER BY 1, 2, 3");
+        $up = $this->assertRoundTrip(
+            'defacl',
+            $roles . "
+             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO dbdiff_cat_api;
+             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO dbdiff_cat_svc WITH GRANT OPTION;
+             ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+             ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO dbdiff_cat_api;
+             CREATE TABLE created_after (id int);",
+            $roles . "
+             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT, SELECT ON TABLES TO dbdiff_cat_api;
+             ALTER DEFAULT PRIVILEGES GRANT USAGE ON TYPES TO dbdiff_cat_svc;",
+            fn(string $db) => array_merge($acl($db), $this->rows($db,
+                "SELECT relacl::text FROM pg_class WHERE relname = 'created_after'"))
+        );
+        // Set before the table, so the table is created with them.
+        $this->assertLessThan(strpos($up, 'CREATE TABLE'), strpos($up, 'ALTER DEFAULT PRIVILEGES'), $up);
+    }
 }
