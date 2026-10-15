@@ -102,4 +102,19 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
                 "SELECT evtname, evtevent, evtenabled::text, evttags::text FROM pg_event_trigger WHERE evtname LIKE 'dbdiff_cat_%' ORDER BY 1")
         );
     }
+
+    public function testRules(): void
+    {
+        $tables = "CREATE TABLE orders (id int PRIMARY KEY, total int); CREATE TABLE audit (id int, note text);
+                   CREATE VIEW recent AS SELECT id, total FROM orders;";
+        $this->assertRoundTrip(
+            'rules',
+            $tables . "CREATE RULE keep_orders AS ON DELETE TO orders DO INSTEAD NOTHING;
+                       CREATE RULE log_insert AS ON INSERT TO recent DO INSTEAD
+                           (INSERT INTO orders VALUES (NEW.id, NEW.total); INSERT INTO audit VALUES (NEW.id, 'via view'));",
+            $tables . "CREATE RULE keep_orders AS ON DELETE TO orders DO ALSO INSERT INTO audit VALUES (OLD.id, 'deleted');
+                       CREATE RULE old_rule AS ON UPDATE TO orders DO INSTEAD NOTHING;",
+            fn(string $db) => $this->rows($db, "SELECT tablename, rulename, definition FROM pg_rules WHERE schemaname = 'public' ORDER BY 1, 2")
+        );
+    }
 }

@@ -224,4 +224,31 @@ final class PostgresCatalogObjects {
         }
         return $out;
     }
+
+    /**
+     * Rewrite rules on the schema's tables and views — not the `_RETURN`
+     * rule that is a view's own definition. Keyed `table.rule`: a rule's
+     * name is unique only on its relation.
+     */
+    public static function rules(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT c.relname AS relation, r.rulename AS name, pg_get_ruledef(r.oid, true) AS definition
+               FROM pg_rewrite r
+               JOIN pg_class c ON c.oid = r.ev_class
+              WHERE c.relnamespace = " . SchemaScope::oid($connection) . "
+                AND r.rulename <> '_RETURN'
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
+              ORDER BY c.relname, r.rulename"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $out[$row['relation'] . '.' . $row['name']] = [
+                'create' => rtrim(trim($row['definition']), ';'),
+                'drop'   => 'DROP RULE IF EXISTS ' . self::ident($row['name']) . ' ON ' . SchemaScope::name($connection, $row['relation']),
+                'table'  => $row['relation'],
+            ];
+        }
+        return $out;
+    }
 }
