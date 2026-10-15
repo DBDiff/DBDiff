@@ -52,6 +52,12 @@ use DBDiff\Diff\AlterAggregate;
 use DBDiff\Diff\CreateStatistics;
 use DBDiff\Diff\DropStatistics;
 use DBDiff\Diff\AlterStatistics;
+use DBDiff\Diff\CreateTextSearchDictionary;
+use DBDiff\Diff\DropTextSearchDictionary;
+use DBDiff\Diff\AlterTextSearchDictionary;
+use DBDiff\Diff\CreateTextSearchConfiguration;
+use DBDiff\Diff\DropTextSearchConfiguration;
+use DBDiff\Diff\AlterTextSearchConfiguration;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -278,6 +284,17 @@ class DBSchema {
                 PostgresObjectKinds::collations($source),
                 PostgresObjectKinds::collations($target),
                 CreateCollation::class, DropCollation::class, AlterCollation::class
+            ),
+            // What an index, a generated column or a routine may search with.
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::textSearchDictionaries($source),
+                PostgresCatalogObjects::textSearchDictionaries($target),
+                CreateTextSearchDictionary::class, DropTextSearchDictionary::class, AlterTextSearchDictionary::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::textSearchConfigurations($source),
+                PostgresCatalogObjects::textSearchConfigurations($target),
+                CreateTextSearchConfiguration::class, DropTextSearchConfiguration::class, AlterTextSearchConfiguration::class
             ),
             // Like enums, a composite, a domain or a sequence can be referenced
             // by a column — by its type, or by a nextval() default — so

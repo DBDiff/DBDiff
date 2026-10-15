@@ -17,10 +17,13 @@ trait ChangedSchemaObject {
     public string $targetDefinition;
     public string $sourceDrop;
     public string $targetDrop;
+    /** Set when the object can be changed where it stands — see ReplaceSchemaObjectSQL. */
+    public ?array $sourceInPlace = null;
+    public ?array $targetInPlace = null;
 
     /**
-     * @param array{create: string, drop: string, table?: ?string} $source
-     * @param array{create: string, drop: string, table?: ?string} $target
+     * @param array{create: string, drop: string, table?: ?string, inPlace?: array{same: string, clear: string, fill: string}} $source
+     * @param array{create: string, drop: string, table?: ?string, inPlace?: array{same: string, clear: string, fill: string}} $target
      */
     public function __construct(string $name, array $source, array $target) {
         $this->name             = $name;
@@ -29,5 +32,7 @@ trait ChangedSchemaObject {
         $this->sourceDrop       = $source['drop'];
         $this->targetDrop       = $target['drop'];
         $this->table            = $source['table'] ?? null;
+        $this->sourceInPlace    = $source['inPlace'] ?? null;
+        $this->targetInPlace    = $target['inPlace'] ?? null;
     }
 }

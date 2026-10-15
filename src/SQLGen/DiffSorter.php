@@ -28,6 +28,12 @@ class DiffSorter {
         // A domain, a column or an index may be collated by one.
         "CreateCollation",
         "AlterCollation",
+        // What an index or a generated column may search with: the
+        // dictionaries a configuration maps to first.
+        "CreateTextSearchDictionary",
+        "AlterTextSearchDictionary",
+        "CreateTextSearchConfiguration",
+        "AlterTextSearchConfiguration",
 
         "DropView",
         // Both depend on tables, so they go before any table is touched.
@@ -144,6 +150,8 @@ class DiffSorter {
         "DropDomain",
         "DropEnum",
         "DropCollation",
+        "DropTextSearchConfiguration",
+        "DropTextSearchDictionary",
         // After everything that used it, before its schema.
         "DropExtension",
         "DropSchema",
@@ -170,6 +178,8 @@ class DiffSorter {
         // it (issue #238): the types first, and a routine a table's default,
         // constraint or index calls, so the tables and columns below can use
         // them...
+        "DropTextSearchDictionary",
+        "DropTextSearchConfiguration",
         "DropCollation",
         "DropEnum",
         "DropDomain",
@@ -265,6 +275,10 @@ class DiffSorter {
         // UP created with it are gone: neither can be replaced while a
         // column uses it.
         "AlterRangeType",
+        "AlterTextSearchConfiguration",
+        "CreateTextSearchConfiguration",
+        "AlterTextSearchDictionary",
+        "CreateTextSearchDictionary",
         "AlterCollation",
         "CreateCollation",
         "CreateExtension",

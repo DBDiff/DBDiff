@@ -157,4 +157,31 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
                    FROM pg_statistic_ext s WHERE stxnamespace = 'public'::regnamespace ORDER BY 1")
         );
     }
+
+    public function testTextSearchConfigurationsAndDictionaries(): void
+    {
+        $state = fn(string $db) => array_merge(
+            $this->rows($db, "SELECT dictname, dicttemplate::regproc::text, dictinitoption FROM pg_ts_dict
+                               WHERE dictnamespace = 'public'::regnamespace ORDER BY 1"),
+            $this->rows($db, "SELECT c.cfgname, t.alias, string_agg(m.mapdict::regdictionary::text, ',' ORDER BY m.mapseqno) AS dicts
+                                FROM pg_ts_config c JOIN pg_ts_config_map m ON m.mapcfg = c.oid
+                                JOIN ts_token_type(c.cfgparser) t ON t.tokid = m.maptokentype
+                               WHERE c.cfgnamespace = 'public'::regnamespace GROUP BY 1, 2 ORDER BY 1, 2"));
+        $this->assertRoundTrip(
+            'fts',
+            "CREATE TEXT SEARCH DICTIONARY my_stem (TEMPLATE = snowball, language = 'english');
+             CREATE TEXT SEARCH CONFIGURATION my_cfg (COPY = english);
+             ALTER TEXT SEARCH CONFIGURATION my_cfg ALTER MAPPING FOR asciiword, word WITH my_stem;
+             ALTER TEXT SEARCH CONFIGURATION my_cfg DROP MAPPING FOR email;
+             CREATE TABLE docs (id int PRIMARY KEY, body text,
+                 search tsvector GENERATED ALWAYS AS (to_tsvector('my_cfg', body)) STORED);
+             CREATE INDEX docs_fts ON docs USING gin (to_tsvector('my_cfg'::regconfig, body));",
+            // The target's my_cfg is used by an index, so it can only be changed in place.
+            "CREATE TEXT SEARCH CONFIGURATION my_cfg (COPY = simple);
+             CREATE TABLE docs (id int PRIMARY KEY, body text);
+             CREATE INDEX docs_fts ON docs USING gin (to_tsvector('my_cfg'::regconfig, body));
+             CREATE TEXT SEARCH DICTIONARY old_dict (TEMPLATE = simple, stopwords = english);",
+            $state
+        );
+    }
 }
