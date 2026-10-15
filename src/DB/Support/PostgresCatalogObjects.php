@@ -192,4 +192,36 @@ final class PostgresCatalogObjects {
         }
         return $out;
     }
+
+    /**
+     * Event triggers, with the schema of the function they run: one fires on
+     * DDL in the whole database, so it belongs to no schema of its own.
+     */
+    public static function eventTriggers(Connection $connection): array {
+        $rows = $connection->select(
+            "SELECT e.evtname AS name, e.evtevent AS event, e.evtenabled::text AS enabled,
+                    e.evtfoid::regproc::text AS function,
+                    array_to_json(e.evttags)::text AS tags
+               FROM pg_event_trigger e
+               JOIN pg_proc p ON p.oid = e.evtfoid
+              WHERE p.pronamespace = " . SchemaScope::oid($connection) . "
+                AND " . PostgresSchemaHelper::notExtensionMember('pg_event_trigger', 'e.oid') . "
+              ORDER BY e.evtname"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $row  = (array) $row;
+            $name = self::ident($row['name']);
+            $tags = json_decode((string) $row['tags'], true) ?? [];
+            $create = "CREATE EVENT TRIGGER $name ON " . $row['event']
+                . ($tags !== [] ? ' WHEN TAG IN (' . implode(', ', array_map([self::class, 'literal'], $tags)) . ')' : '')
+                . ' EXECUTE FUNCTION ' . $row['function'] . '()';
+            $state = ['D' => 'DISABLE', 'R' => 'ENABLE REPLICA', 'A' => 'ENABLE ALWAYS'][$row['enabled']] ?? null;
+            if ($state !== null) {
+                $create .= ";\nALTER EVENT TRIGGER $name $state";
+            }
+            $out[$row['name']] = ['create' => $create, 'drop' => "DROP EVENT TRIGGER IF EXISTS $name"];
+        }
+        return $out;
+    }
 }

@@ -40,6 +40,9 @@ use DBDiff\Diff\AlterCompositeType;
 use DBDiff\Diff\CreateDefaultPrivileges;
 use DBDiff\Diff\DropDefaultPrivileges;
 use DBDiff\Diff\AlterDefaultPrivileges;
+use DBDiff\Diff\CreateEventTrigger;
+use DBDiff\Diff\DropEventTrigger;
+use DBDiff\Diff\AlterEventTrigger;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -304,6 +307,11 @@ class DBSchema {
                 PostgresObjectKinds::rowSecurity($target),
                 $sourceTables,
                 $targetTables
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::eventTriggers($source),
+                PostgresCatalogObjects::eventTriggers($target),
+                CreateEventTrigger::class, DropEventTrigger::class, AlterEventTrigger::class
             ),
             $this->diffPolicies(
                 PostgresObjectKinds::policies($source),

@@ -16,6 +16,9 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "CreateSchema",
+        // An event trigger fires on DDL: one going is gone before the
+        // migration's own DDL runs, and one coming is created after it.
+        "DropEventTrigger",
         // Before the objects the migration creates, which take them.
         "DropDefaultPrivileges",
         "AlterDefaultPrivileges",
@@ -132,12 +135,15 @@ class DiffSorter {
         // After everything that used it, before its schema.
         "DropExtension",
         "DropSchema",
+        "AlterEventTrigger",
+        "CreateEventTrigger",
     ];
 
     private $down_order = [
         "SetDBCharset",
         "SetDBCollation",
         "DropSchema",
+        "CreateEventTrigger",
         "CreateDefaultPrivileges",
         "AlterDefaultPrivileges",
         "DropDefaultPrivileges",
@@ -242,6 +248,8 @@ class DiffSorter {
         "CreateSchema",
         // Last: after everything DOWN puts back.
         "AlterComment",
+        "AlterEventTrigger",
+        "DropEventTrigger",
     ];
 
     public function sort($diff, $type) {

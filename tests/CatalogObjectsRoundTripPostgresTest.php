@@ -85,4 +85,21 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
         // Set before the table, so the table is created with them.
         $this->assertLessThan(strpos($up, 'CREATE TABLE'), strpos($up, 'ALTER DEFAULT PRIVILEGES'), $up);
     }
+
+    public function testEventTriggers(): void
+    {
+        $fn = "CREATE FUNCTION audit_ddl() RETURNS event_trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE NOTICE 'ddl'; END \$\$;
+               CREATE FUNCTION forbid_drop() RETURNS event_trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION 'no drops'; END \$\$;";
+        $this->assertRoundTrip(
+            'evt',
+            $fn . "CREATE EVENT TRIGGER dbdiff_cat_audit ON ddl_command_end WHEN TAG IN ('CREATE TABLE', 'ALTER TABLE') EXECUTE FUNCTION audit_ddl();
+                   CREATE EVENT TRIGGER dbdiff_cat_guard ON sql_drop EXECUTE FUNCTION forbid_drop();
+                   ALTER EVENT TRIGGER dbdiff_cat_guard DISABLE;
+                   CREATE TABLE t (id int);",
+            $fn . "CREATE EVENT TRIGGER dbdiff_cat_audit ON ddl_command_end EXECUTE FUNCTION audit_ddl();
+                   CREATE EVENT TRIGGER dbdiff_cat_gone ON ddl_command_start EXECUTE FUNCTION audit_ddl();",
+            fn(string $db) => $this->rows($db,
+                "SELECT evtname, evtevent, evtenabled::text, evttags::text FROM pg_event_trigger WHERE evtname LIKE 'dbdiff_cat_%' ORDER BY 1")
+        );
+    }
 }
