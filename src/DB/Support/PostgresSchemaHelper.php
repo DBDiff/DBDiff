@@ -236,7 +236,9 @@ class PostgresSchemaHelper {
                     a.attinhcount > 0 AS inherited,
                     -- Declared by the table itself, inherited or not: a column
                     -- that is only inherited is not written in its CREATE TABLE.
-                    a.attislocal AS local
+                    a.attislocal AS local,
+                    -- A per-column statistics target: -1 (NULL from 17) is the default.
+                    COALESCE(a.attstattarget, -1)::int AS stattarget
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_type t ON t.oid = a.atttypid
@@ -400,7 +402,10 @@ class PostgresSchemaHelper {
         $rows = $connection->select(
             "SELECT c.relname AS table_name,
                     c.relpersistence,
-                    " . self::canonicalReloptions('c.reloptions', ', ') . " AS reloptions
+                    " . self::canonicalReloptions('c.reloptions', ', ') . " AS reloptions,
+                    c.relreplident::text AS replident,
+                    (SELECT ic.relname FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+                      WHERE i.indrelid = c.oid AND i.indisreplident) AS replident_index
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
               WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname IN ($ph)",
@@ -411,6 +416,7 @@ class PostgresSchemaHelper {
             $meta[$row['table_name']] = [
                 'unlogged'   => ($row['relpersistence'] ?? 'p') === 'u',
                 'reloptions' => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+                'replicaIdentity' => PostgresTableSettings::replicaIdentity($row['replident'] ?? 'd', $row['replident_index'] ?? null),
             ];
         }
         return $meta;

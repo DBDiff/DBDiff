@@ -14,7 +14,8 @@ use DBDiff\DB\Support\SchemaScope;
  * Routines are created with the programmable objects, after the tables,
  * because a routine's body may read a table the same migration creates. A
  * column default, a generated column, a CHECK constraint or an expression
- * index that *calls* a routine needs the opposite:
+ * index that *calls* a routine needs the opposite — and so does a range
+ * type's subtype_diff:
  *
  *     ALTER TABLE "t" ADD COLUMN "id" integer DEFAULT f();
  *     ERROR:  function f() does not exist
@@ -58,7 +59,7 @@ final class CreationOrderPlan {
                JOIN pg_namespace n ON n.oid = p.pronamespace
               WHERE d.refclassid = 'pg_proc'::regclass
                 AND n.nspname = " . SchemaScope::literal($side) . "
-                AND (d.classid IN ('pg_attrdef'::regclass, 'pg_constraint'::regclass)
+                AND (d.classid IN ('pg_attrdef'::regclass, 'pg_constraint'::regclass, 'pg_type'::regclass)
                      OR (d.classid = 'pg_class'::regclass
                          AND (SELECT relkind FROM pg_class WHERE oid = d.objid) IN ('i', 'I')))"
         ), 'name'));

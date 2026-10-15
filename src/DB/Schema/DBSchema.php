@@ -37,6 +37,48 @@ use DBDiff\Diff\AlterSequence;
 use DBDiff\Diff\CreateCompositeType;
 use DBDiff\Diff\DropCompositeType;
 use DBDiff\Diff\AlterCompositeType;
+use DBDiff\Diff\CreateDefaultPrivileges;
+use DBDiff\Diff\DropDefaultPrivileges;
+use DBDiff\Diff\AlterDefaultPrivileges;
+use DBDiff\Diff\CreateEventTrigger;
+use DBDiff\Diff\DropEventTrigger;
+use DBDiff\Diff\AlterEventTrigger;
+use DBDiff\Diff\CreateRule;
+use DBDiff\Diff\DropRule;
+use DBDiff\Diff\AlterRule;
+use DBDiff\Diff\CreateAggregate;
+use DBDiff\Diff\DropAggregate;
+use DBDiff\Diff\AlterAggregate;
+use DBDiff\Diff\CreateStatistics;
+use DBDiff\Diff\DropStatistics;
+use DBDiff\Diff\AlterStatistics;
+use DBDiff\Diff\CreateTextSearchDictionary;
+use DBDiff\Diff\DropTextSearchDictionary;
+use DBDiff\Diff\AlterTextSearchDictionary;
+use DBDiff\Diff\CreateTextSearchConfiguration;
+use DBDiff\Diff\DropTextSearchConfiguration;
+use DBDiff\Diff\AlterTextSearchConfiguration;
+use DBDiff\Diff\CreateCast;
+use DBDiff\Diff\DropCast;
+use DBDiff\Diff\AlterCast;
+use DBDiff\Diff\CreateForeignServer;
+use DBDiff\Diff\DropForeignServer;
+use DBDiff\Diff\AlterForeignServer;
+use DBDiff\Diff\CreateUserMapping;
+use DBDiff\Diff\DropUserMapping;
+use DBDiff\Diff\AlterUserMapping;
+use DBDiff\Diff\CreateForeignTable;
+use DBDiff\Diff\DropForeignTable;
+use DBDiff\Diff\AlterForeignTable;
+use DBDiff\Diff\CreateRangeType;
+use DBDiff\Diff\DropRangeType;
+use DBDiff\Diff\AlterRangeType;
+use DBDiff\DB\Support\PostgresCatalogObjects;
+use DBDiff\DB\Support\PostgresDefaultPrivileges;
+use DBDiff\DB\Support\PostgresAggregates;
+use DBDiff\DB\Support\PostgresTextSearch;
+use DBDiff\DB\Support\PostgresForeignData;
+use DBDiff\DB\Support\PostgresUncompared;
 use DBDiff\Diff\CreateCollation;
 use DBDiff\Diff\DropCollation;
 use DBDiff\Diff\AlterCollation;
@@ -103,6 +145,18 @@ class DBSchema {
         $addedTables = array_values(array_diff($sourceTables, $targetTables));
         $deletedTables = array_values(array_diff($targetTables, $sourceTables));
 
+        // A table renamed, not dropped and created: its rows stay.
+        $adapter = $this->manager->getAdapter();
+        if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off' && $adapter instanceof BulkSchemaAdapterInterface) {
+            [$renamedTables, $renameDiffs] = TableRenames::plan(
+                $addedTables, $deletedTables, $adapter, $this->manager->getDB('source'), $this->manager->getDB('target')
+            );
+            $addedTables   = array_values(array_diff($addedTables, array_keys($renamedTables)));
+            $deletedTables = array_values(array_diff($deletedTables, array_values($renamedTables)));
+            $diffs = array_merge($diffs, $renameDiffs);
+            $tableSchema->tableRenames = $renamedTables;
+        }
+
         // Topological sort so parents are created before children
         if (!empty($addedTables)) {
             $sourceFkMap  = $this->manager->getForeignKeyMap('source');
@@ -165,6 +219,8 @@ class DBSchema {
         // way collation and charset above are asked for only of MySQL.
         if ($driver === 'pgsql') {
             $diffs = array_merge($diffs, $this->diffPostgresObjectKinds($sourceTables, $targetTables));
+            // What is not compared at all is named rather than passed over.
+            PostgresUncompared::report($this->manager->getDB('source'), $this->manager->getDB('target'));
             // Before anything plans around them: a "change" that is the same
             // definition rendered twice is not one (issue #234).
             $diffs = PostgresExpressionEquivalence::dropEquivalent(
@@ -247,11 +303,45 @@ class DBSchema {
             // What the types and tables below may use: an extension's type or
             // operator class (an exclusion constraint's btree_gist).
             $extensions,
+            // Where foreign tables read from, and as whom.
+            $this->diffSchemaObjects(
+                PostgresForeignData::foreignServers($source),
+                PostgresForeignData::foreignServers($target),
+                CreateForeignServer::class, DropForeignServer::class, AlterForeignServer::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresForeignData::userMappings($source),
+                PostgresForeignData::userMappings($target),
+                CreateUserMapping::class, DropUserMapping::class, AlterUserMapping::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresForeignData::foreignTables($source),
+                PostgresForeignData::foreignTables($target),
+                CreateForeignTable::class, DropForeignTable::class, AlterForeignTable::class
+            ),
+            // What a role's new objects are granted — set before the tables
+            // the migration creates, so they are created the source's way.
+            $this->diffSchemaObjects(
+                PostgresDefaultPrivileges::defaultPrivileges($source),
+                PostgresDefaultPrivileges::defaultPrivileges($target),
+                CreateDefaultPrivileges::class, DropDefaultPrivileges::class, AlterDefaultPrivileges::class
+            ),
             // What a column, a domain or an index may be collated by.
             $this->diffNamedObjects(
                 PostgresObjectKinds::collations($source),
                 PostgresObjectKinds::collations($target),
                 CreateCollation::class, DropCollation::class, AlterCollation::class
+            ),
+            // What an index, a generated column or a routine may search with.
+            $this->diffSchemaObjects(
+                PostgresTextSearch::textSearchDictionaries($source),
+                PostgresTextSearch::textSearchDictionaries($target),
+                CreateTextSearchDictionary::class, DropTextSearchDictionary::class, AlterTextSearchDictionary::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresTextSearch::textSearchConfigurations($source),
+                PostgresTextSearch::textSearchConfigurations($target),
+                CreateTextSearchConfiguration::class, DropTextSearchConfiguration::class, AlterTextSearchConfiguration::class
             ),
             // Like enums, a composite, a domain or a sequence can be referenced
             // by a column — by its type, or by a nextval() default — so
@@ -260,6 +350,12 @@ class DBSchema {
                 PostgresObjectKinds::compositeTypes($source),
                 PostgresObjectKinds::compositeTypes($target),
                 CreateCompositeType::class, DropCompositeType::class, AlterCompositeType::class
+            ),
+            // A column can be typed by a range type, as by a composite.
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::rangeTypes($source),
+                PostgresCatalogObjects::rangeTypes($target),
+                CreateRangeType::class, DropRangeType::class, AlterRangeType::class
             ),
             $this->diffNamedObjects(
                 PostgresObjectKinds::domains($source),
@@ -284,6 +380,31 @@ class DBSchema {
                 PostgresObjectKinds::rowSecurity($target),
                 $sourceTables,
                 $targetTables
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::casts($source),
+                PostgresCatalogObjects::casts($target),
+                CreateCast::class, DropCast::class, AlterCast::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresAggregates::aggregates($source),
+                PostgresAggregates::aggregates($target),
+                CreateAggregate::class, DropAggregate::class, AlterAggregate::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::statistics($source),
+                PostgresCatalogObjects::statistics($target),
+                CreateStatistics::class, DropStatistics::class, AlterStatistics::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::rules($source),
+                PostgresCatalogObjects::rules($target),
+                CreateRule::class, DropRule::class, AlterRule::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::eventTriggers($source),
+                PostgresCatalogObjects::eventTriggers($target),
+                CreateEventTrigger::class, DropEventTrigger::class, AlterEventTrigger::class
             ),
             $this->diffPolicies(
                 PostgresObjectKinds::policies($source),
@@ -326,6 +447,32 @@ class DBSchema {
             }
         }
 
+        return $diffs;
+    }
+
+    /**
+     * Diff two [key => ['create' => ..., 'drop' => ...]] maps — see
+     * PostgresCatalogObjects — into Create/Drop/Alter diffs.
+     *
+     * @param  class-string $createClass
+     * @param  class-string $dropClass
+     * @param  class-string $alterClass
+     */
+    private function diffSchemaObjects(array $source, array $target, string $createClass, string $dropClass, string $alterClass): array {
+        $diffs = [];
+        foreach (array_diff_key($source, $target) as $key => $object) {
+            $diffs[] = new $createClass($key, $object);
+        }
+        foreach (array_diff_key($target, $source) as $key => $object) {
+            $diffs[] = new $dropClass($key, $object);
+        }
+        foreach (array_intersect_key($source, $target) as $key => $object) {
+            // `compare`, where given, is what decides: a credential option
+            // is compared by presence, never written out.
+            if (($object['compare'] ?? $object['create']) !== ($target[$key]['compare'] ?? $target[$key]['create'])) {
+                $diffs[] = new $alterClass($key, $object, $target[$key]);
+            }
+        }
         return $diffs;
     }
 

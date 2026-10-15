@@ -6,6 +6,8 @@ use Diff\Differ\ListDiffer;
 use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
+use DBDiff\Diff\AlterTableReplicaIdentity;
+use DBDiff\Diff\AlterTableColumnStatistics;
 use DBDiff\Diff\AlterTableColumnStorage;
 use DBDiff\Diff\AlterTableCollation;
 use DBDiff\SQLGen\Dialect\PostgresDialect;
@@ -14,6 +16,9 @@ use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Schema\GeneratedColumnPlan;
 
 use DBDiff\Diff\AlterTableAddColumn;
+use DBDiff\Diff\AlterTableRenameColumn;
+use DBDiff\Diff\AlterTableRenameKey;
+use DBDiff\Diff\AlterTableRenameConstraint;
 use DBDiff\Diff\AlterTableChangeColumn;
 use DBDiff\Diff\AlterTableDropColumn;
 
@@ -31,6 +36,15 @@ use DBDiff\Logger;
 class TableSchema {
 
     protected $manager;
+
+    /**
+     * Tables the migration renames, new name => old — see TableRenames. A
+     * key or constraint here that names one by its old name follows the
+     * rename by itself.
+     *
+     * @var array<string, string>
+     */
+    public array $tableRenames = [];
 
     function __construct($manager) {
         $this->manager = $manager;
@@ -93,6 +107,13 @@ class TableSchema {
 
         $differ = new MapDiffer();
         $diffs = $differ->doDiff($targetColumns, $sourceColumns);
+
+        // A column renamed, not dropped and added: its data stays.
+        $columnRenames = [];
+        if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off') {
+            [$diffs, $columnRenames, $renameDiffs] = $this->columnRenameDiffs($table, $diffs, $sourceSchema);
+            $diffSequence = array_merge($diffSequence, $renameDiffs);
+        }
 
         // Collect columns being dropped and detect generated column cascades
         $droppedColumns = [];
@@ -195,37 +216,75 @@ class TableSchema {
             );
         }
 
-        // Keys
-        $sourceKeys = $sourceSchema['keys'];
-        $targetKeys = $targetSchema['keys'];
-        $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetKeys, $sourceKeys);
+        return array_merge(
+            $diffSequence,
+            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames),
+            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
+        );
+    }
+
+    /**
+     * The renames among a table's column diffs, as RENAME COLUMNs — with,
+     * from PostgreSQL 18, the NOT NULL constraint named after the column,
+     * whose default name follows it — and the diffs that are left.
+     *
+     * @return array{0: array, 1: array<string, string>, 2: list<object>}
+     */
+    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema): array {
+        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs);
+        $out = [];
+        foreach ($columnRenames as $to => $from) {
+            $out[] = new AlterTableRenameColumn($table, $to, $from);
+            $notNull = ColumnRenames::defaultNotNull($this->manager->getDB('target'), $table, $from, $to);
+            if ($notNull !== null && !isset($sourceSchema['constraints'][$notNull[1]])) {
+                $out[] = new AlterTableRenameConstraint($table, $notNull[1], $notNull[0]);
+            }
+        }
+        return [$diffs, $columnRenames, $out];
+    }
+
+    /** Index and key diffs; one a rename carried along is renamed or left alone. */
+    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames): array {
+        $out = [];
+        [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetKeys, $sourceKeys);
+        $kept += ColumnRenames::carried($this->tableRenames, $targetKeys, $sourceKeys)[0];
+        foreach ($renamed as $from => $to) {
+            $out[] = new AlterTableRenameKey($table, $to, $from);
+            unset($targetKeys[$from], $sourceKeys[$to]);
+        }
+        $diffs = array_diff_key((new MapDiffer())->doDiff($targetKeys, $sourceKeys), $kept);
         foreach ($diffs as $key => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropKey($table, $key, $diff);
+                $out[] = new AlterTableDropKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeKey($table, $key, $diff);
+                $out[] = new AlterTableChangeKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddKey($table, $key, $diff);
+                $out[] = new AlterTableAddKey($table, $key, $diff);
             }
         }
+        return $out;
+    }
 
-        // Constraints
-        $sourceConstraints = $sourceSchema['constraints'];
-        $targetConstraints = $targetSchema['constraints'];
-        $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetConstraints, $sourceConstraints);
+    /** Constraint diffs; one a rename carried along is renamed or left alone. */
+    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames): array {
+        $out = [];
+        [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetConstraints, $sourceConstraints);
+        $kept += ColumnRenames::carried($this->tableRenames, $targetConstraints, $sourceConstraints)[0];
+        foreach ($renamed as $from => $to) {
+            $out[] = new AlterTableRenameConstraint($table, $to, $from);
+            unset($targetConstraints[$from], $sourceConstraints[$to]);
+        }
+        $diffs = array_diff_key((new MapDiffer())->doDiff($targetConstraints, $sourceConstraints), $kept);
         foreach ($diffs as $name => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropConstraint($table, $name, $diff);
+                $out[] = new AlterTableDropConstraint($table, $name, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeConstraint($table, $name, $diff);
+                $out[] = new AlterTableChangeConstraint($table, $name, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddConstraint($table, $name, $diff);
+                $out[] = new AlterTableAddConstraint($table, $name, $diff);
             }
         }
-
-        return $diffSequence;
+        return $out;
     }
 
 
@@ -447,6 +506,29 @@ class TableSchema {
         $targetOptions = $targetSchema['reloptions'] ?? null;
         if ($sourceOptions !== $targetOptions) {
             $diffs[] = new AlterTableOptions($table, $sourceOptions, $targetOptions);
+        }
+
+        // What logical replication sends of an old row: Supabase Realtime
+        // gets a deleted or updated row's previous values only under FULL.
+        $sourceIdentity = $sourceSchema['replicaIdentity'] ?? 'DEFAULT';
+        $targetIdentity = $targetSchema['replicaIdentity'] ?? 'DEFAULT';
+        if ($sourceIdentity !== $targetIdentity) {
+            $diffs[] = new AlterTableReplicaIdentity($table, $sourceIdentity, $targetIdentity);
+        }
+
+        // Statistics targets, for the columns on the source.
+        $sourceStats = $sourceSchema['statistics'] ?? [];
+        $targetStats = $targetSchema['statistics'] ?? [];
+        $targetColumns = $targetSchema['columns'] ?? [];
+        foreach (array_keys(($sourceSchema['columns'] ?? []) + $targetStats) as $column) {
+            if (!isset($sourceSchema['columns'][$column])) {
+                continue;
+            }
+            $want = $sourceStats[$column] ?? -1;
+            $have = $targetStats[$column] ?? -1;
+            if ($want !== $have) {
+                $diffs[] = new AlterTableColumnStatistics($table, $column, $want, $have, !isset($targetColumns[$column]));
+            }
         }
 
         return $diffs;

@@ -112,6 +112,12 @@ abstract class PostgresRoundTripTestCase extends TestCase
     /** `--schemas` for every diff; empty compares `public` alone, DBDiff's default. */
     protected string $schemas = '';
 
+    /** What the last diff() printed. */
+    protected string $lastLog = '';
+
+    /** More options for every diff(), with a leading space. */
+    protected string $extraArgs = '';
+
     protected function diff(string $source, string $target, string $type = 'schema'): ?array
     {
         $out = tempnam(sys_get_temp_dir(), $this->prefix . '_') . '.sql';
@@ -120,9 +126,11 @@ abstract class PostgresRoundTripTestCase extends TestCase
             . ' --server1-url=' . escapeshellarg($this->url($source))
             . ' --server2-url=' . escapeshellarg($this->url($target))
             . ($this->schemas !== '' ? ' --schemas=' . escapeshellarg($this->schemas) : '')
+            . $this->extraArgs
             . ' --output=' . escapeshellarg($out) . ' 2>&1';
         exec($cmd, $lines, $status);
         $log = implode("\n", $lines);
+        $this->lastLog = $log;
 
         $this->assertSame(0, $status, "dbdiff failed:\n$log");
         if (!file_exists($out)) {

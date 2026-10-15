@@ -95,7 +95,10 @@ class DiffCommand extends Command
             // ── Safety options ────────────────────────────────────────────────
             ->addOption('allow-destructive', null, InputOption::VALUE_NONE,
                 'Allow destructive schema changes (DROP TABLE, DROP COLUMN) to proceed without error. '
-                . 'Back up your data before using this flag.');
+                . 'Back up your data before using this flag.')
+            ->addOption('renames', null, InputOption::VALUE_REQUIRED,
+                'PostgreSQL: "auto" (default) renames a column or table whose only difference is its name, '
+                . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -165,6 +168,7 @@ class DiffCommand extends Command
         $params->description   = $input->getOption('description') ?: '';
         $params->memoryLimit      = $input->getOption('memory-limit');
         $params->allowDestructive = (bool) $input->getOption('allow-destructive');
+        $params->renames          = $input->getOption('renames') === 'off' ? 'off' : 'auto';
 
         if ($input->getOption('tables')) {
             $params->tables = array_map('trim', explode(',', $input->getOption('tables')));

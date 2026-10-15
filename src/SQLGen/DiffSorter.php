@@ -16,17 +16,38 @@ class DiffSorter {
         "SetDBCharset",
         "SetDBCollation",
         "CreateSchema",
+        // An event trigger fires on DDL: one going is gone before the
+        // migration's own DDL runs, and one coming is created after it.
+        "DropEventTrigger",
+        // Before the objects the migration creates, which take them.
+        "DropDefaultPrivileges",
+        "AlterDefaultPrivileges",
+        "CreateDefaultPrivileges",
         // Before anything that may use one: a type, an operator class.
         "CreateExtension",
+        // A wrapper comes with its extension.
+        "CreateForeignServer",
+        "AlterForeignServer",
+        "CreateUserMapping",
+        "AlterUserMapping",
         // A domain, a column or an index may be collated by one.
         "CreateCollation",
         "AlterCollation",
+        // What an index or a generated column may search with: the
+        // dictionaries a configuration maps to first.
+        "CreateTextSearchDictionary",
+        "AlterTextSearchDictionary",
+        "CreateTextSearchConfiguration",
+        "AlterTextSearchConfiguration",
 
         "DropView",
+        "DropForeignTable",
         // Both depend on tables, so they go before any table is touched.
         "DropMatView",
         "DropPolicy",
         "DropTrigger",
+        "DropRule",
+        "DropStatistics",
 
         "AlterTableDropConstraint",
 
@@ -49,9 +70,19 @@ class DiffSorter {
         // CreationOrderPlan. Any other routine stays with the programmable
         // objects below, after the tables its body may read.
         "CreateRoutineEarly",
+        // After both: its subtype may be a domain, and its subtype_diff a
+        // routine of the schema.
+        "CreateRangeType",
+        "AlterRangeType",
         "AlterSequence",
 
+        // Before what names the table by its new name.
+        "AlterTableRename",
+        "AlterSequenceRename",
         "AddTable",
+        // With the types its columns may use.
+        "CreateForeignTable",
+        "AlterForeignTable",
 
         "DeleteData",
         "DropTable",
@@ -65,10 +96,15 @@ class DiffSorter {
         // index with it, and a DROP INDEX after it would fail.
         "AlterTableDropKey",
 
+        // Before anything that names the column by its new name.
+        "AlterTableRenameColumn",
+        "AlterTableRenameKey",
+        "AlterTableRenameConstraint",
         "AlterTableAddColumn",
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
         "AlterTableColumnStorage",
+        "AlterTableColumnStatistics",
         "AlterTableDropColumn",
 
         "AlterTableAddKey",
@@ -76,6 +112,8 @@ class DiffSorter {
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
+        // USING INDEX names an index or key the lines above may create.
+        "AlterTableReplicaIdentity",
 
         "InsertData",
         "UpdateData",
@@ -86,6 +124,11 @@ class DiffSorter {
         // CreateRoutine used to sit last, after the objects depending on it.
         "CreateRoutine",
         "AlterRoutine",
+        // Built on routines, and a view may call one.
+        "CreateAggregate",
+        "AlterAggregate",
+        "CreateCast",
+        "AlterCast",
         "CreateView",
         "AlterView",
         // After views: a materialised view may select from one.
@@ -93,6 +136,12 @@ class DiffSorter {
         "AlterMatView",
         "CreateTrigger",
         "AlterTrigger",
+        // A rule may name any table or view in its action.
+        "CreateRule",
+        "AlterRule",
+        // On columns the table changes above may add.
+        "CreateStatistics",
+        "AlterStatistics",
 
         // Last: both need their table to exist, and enabling RLS without the
         // policies would leave the table denying every row.
@@ -110,45 +159,77 @@ class DiffSorter {
         // because other objects depend on it" (issue #238). Dependants first:
         // a routine can take a type, a composite can hold a domain, and a
         // domain or a composite can be built on an enum.
+        "DropAggregate",
+        "DropCast",
         "DropRoutine",
         "DropRoutineEarly",
         "DropSequence",
         "DropCompositeType",
+        "DropRangeType",
         "DropDomain",
         "DropEnum",
+        "DropUserMapping",
+        "DropForeignServer",
         "DropCollation",
+        "DropTextSearchConfiguration",
+        "DropTextSearchDictionary",
         // After everything that used it, before its schema.
         "DropExtension",
         "DropSchema",
+        "AlterEventTrigger",
+        "CreateEventTrigger",
     ];
 
     private $down_order = [
         "SetDBCharset",
         "SetDBCollation",
         "DropSchema",
+        "CreateEventTrigger",
+        "CreateDefaultPrivileges",
+        "AlterDefaultPrivileges",
+        "DropDefaultPrivileges",
         "DropExtension",
+        "DropForeignServer",
+        "DropUserMapping",
 
         // Before the routines, views, policies and triggers the DOWN puts
         // back: they may name a label it restores, and a label swap takes
         // their current versions aside and back (EnumSwapPlan).
         "AlterEnum",
 
+        // Names back as the target has them, first: a view or policy the
+        // DOWN puts back reads the column by its old name, and what reads it
+        // now follows a rename.
+        "AlterTableRenameColumn",
+        "AlterTableRenameKey",
+        "AlterTableRenameConstraint",
+        // After the renames above, which name it by its new name.
+        "AlterSequenceRename",
+        "AlterTableRename",
+
         // What the UP dropped is recreated in the order the UP would create
         // it (issue #238): the types first, and a routine a table's default,
         // constraint or index calls, so the tables and columns below can use
         // them...
+        "DropTextSearchDictionary",
+        "DropTextSearchConfiguration",
         "DropCollation",
         "DropEnum",
         "DropDomain",
         "DropCompositeType",
         "DropSequence",
         "DropRoutineEarly",
+        "DropRangeType",
 
         "AlterRoutine",
         // Policies and the RLS flags come off before the tables they sit on.
         "AlterPolicy",
         "CreatePolicy",
         "AlterRowSecurity",
+        "AlterStatistics",
+        "CreateStatistics",
+        "AlterRule",
+        "CreateRule",
         "AlterTrigger",
         "CreateTrigger",
         "AlterMatView",
@@ -163,6 +244,8 @@ class DiffSorter {
         "AlterTableChangeConstraint",
 
         "InsertData",
+        "AlterForeignTable",
+        "CreateForeignTable",
         "AddTable",
 
         "DropTable",
@@ -179,10 +262,13 @@ class DiffSorter {
         "AlterTableChangeColumn",
         // After a column is added or retyped: a type change resets storage.
         "AlterTableColumnStorage",
+        "AlterTableColumnStatistics",
         "AlterTableDropColumn",
 
         "AlterTableChangeKey",
         "AlterTableDropKey",
+        // Once the index it may name is back.
+        "AlterTableReplicaIdentity",
 
         "AlterTableDropConstraint",
 
@@ -191,10 +277,19 @@ class DiffSorter {
 
         // ...and, once the tables are back, the routines whose bodies may read
         // them, then the views, triggers and policies that read or call them.
+        "DropForeignTable",
         "DropRoutine",
+        // Once the views the UP created with it are gone, and before the
+        // ones the DOWN puts back.
+        "AlterAggregate",
+        "DropAggregate",
+        "AlterCast",
+        "DropCast",
         "DropView",
         "DropMatView",
         "DropTrigger",
+        "DropRule",
+        "DropStatistics",
         "DropPolicy",
 
         // What the UP created goes last, once nothing reverted above still
@@ -205,20 +300,36 @@ class DiffSorter {
         // DOWN of any new type, domain or sequence with a new column using it,
         // and of any new routine a reverted view or default still called
         // (issue #238).
+        // An aggregate, and a range type, before the routines they name.
+        "CreateAggregate",
+        "CreateCast",
+        "CreateRangeType",
         "CreateRoutine",
         "CreateRoutineEarly",
         "CreateCompositeType",
         "CreateDomain",
         "CreateEnum",
         "CreateSequence",
-        // A changed collation is put back once the tables the UP created
-        // with it are gone: it cannot be replaced while a column uses it.
+        // A changed collation or range type is put back once the tables the
+        // UP created with it are gone: neither can be replaced while a
+        // column uses it.
+        "AlterRangeType",
+        "AlterTextSearchConfiguration",
+        "CreateTextSearchConfiguration",
+        "AlterTextSearchDictionary",
+        "CreateTextSearchDictionary",
         "AlterCollation",
         "CreateCollation",
+        "AlterUserMapping",
+        "CreateUserMapping",
+        "AlterForeignServer",
+        "CreateForeignServer",
         "CreateExtension",
         "CreateSchema",
         // Last: after everything DOWN puts back.
         "AlterComment",
+        "AlterEventTrigger",
+        "DropEventTrigger",
     ];
 
     public function sort($diff, $type) {

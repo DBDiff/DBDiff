@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * A column renamed on the source is renamed on the target — its data kept
+ * — rather than dropped and added again.
+ *
+ * See PostgresRoundTripTestCase for how each case is checked.
+ */
+class RenamesRoundTripPostgresTest extends PostgresRoundTripTestCase
+{
+    protected string $prefix = 'dbdiff_ren';
+
+    public function testARenamedColumnKeepsItsData(): void
+    {
+        $up = $this->assertRoundTrip(
+            'col',
+            "CREATE TABLE people (id int PRIMARY KEY, full_name text NOT NULL DEFAULT '' CHECK (full_name <> 'x'));
+             CREATE INDEX people_name ON people (full_name);
+             CREATE VIEW names AS SELECT full_name FROM people;
+             INSERT INTO people VALUES (1, 'Ann'), (2, 'Bo');",
+            "CREATE TABLE people (id int PRIMARY KEY, name text NOT NULL DEFAULT '' CHECK (name <> 'x'));
+             CREATE INDEX people_name ON people (name);
+             CREATE VIEW names AS SELECT name FROM people;
+             INSERT INTO people VALUES (1, 'Ann'), (2, 'Bo');",
+            fn(string $db) => $this->rows($db, 'SELECT * FROM people ORDER BY id')
+        );
+        $this->assertStringContainsString('RENAME COLUMN "name" TO "full_name"', $up);
+        $this->assertStringNotContainsString('DROP COLUMN', $up);
+    }
+
+    public function testColumnsSharingADefinitionAreNotGuessed(): void
+    {
+        [$up] = $this->diff(
+            $this->db('amb_s', 'CREATE TABLE t (id int PRIMARY KEY, c text, d text);'),
+            $this->db('amb_t', 'CREATE TABLE t (id int PRIMARY KEY, a text, b text);')
+        );
+        $this->assertStringNotContainsString('RENAME COLUMN', $up);
+        $this->assertStringContainsString('not taken for renames', $this->lastLog);
+    }
+
+    public function testRenamesCanBeTurnedOff(): void
+    {
+        $this->extraArgs = ' --renames=off';
+        [$up] = $this->diff(
+            $this->db('off_s', 'CREATE TABLE t (id int PRIMARY KEY, b text);'),
+            $this->db('off_t', 'CREATE TABLE t (id int PRIMARY KEY, a text);')
+        );
+        $this->assertStringNotContainsString('RENAME COLUMN', $up);
+        $this->assertStringContainsString('DROP COLUMN', $up);
+    }
+
+    public function testARenamedTableKeepsItsRows(): void
+    {
+        $up = $this->assertRoundTrip(
+            'table',
+            "CREATE TABLE customers (id serial PRIMARY KEY, name text NOT NULL, CONSTRAINT customers_name_check CHECK (name <> ''));
+             CREATE INDEX customers_name_idx ON customers (name);
+             CREATE TABLE orders (id int PRIMARY KEY, customer int REFERENCES customers (id));
+             INSERT INTO customers (name) VALUES ('Ann'), ('Bo');",
+            "CREATE TABLE clients (id serial PRIMARY KEY, name text NOT NULL, CONSTRAINT clients_name_check CHECK (name <> ''));
+             CREATE INDEX clients_name_idx ON clients (name);
+             CREATE TABLE orders (id int PRIMARY KEY, customer int REFERENCES clients (id));
+             INSERT INTO clients (name) VALUES ('Ann'), ('Bo');",
+            fn(string $db) => $this->rows($db,
+                "SELECT c.relname, (SELECT count(*) FROM pg_class t WHERE t.relname IN ('customers', 'clients') AND t.relkind = 'r') AS tables
+                   FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace ORDER BY 1")
+        );
+        $this->assertStringContainsString('ALTER TABLE "clients" RENAME TO "customers"', $up);
+        $this->assertStringNotContainsString('DROP TABLE', $up);
+    }
+
+    public function testTablesSharingAStructureAreNotGuessed(): void
+    {
+        [$up] = $this->diff(
+            $this->db('tamb_s', 'CREATE TABLE c (id int); CREATE TABLE d (id int);'),
+            $this->db('tamb_t', 'CREATE TABLE a (id int); CREATE TABLE b (id int);')
+        );
+        $this->assertStringNotContainsString('RENAME TO', $up);
+        $this->assertStringContainsString('not taken for renames', $this->lastLog);
+    }
+}
