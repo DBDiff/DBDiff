@@ -4,7 +4,8 @@
  * A changed object is dropped and created again — or, where both sides say
  * how to change it in place and agree on what cannot change (`same`, a text
  * search configuration's parser), cleared and filled where it stands, so
- * what uses it (an index over a configuration) is left alone.
+ * what uses it (an index over a configuration) is left alone. `sticky` marks
+ * something set that only replacing takes away (a foreign server's version).
  */
 abstract class ReplaceSchemaObjectSQL extends SchemaObjectSQL {
 
@@ -19,7 +20,9 @@ abstract class ReplaceSchemaObjectSQL extends SchemaObjectSQL {
     }
 
     private function change(?array $from, ?array $to): ?string {
-        if ($from === null || $to === null || $from['same'] !== $to['same']) {
+        if ($from === null || $to === null || $from['same'] !== $to['same']
+            // Something set that only replacing can take away.
+            || (!empty($from['sticky']) && empty($to['sticky']))) {
             return null;
         }
         return implode("\n", array_map([self::class, 'statement'], array_filter([$from['clear'], $to['fill']])));

@@ -203,4 +203,53 @@ class CatalogObjectsRoundTripPostgresTest extends PostgresRoundTripTestCase
                         castfunc::regprocedure::text FROM pg_cast WHERE oid >= 16384 ORDER BY 1, 2")
         );
     }
+
+    public function testForeignServersUserMappingsAndTables(): void
+    {
+        $base = "CREATE EXTENSION IF NOT EXISTS postgres_fdw;
+                 DO \$\$ BEGIN CREATE ROLE dbdiff_cat_reader NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;";
+        $state = fn(string $db) => array_merge(
+            $this->rows($db, "SELECT srvname, srvversion, (SELECT array_agg(o ORDER BY o) FROM unnest(srvoptions) o)::text AS options FROM pg_foreign_server ORDER BY 1"),
+            $this->rows($db, "SELECT srvname, usename, (SELECT array_agg(o ORDER BY o) FROM unnest(umoptions) o)::text AS options FROM pg_user_mappings ORDER BY 1, 2"),
+            $this->rows($db, "SELECT c.relname, s.srvname, (SELECT array_agg(o ORDER BY o) FROM unnest(f.ftoptions) o)::text AS options,
+                                     (SELECT string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod)
+                                             || coalesce(' ' || a.attfdwoptions::text, ''), ', ' ORDER BY a.attnum)
+                                        FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0) AS cols
+                                FROM pg_foreign_table f JOIN pg_class c ON c.oid = f.ftrelid
+                                JOIN pg_foreign_server s ON s.oid = f.ftserver ORDER BY 1"));
+
+        // Both sides hold the same credential, so it does not decide anything.
+        $migration = $this->diff(
+            $this->db('fdw_s', $base . "
+                CREATE SERVER warehouse VERSION '2' FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'db.internal', dbname 'wh', port '5432');
+                CREATE USER MAPPING FOR dbdiff_cat_reader SERVER warehouse OPTIONS (user 'reader', password 'hunter2');
+                CREATE FOREIGN TABLE remote_orders (id int OPTIONS (column_name 'order_id') NOT NULL, total numeric(10,2))
+                    SERVER warehouse OPTIONS (schema_name 'sales', table_name 'orders');"),
+            $this->db('fdw_t', $base . "
+                CREATE SERVER warehouse FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'old.internal', dbname 'wh');
+                CREATE USER MAPPING FOR dbdiff_cat_reader SERVER warehouse OPTIONS (user 'old', password 'other-secret');
+                CREATE FOREIGN TABLE remote_orders (id int) SERVER warehouse OPTIONS (table_name 'orders');
+                CREATE SERVER retired FOREIGN DATA WRAPPER postgres_fdw;")
+        );
+        $this->assertNotNull($migration);
+        [$up, $down] = $migration;
+        $this->assertStringNotContainsString('hunter2', $up . $down);
+        $this->assertStringNotContainsString('other-secret', $up . $down);
+        // Changed where it stands: a foreign table uses it.
+        $this->assertStringNotContainsString('DROP SERVER IF EXISTS "warehouse"', $up);
+
+        // Without credentials in play, the whole round trip.
+        $this->assertRoundTrip(
+            'fdw',
+            $base . "CREATE SERVER warehouse VERSION '2' FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'db.internal', dbname 'wh');
+                     CREATE USER MAPPING FOR dbdiff_cat_reader SERVER warehouse OPTIONS (user 'reader');
+                     CREATE FOREIGN TABLE remote_orders (id int OPTIONS (column_name 'order_id') NOT NULL, total numeric(10,2))
+                         SERVER warehouse OPTIONS (schema_name 'sales', table_name 'orders');",
+            $base . "CREATE SERVER warehouse VERSION '1' FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'old.internal');
+                     CREATE USER MAPPING FOR PUBLIC SERVER warehouse;
+                     CREATE FOREIGN TABLE remote_orders (id int) SERVER warehouse;
+                     CREATE SERVER retired FOREIGN DATA WRAPPER postgres_fdw;",
+            $state
+        );
+    }
 }

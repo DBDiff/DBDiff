@@ -25,6 +25,11 @@ class DiffSorter {
         "CreateDefaultPrivileges",
         // Before anything that may use one: a type, an operator class.
         "CreateExtension",
+        // A wrapper comes with its extension.
+        "CreateForeignServer",
+        "AlterForeignServer",
+        "CreateUserMapping",
+        "AlterUserMapping",
         // A domain, a column or an index may be collated by one.
         "CreateCollation",
         "AlterCollation",
@@ -36,6 +41,7 @@ class DiffSorter {
         "AlterTextSearchConfiguration",
 
         "DropView",
+        "DropForeignTable",
         // Both depend on tables, so they go before any table is touched.
         "DropMatView",
         "DropPolicy",
@@ -71,6 +77,9 @@ class DiffSorter {
         "AlterSequence",
 
         "AddTable",
+        // With the types its columns may use.
+        "CreateForeignTable",
+        "AlterForeignTable",
 
         "DeleteData",
         "DropTable",
@@ -152,6 +161,8 @@ class DiffSorter {
         "DropRangeType",
         "DropDomain",
         "DropEnum",
+        "DropUserMapping",
+        "DropForeignServer",
         "DropCollation",
         "DropTextSearchConfiguration",
         "DropTextSearchDictionary",
@@ -171,6 +182,8 @@ class DiffSorter {
         "AlterDefaultPrivileges",
         "DropDefaultPrivileges",
         "DropExtension",
+        "DropForeignServer",
+        "DropUserMapping",
 
         // Before the routines, views, policies and triggers the DOWN puts
         // back: they may name a label it restores, and a label swap takes
@@ -214,6 +227,8 @@ class DiffSorter {
         "AlterTableChangeConstraint",
 
         "InsertData",
+        "AlterForeignTable",
+        "CreateForeignTable",
         "AddTable",
 
         "DropTable",
@@ -245,6 +260,7 @@ class DiffSorter {
 
         // ...and, once the tables are back, the routines whose bodies may read
         // them, then the views, triggers and policies that read or call them.
+        "DropForeignTable",
         "DropRoutine",
         // Once the views the UP created with it are gone, and before the
         // ones the DOWN puts back.
@@ -287,6 +303,10 @@ class DiffSorter {
         "CreateTextSearchDictionary",
         "AlterCollation",
         "CreateCollation",
+        "AlterUserMapping",
+        "CreateUserMapping",
+        "AlterForeignServer",
+        "CreateForeignServer",
         "CreateExtension",
         "CreateSchema",
         // Last: after everything DOWN puts back.

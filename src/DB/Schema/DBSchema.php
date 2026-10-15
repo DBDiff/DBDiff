@@ -61,6 +61,15 @@ use DBDiff\Diff\AlterTextSearchConfiguration;
 use DBDiff\Diff\CreateCast;
 use DBDiff\Diff\DropCast;
 use DBDiff\Diff\AlterCast;
+use DBDiff\Diff\CreateForeignServer;
+use DBDiff\Diff\DropForeignServer;
+use DBDiff\Diff\AlterForeignServer;
+use DBDiff\Diff\CreateUserMapping;
+use DBDiff\Diff\DropUserMapping;
+use DBDiff\Diff\AlterUserMapping;
+use DBDiff\Diff\CreateForeignTable;
+use DBDiff\Diff\DropForeignTable;
+use DBDiff\Diff\AlterForeignTable;
 use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
@@ -275,6 +284,22 @@ class DBSchema {
             // What the types and tables below may use: an extension's type or
             // operator class (an exclusion constraint's btree_gist).
             $extensions,
+            // Where foreign tables read from, and as whom.
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::foreignServers($source),
+                PostgresCatalogObjects::foreignServers($target),
+                CreateForeignServer::class, DropForeignServer::class, AlterForeignServer::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::userMappings($source),
+                PostgresCatalogObjects::userMappings($target),
+                CreateUserMapping::class, DropUserMapping::class, AlterUserMapping::class
+            ),
+            $this->diffSchemaObjects(
+                PostgresCatalogObjects::foreignTables($source),
+                PostgresCatalogObjects::foreignTables($target),
+                CreateForeignTable::class, DropForeignTable::class, AlterForeignTable::class
+            ),
             // What a role's new objects are granted — set before the tables
             // the migration creates, so they are created the source's way.
             $this->diffSchemaObjects(
@@ -423,7 +448,9 @@ class DBSchema {
             $diffs[] = new $dropClass($key, $object);
         }
         foreach (array_intersect_key($source, $target) as $key => $object) {
-            if ($object['create'] !== $target[$key]['create']) {
+            // `compare`, where given, is what decides: a credential option
+            // is compared by presence, never written out.
+            if (($object['compare'] ?? $object['create']) !== ($target[$key]['compare'] ?? $target[$key]['create'])) {
                 $diffs[] = new $alterClass($key, $object, $target[$key]);
             }
         }
