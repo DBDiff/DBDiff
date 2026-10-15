@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::userMappings(). */
+/** See PostgresForeignData::userMappings(). */
 class DropUserMapping {
     use SchemaObject;
 }

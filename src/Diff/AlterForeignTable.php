@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::foreignTables(). */
+/** See PostgresForeignData::foreignTables(). */
 class AlterForeignTable {
     use ChangedSchemaObject;
 }

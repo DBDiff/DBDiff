@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::aggregates(). */
+/** See PostgresAggregates::aggregates(). */
 class DropAggregate {
     use SchemaObject;
 }

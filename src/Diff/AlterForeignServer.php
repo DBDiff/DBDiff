@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::foreignServers(). */
+/** See PostgresForeignData::foreignServers(). */
 class AlterForeignServer {
     use ChangedSchemaObject;
 }

@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::foreignServers(). */
+/** See PostgresForeignData::foreignServers(). */
 class DropForeignServer {
     use SchemaObject;
 }

@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::userMappings(). */
+/** See PostgresForeignData::userMappings(). */
 class AlterUserMapping {
     use ChangedSchemaObject;
 }

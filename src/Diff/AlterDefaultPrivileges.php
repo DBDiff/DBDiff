@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::defaultPrivileges(). */
+/** See PostgresDefaultPrivileges::defaultPrivileges(). */
 class AlterDefaultPrivileges {
     use ChangedSchemaObject;
 }

@@ -111,16 +111,8 @@ class TableSchema {
         // A column renamed, not dropped and added: its data stays.
         $columnRenames = [];
         if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off') {
-            [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs);
-            foreach ($columnRenames as $to => $from) {
-                $diffSequence[] = new AlterTableRenameColumn($table, $to, $from);
-                // From PostgreSQL 18 a NOT NULL is a constraint, named after
-                // the column; the default name follows the rename.
-                $notNull = ColumnRenames::defaultNotNull($this->manager->getDB('target'), $table, $from, $to);
-                if ($notNull !== null && !isset($sourceSchema['constraints'][$notNull[1]])) {
-                    $diffSequence[] = new AlterTableRenameConstraint($table, $notNull[1], $notNull[0]);
-                }
-            }
+            [$diffs, $columnRenames, $renameDiffs] = $this->columnRenameDiffs($table, $diffs, $sourceSchema);
+            $diffSequence = array_merge($diffSequence, $renameDiffs);
         }
 
         // Collect columns being dropped and detect generated column cascades
@@ -224,49 +216,75 @@ class TableSchema {
             );
         }
 
-        // Keys
-        $sourceKeys = $sourceSchema['keys'];
-        $targetKeys = $targetSchema['keys'];
-        [$keysKept, $keysRenamed] = ColumnRenames::carried($columnRenames, $targetKeys, $sourceKeys);
-        $keysKept += ColumnRenames::carried($this->tableRenames, $targetKeys, $sourceKeys)[0];
-        foreach ($keysRenamed as $from => $to) {
-            $diffSequence[] = new AlterTableRenameKey($table, $to, $from);
+        return array_merge(
+            $diffSequence,
+            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames),
+            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
+        );
+    }
+
+    /**
+     * The renames among a table's column diffs, as RENAME COLUMNs — with,
+     * from PostgreSQL 18, the NOT NULL constraint named after the column,
+     * whose default name follows it — and the diffs that are left.
+     *
+     * @return array{0: array, 1: array<string, string>, 2: list<object>}
+     */
+    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema): array {
+        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs);
+        $out = [];
+        foreach ($columnRenames as $to => $from) {
+            $out[] = new AlterTableRenameColumn($table, $to, $from);
+            $notNull = ColumnRenames::defaultNotNull($this->manager->getDB('target'), $table, $from, $to);
+            if ($notNull !== null && !isset($sourceSchema['constraints'][$notNull[1]])) {
+                $out[] = new AlterTableRenameConstraint($table, $notNull[1], $notNull[0]);
+            }
+        }
+        return [$diffs, $columnRenames, $out];
+    }
+
+    /** Index and key diffs; one a rename carried along is renamed or left alone. */
+    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames): array {
+        $out = [];
+        [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetKeys, $sourceKeys);
+        $kept += ColumnRenames::carried($this->tableRenames, $targetKeys, $sourceKeys)[0];
+        foreach ($renamed as $from => $to) {
+            $out[] = new AlterTableRenameKey($table, $to, $from);
             unset($targetKeys[$from], $sourceKeys[$to]);
         }
-        $differ = new MapDiffer();
-        $diffs = array_diff_key($differ->doDiff($targetKeys, $sourceKeys), $keysKept);
+        $diffs = array_diff_key((new MapDiffer())->doDiff($targetKeys, $sourceKeys), $kept);
         foreach ($diffs as $key => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropKey($table, $key, $diff);
+                $out[] = new AlterTableDropKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeKey($table, $key, $diff);
+                $out[] = new AlterTableChangeKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddKey($table, $key, $diff);
+                $out[] = new AlterTableAddKey($table, $key, $diff);
             }
         }
+        return $out;
+    }
 
-        // Constraints
-        $sourceConstraints = $sourceSchema['constraints'];
-        $targetConstraints = $targetSchema['constraints'];
-        [$constraintsKept, $constraintsRenamed] = ColumnRenames::carried($columnRenames, $targetConstraints, $sourceConstraints);
-        $constraintsKept += ColumnRenames::carried($this->tableRenames, $targetConstraints, $sourceConstraints)[0];
-        foreach ($constraintsRenamed as $from => $to) {
-            $diffSequence[] = new AlterTableRenameConstraint($table, $to, $from);
+    /** Constraint diffs; one a rename carried along is renamed or left alone. */
+    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames): array {
+        $out = [];
+        [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetConstraints, $sourceConstraints);
+        $kept += ColumnRenames::carried($this->tableRenames, $targetConstraints, $sourceConstraints)[0];
+        foreach ($renamed as $from => $to) {
+            $out[] = new AlterTableRenameConstraint($table, $to, $from);
             unset($targetConstraints[$from], $sourceConstraints[$to]);
         }
-        $differ = new MapDiffer();
-        $diffs = array_diff_key($differ->doDiff($targetConstraints, $sourceConstraints), $constraintsKept);
+        $diffs = array_diff_key((new MapDiffer())->doDiff($targetConstraints, $sourceConstraints), $kept);
         foreach ($diffs as $name => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $diffSequence[] = new AlterTableDropConstraint($table, $name, $diff);
+                $out[] = new AlterTableDropConstraint($table, $name, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
-                $diffSequence[] = new AlterTableChangeConstraint($table, $name, $diff);
+                $out[] = new AlterTableChangeConstraint($table, $name, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $diffSequence[] = new AlterTableAddConstraint($table, $name, $diff);
+                $out[] = new AlterTableAddConstraint($table, $name, $diff);
             }
         }
-
-        return $diffSequence;
+        return $out;
     }
 
 

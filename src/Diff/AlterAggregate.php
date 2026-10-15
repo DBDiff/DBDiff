@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::aggregates(). */
+/** See PostgresAggregates::aggregates(). */
 class AlterAggregate {
     use ChangedSchemaObject;
 }

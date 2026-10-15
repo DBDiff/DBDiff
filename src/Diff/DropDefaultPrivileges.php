@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::defaultPrivileges(). */
+/** See PostgresDefaultPrivileges::defaultPrivileges(). */
 class DropDefaultPrivileges {
     use SchemaObject;
 }

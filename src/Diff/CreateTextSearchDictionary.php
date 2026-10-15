@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::textSearchDictionaries(). */
+/** See PostgresTextSearch::textSearchDictionaries(). */
 class CreateTextSearchDictionary {
     use SchemaObject;
 }

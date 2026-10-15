@@ -74,6 +74,10 @@ use DBDiff\Diff\CreateRangeType;
 use DBDiff\Diff\DropRangeType;
 use DBDiff\Diff\AlterRangeType;
 use DBDiff\DB\Support\PostgresCatalogObjects;
+use DBDiff\DB\Support\PostgresDefaultPrivileges;
+use DBDiff\DB\Support\PostgresAggregates;
+use DBDiff\DB\Support\PostgresTextSearch;
+use DBDiff\DB\Support\PostgresForeignData;
 use DBDiff\DB\Support\PostgresUncompared;
 use DBDiff\Diff\CreateCollation;
 use DBDiff\Diff\DropCollation;
@@ -301,25 +305,25 @@ class DBSchema {
             $extensions,
             // Where foreign tables read from, and as whom.
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::foreignServers($source),
-                PostgresCatalogObjects::foreignServers($target),
+                PostgresForeignData::foreignServers($source),
+                PostgresForeignData::foreignServers($target),
                 CreateForeignServer::class, DropForeignServer::class, AlterForeignServer::class
             ),
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::userMappings($source),
-                PostgresCatalogObjects::userMappings($target),
+                PostgresForeignData::userMappings($source),
+                PostgresForeignData::userMappings($target),
                 CreateUserMapping::class, DropUserMapping::class, AlterUserMapping::class
             ),
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::foreignTables($source),
-                PostgresCatalogObjects::foreignTables($target),
+                PostgresForeignData::foreignTables($source),
+                PostgresForeignData::foreignTables($target),
                 CreateForeignTable::class, DropForeignTable::class, AlterForeignTable::class
             ),
             // What a role's new objects are granted — set before the tables
             // the migration creates, so they are created the source's way.
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::defaultPrivileges($source),
-                PostgresCatalogObjects::defaultPrivileges($target),
+                PostgresDefaultPrivileges::defaultPrivileges($source),
+                PostgresDefaultPrivileges::defaultPrivileges($target),
                 CreateDefaultPrivileges::class, DropDefaultPrivileges::class, AlterDefaultPrivileges::class
             ),
             // What a column, a domain or an index may be collated by.
@@ -330,13 +334,13 @@ class DBSchema {
             ),
             // What an index, a generated column or a routine may search with.
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::textSearchDictionaries($source),
-                PostgresCatalogObjects::textSearchDictionaries($target),
+                PostgresTextSearch::textSearchDictionaries($source),
+                PostgresTextSearch::textSearchDictionaries($target),
                 CreateTextSearchDictionary::class, DropTextSearchDictionary::class, AlterTextSearchDictionary::class
             ),
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::textSearchConfigurations($source),
-                PostgresCatalogObjects::textSearchConfigurations($target),
+                PostgresTextSearch::textSearchConfigurations($source),
+                PostgresTextSearch::textSearchConfigurations($target),
                 CreateTextSearchConfiguration::class, DropTextSearchConfiguration::class, AlterTextSearchConfiguration::class
             ),
             // Like enums, a composite, a domain or a sequence can be referenced
@@ -383,8 +387,8 @@ class DBSchema {
                 CreateCast::class, DropCast::class, AlterCast::class
             ),
             $this->diffSchemaObjects(
-                PostgresCatalogObjects::aggregates($source),
-                PostgresCatalogObjects::aggregates($target),
+                PostgresAggregates::aggregates($source),
+                PostgresAggregates::aggregates($target),
                 CreateAggregate::class, DropAggregate::class, AlterAggregate::class
             ),
             $this->diffSchemaObjects(

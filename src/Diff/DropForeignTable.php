@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\SchemaObject;
 
-/** See PostgresCatalogObjects::foreignTables(). */
+/** See PostgresForeignData::foreignTables(). */
 class DropForeignTable {
     use SchemaObject;
 }

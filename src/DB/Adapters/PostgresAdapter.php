@@ -7,6 +7,7 @@ use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresTableSettings;
 use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresColumnDependants;
 use DBDiff\DB\Support\SchemaScope;
@@ -223,10 +224,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $name  = SchemaScope::name($connection, $table);
         foreach (array_merge(
             PostgresSchemaHelper::storageStatements($name, $attrs),
-            PostgresSchemaHelper::tableSettingStatements(
+            PostgresTableSettings::tableSettingStatements(
                 $name,
                 PostgresSchemaHelper::relationMeta($connection, [$table])[$table]['replicaIdentity'] ?? 'DEFAULT',
-                PostgresSchemaHelper::columnStatistics($attrs)
+                PostgresTableSettings::columnStatistics($attrs)
             )
         ) as $stmt) {
             $ddl .= ";\n$stmt";
@@ -699,7 +700,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                 'unlogged'    => $relMeta[$t]['unlogged']   ?? false,
                 'reloptions'  => $relMeta[$t]['reloptions'] ?? null,
                 'replicaIdentity' => $relMeta[$t]['replicaIdentity'] ?? 'DEFAULT',
-                'statistics'  => PostgresSchemaHelper::columnStatistics($attrByCol[$t] ?? []),
+                'statistics'  => PostgresTableSettings::columnStatistics($attrByCol[$t] ?? []),
                 'columns'     => $columns[$t]     ?? [],
                 'keys'        => $keys[$t]        ?? [],
                 'constraints' => $constraints[$t] ?? [],

@@ -2,7 +2,7 @@
 
 use DBDiff\Diff\Concerns\ChangedSchemaObject;
 
-/** See PostgresCatalogObjects::textSearchDictionaries(). */
+/** See PostgresTextSearch::textSearchDictionaries(). */
 class AlterTextSearchDictionary {
     use ChangedSchemaObject;
 }
