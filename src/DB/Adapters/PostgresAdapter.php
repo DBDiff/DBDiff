@@ -10,6 +10,7 @@ use DBDiff\DB\Support\PostgresSchemaHelper;
 use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresColumnDependants;
 use DBDiff\DB\Support\SchemaScope;
+use DBDiff\DB\Support\PostgresPartman;
 use DBDiff\DB\Support\PostgresCatalogColumns;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
@@ -83,7 +84,9 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                AND " . PostgresSchemaHelper::notExtensionMember('pg_class', 'c.oid') . "
              ORDER BY c.relname"
         );
-        return Arr::pluck($result, 'tablename');
+        // pg_partman's partitions are its to make and drop.
+        $managed = PostgresPartman::managedTables($connection);
+        return array_values(array_filter(Arr::pluck($result, 'tablename'), fn($t) => !isset($managed[$t])));
     }
 
     // Columns and keys are read from the catalogs, not information_schema,
