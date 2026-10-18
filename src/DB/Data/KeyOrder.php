@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Data;
 
 use DBDiff\Logger;
+use DBDiff\DB\Support\PostgresSnapshot;
 use Illuminate\Database\Connection;
 
 /**
@@ -68,7 +69,7 @@ class KeyOrder
     {
         try {
             return match ($this->driver) {
-                'pgsql' => $this->pgsqlKinds($qualified),
+                'pgsql' => PostgresSnapshot::attempt($this->source, fn() => $this->pgsqlKinds($qualified)),
                 'mysql' => $this->mysqlKinds($table),
                 default => $this->sqliteKinds($table),
             };

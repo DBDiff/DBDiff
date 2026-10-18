@@ -12,7 +12,7 @@ class CLIGetter implements ParamsGetter {
             'server1', 'server2', 'format',
             'template', 'type', 'include',
             'nocomments', 'units', 'config', 'output', 'debug',
-            'driver', 'supabase', 'allow-destructive'
+            'driver', 'supabase', 'allow-destructive', 'no-snapshot'
         ]);
     
         $input = $getopt->get(1);
@@ -64,6 +64,10 @@ class CLIGetter implements ParamsGetter {
         }
         // --allow-destructive bypasses the destructive-change linter
         $params->allowDestructive = (bool) $getopt->get('--allow-destructive');
+        // --no-snapshot reads each PostgreSQL query on its own (see PostgresSnapshot)
+        if ($getopt->get('--no-snapshot')) {
+            $params->snapshot = false;
+        }
 
         return $params;
     }

@@ -56,14 +56,13 @@ final class PostgresRenderers {
 
     private static function probe(Connection $connection): bool {
         $pdo = $connection->getPdo();
-        $pdo->beginTransaction();
-        try {
-            $pdo->exec('CREATE TEMP TABLE pg_temp.dbdiff_render_probe (x int)');
-            return true;
-        } catch (\Throwable) {
-            return false;
-        } finally {
-            $pdo->rollBack();
-        }
+        return PostgresSnapshot::scratch($pdo, function () use ($pdo): bool {
+            try {
+                $pdo->exec('CREATE TEMP TABLE pg_temp.dbdiff_render_probe (x int)');
+                return true;
+            } catch (\Throwable) {
+                return false;
+            }
+        });
     }
 }

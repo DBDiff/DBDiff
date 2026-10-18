@@ -98,7 +98,10 @@ class DiffCommand extends Command
                 . 'Back up your data before using this flag.')
             ->addOption('renames', null, InputOption::VALUE_REQUIRED,
                 'PostgreSQL: "auto" (default) renames a column or table whose only difference is its name, '
-                . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto');
+                . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto')
+            ->addOption('no-snapshot', null, InputOption::VALUE_NONE,
+                'PostgreSQL: read each query on its own, rather than each side as of one instant. '
+                . 'The snapshot keeps what the diff reads locked until it ends, as pg_dump does.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -169,6 +172,7 @@ class DiffCommand extends Command
         $params->memoryLimit      = $input->getOption('memory-limit');
         $params->allowDestructive = (bool) $input->getOption('allow-destructive');
         $params->renames          = $input->getOption('renames') === 'off' ? 'off' : 'auto';
+        $params->snapshot         = !$input->getOption('no-snapshot');
 
         if ($input->getOption('tables')) {
             $params->tables = array_map('trim', explode(',', $input->getOption('tables')));

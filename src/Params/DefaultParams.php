@@ -149,6 +149,14 @@ class DefaultParams {
     public string $renames = 'auto';
 
     /*
+     PostgreSQL: read each side as of one instant, in a REPEATABLE READ
+     transaction held for the run, so a change made while the diff runs is
+     seen by all of its reads or by none. What the reads lock stays locked
+     until the run ends, as with pg_dump. See PostgresSnapshot.
+    */
+    public bool $snapshot = true;
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

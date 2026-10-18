@@ -60,7 +60,7 @@ class RowStream
                 $this->ownsTransaction = true;
             }
             $this->cursor = 'dbdiff_' . preg_replace('/\W/', '_', $name);
-            $pdo->exec("DECLARE {$this->cursor} NO SCROLL CURSOR FOR {$sql}");
+            $this->declare($pdo, "DECLARE {$this->cursor} NO SCROLL CURSOR FOR {$sql}");
             $this->fetch = $pdo->prepare("FETCH FORWARD " . self::BATCH . " FROM {$this->cursor}");
             return;
         }
@@ -71,6 +71,29 @@ class RowStream
         }
         $this->statement = $pdo->prepare($sql);
         $this->statement->execute();
+    }
+
+    /**
+     * Declare the cursor. In a transaction this stream did not open — the
+     * snapshot a diff reads as of — a failure would end that transaction for
+     * every read after it, so it is undone to a savepoint instead.
+     */
+    private function declare(PDO $pdo, string $declare): void
+    {
+        if ($this->ownsTransaction) {
+            $pdo->exec($declare);
+            return;
+        }
+        $pdo->exec('SAVEPOINT dbdiff_declare');
+        try {
+            $pdo->exec($declare);
+        } catch (\Throwable $e) {
+            $this->cursor = null;
+            $pdo->exec('ROLLBACK TO SAVEPOINT dbdiff_declare');
+            $pdo->exec('RELEASE SAVEPOINT dbdiff_declare');
+            throw $e;
+        }
+        $pdo->exec('RELEASE SAVEPOINT dbdiff_declare');
     }
 
     /** The next row, or false when there are no more. */

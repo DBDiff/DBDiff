@@ -5,6 +5,7 @@ use DBDiff\Diff\InsertData;
 use DBDiff\Logger;
 use Diff\DiffOp\DiffOpAdd;
 use Diff\DiffOp\DiffOpRemove;
+use DBDiff\DB\Support\PostgresSnapshot;
 use Illuminate\Database\Connection;
 
 /**
@@ -85,7 +86,7 @@ class KeylessMergeDiff extends StreamingMergeDiff
     {
         try {
             if ($this->driver === 'pgsql') {
-                $rows = $this->source->select(
+                $rows = PostgresSnapshot::attempt($this->source, fn() => $this->source->select(
                     "SELECT a.attname AS name
                        FROM pg_attribute a
                        JOIN pg_type d ON d.oid = a.atttypid
@@ -94,7 +95,7 @@ class KeylessMergeDiff extends StreamingMergeDiff
                         AND NOT EXISTS (SELECT 1 FROM pg_operator o
                                          WHERE o.oprname = '=' AND o.oprleft = t.oid AND o.oprright = t.oid)",
                     [$this->tableName($table)]
-                );
+                ));
             } elseif ($this->driver === 'mysql') {
                 $rows = $this->source->select(
                     "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS

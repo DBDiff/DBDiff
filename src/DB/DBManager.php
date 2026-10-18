@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB;
 
 use DBDiff\DB\Support\PostgresSessionOptions;
+use DBDiff\DB\Support\PostgresSnapshot;
 use DBDiff\DB\Support\ServerSettings;
 
 use DBDiff\DB\Support\ComputedColumns;
@@ -21,6 +22,9 @@ class DBManager {
 
     /** The schema useSchema() last pointed the connections at. */
     protected ?string $schema = null;
+
+    /** @var array<string, string> each side's PostgreSQL snapshot, which its connections read as of */
+    protected array $snapshots = [];
 
     function __construct() {
         $this->capsule = new Capsule;
@@ -64,6 +68,26 @@ class DBManager {
             $this->capsule->addConnection($config, $key);
             // The URL's session settings, on a connection just created.
             PostgresSessionOptions::apply($this->capsule->getConnection($key));
+
+            if ($this->driver === 'pgsql' && ($params->snapshot ?? true)) {
+                $this->holdSnapshot($key, $config);
+            }
+        }
+    }
+
+    /**
+     * Read `$side` as of one instant: a second connection exports its
+     * snapshot and keeps it open, and the one DBDiff reads with joins it —
+     * see PostgresSnapshot.
+     */
+    private function holdSnapshot(string $side, array $config): void {
+        $anchor = $side . '__snapshot';
+        $this->capsule->addConnection($config, $anchor);
+        $connection = $this->capsule->getConnection($anchor);
+        PostgresSessionOptions::apply($connection);
+        $id = PostgresSnapshot::export($connection, $side);
+        if ($id !== null && PostgresSnapshot::join($this->getDB($side), $id, $side)) {
+            $this->snapshots[$side] = $id;
         }
     }
 
@@ -87,6 +111,11 @@ class DBManager {
             $this->capsule->getDatabaseManager()->purge($name);
             $this->capsule->addConnection($config, $name);
             PostgresSessionOptions::apply($this->capsule->getConnection($name));
+            // The new connection reads as of the same instant as the last.
+            if (isset($this->snapshots[$name])
+                && !PostgresSnapshot::join($this->getDB($name), $this->snapshots[$name], $name)) {
+                unset($this->snapshots[$name]);
+            }
         }
     }
 
@@ -122,6 +151,11 @@ class DBManager {
 
     public function getAdapter(): DBAdapterInterface {
         return $this->adapter;
+    }
+
+    /** Whether `$side` is read as of one snapshot. */
+    public function readsSnapshot(string $side): bool {
+        return isset($this->snapshots[$side]);
     }
 
     public function getDriver(): string {
