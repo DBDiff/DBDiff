@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DB\Adapters\MySQLAdapter;
+
 use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
 
@@ -106,7 +108,9 @@ class TableSchema {
         }
 
         $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetColumns, $sourceColumns);
+        $diffs = $driver === 'mysql'
+            ? self::comparedAs([MySQLAdapter::class, 'comparableColumnDef'], $differ, $targetColumns, $sourceColumns)
+            : $differ->doDiff($targetColumns, $sourceColumns);
 
         // A column renamed, not dropped and added: its data stays.
         $columnRenames = [];
@@ -222,6 +226,23 @@ class TableSchema {
                 $driver === 'mysql' ? [$sourceSchema['constraints'] ?? [], $targetSchema['constraints'] ?? []] : null),
             $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
         );
+    }
+
+    /**
+     * The diff of two column maps compared through `$comparable`, carrying
+     * each column's definition as its server wrote it.
+     */
+    private static function comparedAs(callable $comparable, MapDiffer $differ, array $target, array $source): array {
+        $diffs = $differ->doDiff(array_map($comparable, $target), array_map($comparable, $source));
+        foreach ($diffs as $column => $diff) {
+            $diffs[$column] = match (true) {
+                $diff instanceof \Diff\DiffOp\DiffOpChange => new \Diff\DiffOp\DiffOpChange($target[$column], $source[$column]),
+                $diff instanceof \Diff\DiffOp\DiffOpAdd    => new \Diff\DiffOp\DiffOpAdd($source[$column]),
+                $diff instanceof \Diff\DiffOp\DiffOpRemove => new \Diff\DiffOp\DiffOpRemove($target[$column]),
+                default => $diff,
+            };
+        }
+        return $diffs;
     }
 
     /**
