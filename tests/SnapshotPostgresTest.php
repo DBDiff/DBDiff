@@ -15,12 +15,13 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
 {
     protected string $prefix = 'dbdiff_snap';
 
-    private function manager(string $source, string $target, bool $snapshot = true): DBManager
+    private function manager(string $source, string $target, bool $snapshot = true, ?string $sourceSnapshot = null): DBManager
     {
         $server = ['user' => $this->user, 'password' => $this->pass, 'host' => $this->host, 'port' => $this->port];
         $params = new \stdClass;
         $params->driver   = 'pgsql';
         $params->snapshot = $snapshot;
+        $params->sourceSnapshot = $sourceSnapshot;
         $params->server1  = $server;
         $params->server2  = $server;
         $params->input    = [
@@ -88,5 +89,21 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
         $this->assertTrue($connection->getPdo()->inTransaction());
         $this->assertSame(['t'], $manager->getTables('source'));
         $this->assertSame(0, (int) $connection->selectOne("SELECT count(*) AS n FROM pg_class WHERE relname = 'dbdiff_render_probe'")['n']);
+    }
+
+    public function testASnapshotAnotherSessionHoldsIsReadAsOf(): void
+    {
+        $source = $this->db('gs', 'CREATE TABLE exported_before (id int);');
+        $target = $this->db('gt', '');
+        $holder = $this->connect($source);
+        $holder->exec('BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+        $id = $holder->query('SELECT pg_export_snapshot()')->fetchColumn();
+        $this->connect($source)->exec('CREATE TABLE made_after (id int);');
+
+        $manager = $this->manager($source, $target, true, $id);
+
+        $this->assertTrue($manager->readsSnapshot('source'));
+        $this->assertSame(['exported_before'], $manager->getTables('source'));
+        $holder->exec('ROLLBACK');
     }
 }

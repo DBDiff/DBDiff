@@ -157,6 +157,14 @@ class DefaultParams {
     public bool $snapshot = true;
 
     /*
+     PostgreSQL: a snapshot another session exported (pg_export_snapshot) and
+     holds open, to read the source or target as of instead of one of
+     DBDiff's own.
+    */
+    public ?string $sourceSnapshot = null;
+    public ?string $targetSnapshot = null;
+
+    /*
      The penultimate parameter is what to compare: db1.table1:db2.table3 or​ db1:db2 
      This tool can compare just one table or all tables (entire db) from the database
     */

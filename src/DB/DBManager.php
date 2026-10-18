@@ -71,7 +71,8 @@ class DBManager {
             PostgresSessionOptions::apply($this->capsule->getConnection($key));
 
             if ($this->driver === 'pgsql' && ($params->snapshot ?? true)) {
-                $this->holdSnapshot($key, $config);
+                $given = $key === 'source' ? ($params->sourceSnapshot ?? null) : ($params->targetSnapshot ?? null);
+                $given ? $this->joinSnapshot($key, $given) : $this->holdSnapshot($key, $config);
             }
         }
         if ($this->driver === 'pgsql') {
@@ -79,6 +80,17 @@ class DBManager {
             if (isset($params->input['source'], $params->input['target'])) {
                 PostgresPeers::compare($this->getDB('source'), $this->getDB('target'));
             }
+        }
+    }
+
+    /**
+     * Read `$side` as of a snapshot another session exported and holds — a
+     * tool running DBDiff as one part of a larger read, so all of it sees the
+     * same instant.
+     */
+    private function joinSnapshot(string $side, string $id): void {
+        if (PostgresSnapshot::join($this->getDB($side), $id, $side)) {
+            $this->snapshots[$side] = $id;
         }
     }
 

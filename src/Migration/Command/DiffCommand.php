@@ -99,6 +99,10 @@ class DiffCommand extends Command
             ->addOption('renames', null, InputOption::VALUE_REQUIRED,
                 'PostgreSQL: "auto" (default) renames a column or table whose only difference is its name, '
                 . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto')
+            ->addOption('source-snapshot', null, InputOption::VALUE_REQUIRED,
+                'PostgreSQL: read the source as of this snapshot, exported by a session that holds it open.')
+            ->addOption('target-snapshot', null, InputOption::VALUE_REQUIRED,
+                'PostgreSQL: read the target as of this snapshot, exported by a session that holds it open.')
             ->addOption('no-snapshot', null, InputOption::VALUE_NONE,
                 'PostgreSQL: read each query on its own, rather than each side as of one instant. '
                 . 'The snapshot keeps what the diff reads locked until it ends, as pg_dump does.');
@@ -173,6 +177,8 @@ class DiffCommand extends Command
         $params->allowDestructive = (bool) $input->getOption('allow-destructive');
         $params->renames          = $input->getOption('renames') === 'off' ? 'off' : 'auto';
         $params->snapshot         = !$input->getOption('no-snapshot');
+        $params->sourceSnapshot   = $input->getOption('source-snapshot') ?: null;
+        $params->targetSnapshot   = $input->getOption('target-snapshot') ?: null;
 
         if ($input->getOption('tables')) {
             $params->tables = array_map('trim', explode(',', $input->getOption('tables')));
