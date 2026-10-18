@@ -87,8 +87,7 @@ final class PostgresSnapshot {
         try {
             return $work();
         } finally {
-            $pdo->exec('ROLLBACK TO SAVEPOINT ' . self::SCRATCH);
-            $pdo->exec('RELEASE SAVEPOINT ' . self::SCRATCH);
+            self::undo($pdo, self::SCRATCH);
         }
     }
 
@@ -105,12 +104,17 @@ final class PostgresSnapshot {
         try {
             $result = $read();
         } catch (\Throwable $e) {
-            $pdo->exec('ROLLBACK TO SAVEPOINT ' . self::ATTEMPT);
-            $pdo->exec('RELEASE SAVEPOINT ' . self::ATTEMPT);
+            self::undo($pdo, self::ATTEMPT);
             throw $e;
         }
         $pdo->exec('RELEASE SAVEPOINT ' . self::ATTEMPT);
         return $result;
+    }
+
+    /** Back to the savepoint, and let it go. */
+    private static function undo(\PDO $pdo, string $savepoint): void {
+        $pdo->exec("ROLLBACK TO SAVEPOINT $savepoint");
+        $pdo->exec("RELEASE SAVEPOINT $savepoint");
     }
 
     private static function firstLine(\Throwable $e): string {

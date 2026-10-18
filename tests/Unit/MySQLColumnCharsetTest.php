@@ -1,6 +1,6 @@
 <?php
 
-use DBDiff\DB\Adapters\MySQLAdapter;
+use DBDiff\DB\Support\MySQLColumns;
 use DBDiff\DB\DBManager;
 use DBDiff\DB\Schema\TableSchema;
 use DBDiff\Diff\AlterTableChangeColumn;
@@ -60,8 +60,8 @@ class MySQLColumnCharsetTest extends TestCase
 
     public function testOnlyACharacterSetItsCollationNamesIsLeftOut(): void
     {
-        $this->assertSame('`a` text COLLATE utf8mb4_bin', MySQLAdapter::comparableColumnDef('`a` text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'));
-        $this->assertSame('`a` text CHARACTER SET latin1 COLLATE utf8mb4_bin', MySQLAdapter::comparableColumnDef('`a` text CHARACTER SET latin1 COLLATE utf8mb4_bin'));
-        $this->assertSame('`a` text CHARACTER SET latin1', MySQLAdapter::comparableColumnDef('`a` text CHARACTER SET latin1'));
+        $this->assertSame('`a` text COLLATE utf8mb4_bin', MySQLColumns::comparable('`a` text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'));
+        $this->assertSame('`a` text CHARACTER SET latin1 COLLATE utf8mb4_bin', MySQLColumns::comparable('`a` text CHARACTER SET latin1 COLLATE utf8mb4_bin'));
+        $this->assertSame('`a` text CHARACTER SET latin1', MySQLColumns::comparable('`a` text CHARACTER SET latin1'));
     }
 }

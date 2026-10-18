@@ -38,7 +38,7 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
         $source = $this->db('s', 'CREATE TABLE before_connect (id int);');
         $target = $this->db('t', '');
         $manager = $this->manager($source, $target);
-        $this->assertTrue($manager->readsSnapshot('source'));
+        $this->assertTrue($manager->snapshots->holds('source'));
 
         $this->connect($source)->exec('CREATE TABLE after_connect (id int);');
 
@@ -50,7 +50,7 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
         $source = $this->db('ns', 'CREATE TABLE before_connect (id int);');
         $target = $this->db('nt', '');
         $manager = $this->manager($source, $target, false);
-        $this->assertFalse($manager->readsSnapshot('source'));
+        $this->assertFalse($manager->snapshots->holds('source'));
 
         $this->connect($source)->exec('CREATE TABLE after_connect (id int);');
 
@@ -66,7 +66,7 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
         $this->connect($source)->exec('CREATE TABLE app.added (id int);');
         $manager->useSchema('app');
 
-        $this->assertTrue($manager->readsSnapshot('source'));
+        $this->assertTrue($manager->snapshots->holds('source'));
         $this->assertSame(['kept'], $manager->getTables('source'));
     }
 
@@ -102,7 +102,7 @@ class SnapshotPostgresTest extends PostgresRoundTripTestCase
 
         $manager = $this->manager($source, $target, true, $id);
 
-        $this->assertTrue($manager->readsSnapshot('source'));
+        $this->assertTrue($manager->snapshots->holds('source'));
         $this->assertSame(['exported_before'], $manager->getTables('source'));
         $holder->exec('ROLLBACK');
     }

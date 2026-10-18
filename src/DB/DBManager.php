@@ -1,7 +1,7 @@
 <?php namespace DBDiff\DB;
 
 use DBDiff\DB\Support\PostgresSessionOptions;
-use DBDiff\DB\Support\PostgresSnapshot;
+use DBDiff\DB\Support\PostgresSnapshotSet;
 use DBDiff\DB\Support\PostgresPeers;
 use DBDiff\DB\Support\ServerSettings;
 
@@ -24,11 +24,12 @@ class DBManager {
     /** The schema useSchema() last pointed the connections at. */
     protected ?string $schema = null;
 
-    /** @var array<string, string> each side's PostgreSQL snapshot, which its connections read as of */
-    protected array $snapshots = [];
+    /** The PostgreSQL snapshot each side is read as of. */
+    public readonly PostgresSnapshotSet $snapshots;
 
     function __construct() {
-        $this->capsule = new Capsule;
+        $this->capsule   = new Capsule;
+        $this->snapshots = new PostgresSnapshotSet;
         $dispatcher    = new Dispatcher();
         $dispatcher->listen(StatementPrepared::class, function ($event) {
             $event->statement->setFetchMode(\PDO::FETCH_ASSOC);
@@ -52,27 +53,13 @@ class DBManager {
                 continue;
             }
 
-            // SQLite uses the db value as a file path; no server block required.
-            if ($this->driver === 'sqlite') {
-                $config = $this->adapter->buildConnectionConfig([], $input['db']);
-            } else {
-                $server = $params->{$input['server']};
-                ServerSettings::requireFor($server, $input['server']);
-                // --supabase / --sslmode supply an sslmode where the server's own
-                // URL does not name one.
-                if (isset($params->sslmode) && empty($server['sslmode'])) {
-                    $server['sslmode'] = $params->sslmode;
-                }
-                $config = $this->adapter->buildConnectionConfig($server, $input['db']);
-            }
-
+            $config = ServerSettings::connectionConfig($this->adapter, $this->driver, $params, $input);
             $this->capsule->addConnection($config, $key);
             // The URL's session settings, on a connection just created.
             PostgresSessionOptions::apply($this->capsule->getConnection($key));
 
             if ($this->driver === 'pgsql' && ($params->snapshot ?? true)) {
-                $given = $key === 'source' ? ($params->sourceSnapshot ?? null) : ($params->targetSnapshot ?? null);
-                $given ? $this->joinSnapshot($key, $given) : $this->holdSnapshot($key, $config);
+                $this->snapshots->take($this->capsule, $key, $config, $params);
             }
         }
         if ($this->driver === 'pgsql') {
@@ -80,33 +67,6 @@ class DBManager {
             if (isset($params->input['source'], $params->input['target'])) {
                 PostgresPeers::compare($this->getDB('source'), $this->getDB('target'));
             }
-        }
-    }
-
-    /**
-     * Read `$side` as of a snapshot another session exported and holds — a
-     * tool running DBDiff as one part of a larger read, so all of it sees the
-     * same instant.
-     */
-    private function joinSnapshot(string $side, string $id): void {
-        if (PostgresSnapshot::join($this->getDB($side), $id, $side)) {
-            $this->snapshots[$side] = $id;
-        }
-    }
-
-    /**
-     * Read `$side` as of one instant: a second connection exports its
-     * snapshot and keeps it open, and the one DBDiff reads with joins it —
-     * see PostgresSnapshot.
-     */
-    private function holdSnapshot(string $side, array $config): void {
-        $anchor = $side . '__snapshot';
-        $this->capsule->addConnection($config, $anchor);
-        $connection = $this->capsule->getConnection($anchor);
-        PostgresSessionOptions::apply($connection);
-        $id = PostgresSnapshot::export($connection, $side);
-        if ($id !== null && PostgresSnapshot::join($this->getDB($side), $id, $side)) {
-            $this->snapshots[$side] = $id;
         }
     }
 
@@ -130,11 +90,7 @@ class DBManager {
             $this->capsule->getDatabaseManager()->purge($name);
             $this->capsule->addConnection($config, $name);
             PostgresSessionOptions::apply($this->capsule->getConnection($name));
-            // The new connection reads as of the same instant as the last.
-            if (isset($this->snapshots[$name])
-                && !PostgresSnapshot::join($this->getDB($name), $this->snapshots[$name], $name)) {
-                unset($this->snapshots[$name]);
-            }
+            $this->snapshots->rejoin($this->getDB($name), $name);
         }
     }
 
@@ -170,11 +126,6 @@ class DBManager {
 
     public function getAdapter(): DBAdapterInterface {
         return $this->adapter;
-    }
-
-    /** Whether `$side` is read as of one snapshot. */
-    public function readsSnapshot(string $side): bool {
-        return isset($this->snapshots[$side]);
     }
 
     public function getDriver(): string {

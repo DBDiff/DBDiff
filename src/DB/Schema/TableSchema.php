@@ -1,6 +1,6 @@
 <?php namespace DBDiff\DB\Schema;
 
-use DBDiff\DB\Adapters\MySQLAdapter;
+use DBDiff\DB\Support\MySQLColumns;
 
 use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
@@ -109,7 +109,7 @@ class TableSchema {
 
         $differ = new MapDiffer();
         $diffs = $driver === 'mysql'
-            ? self::comparedAs([MySQLAdapter::class, 'comparableColumnDef'], $differ, $targetColumns, $sourceColumns)
+            ? self::comparedAs([MySQLColumns::class, 'comparable'], $differ, $targetColumns, $sourceColumns)
             : $differ->doDiff($targetColumns, $sourceColumns);
 
         // A column renamed, not dropped and added: its data stays.

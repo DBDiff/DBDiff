@@ -26,32 +26,19 @@ class CLIGetter implements ParamsGetter {
         if ($getopt->get('--server2')) {
             $params->server2 = $this->parseServer($getopt->get('--server2'));
         }
-        if ($getopt->get('--format')) {
-            $params->format = $getopt->get('--format');
-        }
-        if ($getopt->get('--template')) {
-            $params->template = $getopt->get('--template');
-        }
-        if ($getopt->get('--type')) {
-            $params->type = $getopt->get('--type');
-        }
-        if ($getopt->get('--include')) {
-            $params->include = $getopt->get('--include');
-        }
-        if ($getopt->get('--nocomments')) {
-            $params->nocomments = $getopt->get('--nocomments');
+        // Options taken as given.
+        foreach (['format', 'template', 'type', 'include', 'nocomments'] as $option) {
+            if ($getopt->get("--$option")) {
+                $params->$option = $getopt->get("--$option");
+            }
         }
         if ($getopt->get('--units')) {
             $params->units = (bool) $getopt->get('--units');
         }
-        if ($getopt->get('--config')) {
-            $params->config = $getopt->get('--config');
-        }
-        if ($getopt->get('--output')) {
-            $params->output = $getopt->get('--output');
-        }
-        if ($getopt->get('--debug')) {
-            $params->debug = $getopt->get('--debug');
+        foreach (['config', 'output', 'debug'] as $option) {
+            if ($getopt->get("--$option")) {
+                $params->$option = $getopt->get("--$option");
+            }
         }
         if ($getopt->get('--driver')) {
             $params->driver = strtolower($getopt->get('--driver'));
