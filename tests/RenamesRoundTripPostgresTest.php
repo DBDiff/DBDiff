@@ -69,6 +69,27 @@ class RenamesRoundTripPostgresTest extends PostgresRoundTripTestCase
         $this->assertStringNotContainsString('DROP TABLE', $up);
     }
 
+    /**
+     * A table renamed on the source keeps its NOT NULL constraints' old names
+     * from PostgreSQL 18, where they are constraints: read as constraints of
+     * their own beside the target's plain NOT NULLs, it no longer matched its
+     * old self, was created afresh, and its primary key's old name clashed
+     * with the target's.
+     */
+    public function testATableRenamedOnTheSourceIsStillARename(): void
+    {
+        $up = $this->assertRoundTrip(
+            'renamed_source',
+            "CREATE TABLE settings (key text PRIMARY KEY, value jsonb NOT NULL);
+             ALTER TABLE settings RENAME TO config;",
+            "CREATE TABLE settings (key text PRIMARY KEY, value jsonb NOT NULL);
+             INSERT INTO settings VALUES ('plan', '{\"tier\": \"pro\"}'), ('flags', '{}');",
+            fn(string $db) => $this->rows($db, "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'")
+        );
+        $this->assertStringContainsString('ALTER TABLE "settings" RENAME TO "config"', $up);
+        $this->assertStringNotContainsString('CREATE TABLE', $up);
+    }
+
     public function testTablesSharingAStructureAreNotGuessed(): void
     {
         [$up] = $this->diff(
