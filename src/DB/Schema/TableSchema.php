@@ -218,7 +218,8 @@ class TableSchema {
 
         return array_merge(
             $diffSequence,
-            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames),
+            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames,
+                $driver === 'mysql' ? [$sourceSchema['constraints'] ?? [], $targetSchema['constraints'] ?? []] : null),
             $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
         );
     }
@@ -243,8 +244,16 @@ class TableSchema {
         return [$diffs, $columnRenames, $out];
     }
 
-    /** Index and key diffs; one a rename carried along is renamed or left alone. */
-    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames): array {
+    /**
+     * Index and key diffs; one a rename carried along is renamed or left alone.
+     *
+     * MySQL keeps an index for every foreign key and refuses to drop the last
+     * one a foreign key can use. So with `$foreignKeys` — each side's
+     * constraints — a key whose leading columns are a foreign key's is marked:
+     * one dropped is dropped once the keys added have been, and the DOWN of
+     * one added likewise (see DiffSorter).
+     */
+    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames, ?array $foreignKeys = null): array {
         $out = [];
         [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetKeys, $sourceKeys);
         $kept += ColumnRenames::carried($this->tableRenames, $targetKeys, $sourceKeys)[0];
@@ -255,14 +264,36 @@ class TableSchema {
         $diffs = array_diff_key((new MapDiffer())->doDiff($targetKeys, $sourceKeys), $kept);
         foreach ($diffs as $key => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $out[] = new AlterTableDropKey($table, $key, $diff);
+                $drop = new AlterTableDropKey($table, $key, $diff);
+                $drop->forForeignKey = $foreignKeys !== null && self::servesForeignKey((string) $diff->getOldValue(), $foreignKeys[0]);
+                $out[] = $drop;
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
                 $out[] = new AlterTableChangeKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $out[] = new AlterTableAddKey($table, $key, $diff);
+                $add = new AlterTableAddKey($table, $key, $diff);
+                $add->forForeignKey = $foreignKeys !== null && self::servesForeignKey((string) $diff->getNewValue(), $foreignKeys[1]);
+                $out[] = $add;
             }
         }
         return $out;
+    }
+
+    /** Whether a MySQL key definition's leading columns are those of one of the foreign keys among `$constraints`. */
+    private static function servesForeignKey(string $keyDefinition, array $constraints): bool {
+        $columns = fn(string $list): array => preg_match_all('/`((?:[^`]|``)+)`/', $list, $m) ? $m[1] : [];
+        if (!preg_match('/\(([^)]*)\)/', $keyDefinition, $keyList)) {
+            return false;
+        }
+        $keyColumns = $columns($keyList[1]);
+        foreach ($constraints as $constraint) {
+            if (preg_match('/\bFOREIGN KEY\s*\(([^)]*)\)/i', (string) $constraint, $fk)) {
+                $fkColumns = $columns($fk[1]);
+                if ($fkColumns !== [] && array_slice($keyColumns, 0, count($fkColumns)) === $fkColumns) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Constraint diffs; one a rename carried along is renamed or left alone. */

@@ -17,6 +17,9 @@ class AlterTableDropKey {
     /** Its DROP may find the object gone — an enum swap could not put it back (EnumSwapPlan). */
     public bool $dropIfExists = false;
 
+    /** MySQL: a foreign key's columns lead it, so its drop waits for the keys added — see TableSchema::keyDiffs. */
+    public bool $forForeignKey = false;
+
     function __construct($table, $key, $diff) {
         $this->table = $table;
         $this->key = $key;
