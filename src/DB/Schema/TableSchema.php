@@ -114,8 +114,9 @@ class TableSchema {
 
         // A column renamed, not dropped and added: its data stays.
         $columnRenames = [];
+        $keptNotNull = [];
         if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off') {
-            [$diffs, $columnRenames, $renameDiffs] = $this->columnRenameDiffs($table, $diffs, $sourceSchema);
+            [$diffs, $columnRenames, $renameDiffs, $keptNotNull] = $this->columnRenameDiffs($table, $diffs, $sourceSchema, $targetSchema);
             $diffSequence = array_merge($diffSequence, $renameDiffs);
         }
 
@@ -224,7 +225,7 @@ class TableSchema {
             $diffSequence,
             $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames,
                 $driver === 'mysql' ? [$sourceSchema['constraints'] ?? [], $targetSchema['constraints'] ?? []] : null),
-            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
+            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames, $keptNotNull)
         );
     }
 
@@ -250,19 +251,30 @@ class TableSchema {
      * from PostgreSQL 18, the NOT NULL constraint named after the column,
      * whose default name follows it — and the diffs that are left.
      *
-     * @return array{0: array, 1: array<string, string>, 2: list<object>}
+     * @return array{0: array, 1: array<string, string>, 2: list<object>, 3: list<string>} the NOT NULLs a rename keeps as they are last
      */
-    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema): array {
-        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs);
+    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema, array $targetSchema): array {
+        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs, [
+            'source' => ColumnRenames::namedNotNullColumns($sourceSchema['constraints'] ?? []),
+            'target' => ColumnRenames::namedNotNullColumns($targetSchema['constraints'] ?? []),
+        ]);
         $out = [];
+        $kept = [];
         foreach ($columnRenames as $to => $from) {
             $out[] = new AlterTableRenameColumn($table, $to, $from);
             $notNull = ColumnRenames::defaultNotNull($this->manager->getDB('target'), $table, $from, $to);
-            if ($notNull !== null && !isset($sourceSchema['constraints'][$notNull[1]])) {
+            if ($notNull === null) {
+                continue;
+            }
+            // A column renamed on the source kept its NOT NULL's old name,
+            // and the rename gives the target's the same: it stays as it is.
+            if (isset($sourceSchema['constraints'][$notNull[0]])) {
+                $kept[] = $notNull[0];
+            } elseif (!isset($sourceSchema['constraints'][$notNull[1]])) {
                 $out[] = new AlterTableRenameConstraint($table, $notNull[1], $notNull[0]);
             }
         }
-        return [$diffs, $columnRenames, $out];
+        return [$diffs, $columnRenames, $out, $kept];
     }
 
     /**
@@ -318,9 +330,10 @@ class TableSchema {
     }
 
     /** Constraint diffs; one a rename carried along is renamed or left alone. */
-    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames): array {
+    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames, array $keptNotNull = []): array {
         $out = [];
         [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetConstraints, $sourceConstraints);
+        $kept += array_fill_keys($keptNotNull, true);
         $kept += ColumnRenames::carried($this->tableRenames, $targetConstraints, $sourceConstraints)[0];
         foreach ($renamed as $from => $to) {
             $out[] = new AlterTableRenameConstraint($table, $to, $from);
