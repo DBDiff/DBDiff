@@ -338,6 +338,16 @@ class DiffCommand extends Command
         $p1 = DsnParser::toServerAndDb(DsnParser::parse($s1url));
         $p2 = DsnParser::toServerAndDb(DsnParser::parse($s2url));
 
+        // Both are read and written with one driver. A MySQL source and a
+        // PostgreSQL target had the PostgreSQL server spoken to as MySQL,
+        // which waited for a greeting that never came.
+        if ($p1['driver'] !== $p2['driver']) {
+            throw new \InvalidArgumentException(
+                "--server1-url is {$p1['driver']} and --server2-url is {$p2['driver']}: "
+                . 'DBDiff compares two databases of the same engine.'
+            );
+        }
+
         $params->driver  = $p1['driver'];
         $params->server1 = $p1['server'];
         $params->server2 = $p2['server'];

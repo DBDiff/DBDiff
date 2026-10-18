@@ -105,6 +105,17 @@ class DiffCommandTest extends TestCase
         $this->assertStringContainsString('mongodb', $this->tester->getDisplay());
     }
 
+    public function testServerUrlsOfTwoEnginesFail(): void
+    {
+        $exitCode = $this->tester->execute([
+            '--server1-url' => 'mysql://u:p@host/db',
+            '--server2-url' => 'postgres://u:p@host/db',
+        ]);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('--server1-url is mysql and --server2-url is pgsql', $this->tester->getDisplay());
+    }
+
     public function testInvalidServer2UrlSchemeFails(): void
     {
         $exitCode = $this->tester->execute([
