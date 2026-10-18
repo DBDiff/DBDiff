@@ -70,6 +70,10 @@ final class PostgresDefaultPrivileges {
     private static function aclRows(?string $json): array {
         $out = [];
         foreach (json_decode((string) $json, true) ?? [] as [$grantee, $privilege, $grantable]) {
+            // Read as both servers can hold it: an older one has no MAINTAIN.
+            if (!PostgresPeers::bothHave($privilege)) {
+                continue;
+            }
             $out["$grantee|$privilege"] = [$grantee, $privilege, (bool) $grantable];
         }
         return $out;

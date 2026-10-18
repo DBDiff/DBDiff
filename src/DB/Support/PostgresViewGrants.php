@@ -56,6 +56,8 @@ final class PostgresViewGrants {
         if ($row === null) {
             return null;
         }
-        return ['owner' => $row['owner'], 'grants' => json_decode((string) $row['grants'], true) ?? []];
+        $grants = array_values(array_filter(json_decode((string) $row['grants'], true) ?? [],
+            fn(array $g) => PostgresPeers::bothHave($g['privilege'])));
+        return ['owner' => $row['owner'], 'grants' => $grants];
     }
 }

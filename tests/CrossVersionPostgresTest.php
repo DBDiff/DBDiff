@@ -134,6 +134,35 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         $this->assertNull($this->upAcross($source, $target), 'the table created on the other server still differs');
     }
 
+    /**
+     * MAINTAIN arrived in PostgreSQL 17. A view a 17 source grants it on, and
+     * default privileges that give it, were written for an older target with
+     * it: GRANT MAINTAIN failed there, and the replaced view, and every view
+     * reading it, were left out with it.
+     */
+    public function testMaintainIsLeftOutForAnOlderServer(): void
+    {
+        $other = intdiv((int) $this->otherAdmin->query('SHOW server_version_num')->fetchColumn(), 10000);
+        if (intdiv($this->serverVersion, 10000) < 17 || $other >= 17) {
+            $this->markTestSkipped('Needs a PostgreSQL 17 or newer source and an older target.');
+        }
+        $role = "DO \$\$ BEGIN CREATE ROLE dbdiff_xv_reader NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;";
+        $this->admin->exec($role);
+        $this->otherAdmin->exec($role);
+        $source = $this->db('mn_s', self::BASE . "CREATE VIEW mv AS SELECT id FROM vt WHERE a = 2;
+            GRANT SELECT, MAINTAIN ON mv TO dbdiff_xv_reader;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, MAINTAIN ON TABLES TO dbdiff_xv_reader;");
+        $target = $this->otherDb('mn_t', self::BASE . "CREATE VIEW mv AS SELECT id FROM vt WHERE a = 1;
+            GRANT SELECT ON mv TO dbdiff_xv_reader;");
+
+        $up = $this->upAcross($source, $target);
+        $this->assertNotNull($up);
+        $this->assertStringNotContainsStringIgnoringCase('MAINTAIN', $up);
+        (new PDO("pgsql:host={$this->otherHost};port={$this->otherPort};dbname=$target", $this->user, $this->pass,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]))->exec($up);
+        $this->assertNull($this->upAcross($source, $target), 'the older server still differs');
+    }
+
     /** @return array<string, array{string}> */
     public static function kinds(): array
     {

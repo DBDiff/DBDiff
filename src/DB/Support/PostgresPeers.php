@@ -22,6 +22,16 @@ final class PostgresPeers {
         return self::$lowest;
     }
 
+    /**
+     * Whether `$privilege` is one both servers have. MAINTAIN arrived in
+     * PostgreSQL 17, and an older server rejects a GRANT naming it, taking
+     * the change it was part of — a replaced view, default privileges — with
+     * it.
+     */
+    public static function bothHave(string $privilege): bool {
+        return strtoupper($privilege) !== 'MAINTAIN' || (self::$lowest ?? 17) >= 17;
+    }
+
     public static function forget(): void {
         self::$lowest = null;
     }
