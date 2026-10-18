@@ -7,6 +7,7 @@ use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\DB\Support\PostgresColumnType;
 use DBDiff\DB\Support\PostgresSchemaHelper;
+use DBDiff\DB\Support\PostgresPeers;
 use DBDiff\DB\Support\PostgresTableSettings;
 use DBDiff\DB\Support\PostgresIdent;
 use DBDiff\DB\Support\PostgresColumnDependants;
@@ -629,6 +630,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         );
         $namedNotNull  = [];
         $nnColsByTable = [];
+        // Against a server before PostgreSQL 18, which has no names for them,
+        // every NOT NULL is the column's: CONSTRAINT "x" NOT NULL "c" is a
+        // syntax error there, and its name could not be kept anyway.
+        $nnRows = (PostgresPeers::lowestMajor() ?? 18) < 18 ? [] : $nnRows;
         foreach ($nnRows as $r) {
             // A partition's or child's NOT NULL inherited from its parent has
             // the parent's name, and comes with the parent: it is the column's

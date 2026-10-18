@@ -2,6 +2,7 @@
 
 use DBDiff\DB\Support\PostgresSessionOptions;
 use DBDiff\DB\Support\PostgresSnapshot;
+use DBDiff\DB\Support\PostgresPeers;
 use DBDiff\DB\Support\ServerSettings;
 
 use DBDiff\DB\Support\ComputedColumns;
@@ -71,6 +72,12 @@ class DBManager {
 
             if ($this->driver === 'pgsql' && ($params->snapshot ?? true)) {
                 $this->holdSnapshot($key, $config);
+            }
+        }
+        if ($this->driver === 'pgsql') {
+            PostgresPeers::forget();
+            if (isset($params->input['source'], $params->input['target'])) {
+                PostgresPeers::compare($this->getDB('source'), $this->getDB('target'));
             }
         }
     }

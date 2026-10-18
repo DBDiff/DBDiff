@@ -43,6 +43,10 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
                          CREATE TABLE ev_2026 PARTITION OF ev FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
                          CREATE TABLE ev_2027 PARTITION OF ev FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
                          CREATE INDEX ev_i ON ev (id) WHERE a = 1;",
+        // A renamed column keeps its NOT NULL's old name on PostgreSQL 18,
+        // where it is a constraint; an older server has no name for it.
+        'renamed' => "CREATE TABLE rn (id int, old_name text NOT NULL); ALTER TABLE rn RENAME COLUMN old_name TO name;
+                      CREATE INDEX rn_i ON vt (id) WHERE a = 1;",
         // A view recreated for nothing had its comments set again, which
         // read as comments changed although they were identical.
         'comments' => "CREATE VIEW vt_c AS SELECT vt.id, vt.name FROM vt WHERE vt.a = 1;
@@ -107,6 +111,27 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         $sql = trim(preg_replace('/^--.*$/m', '', file_get_contents($out)));
         unlink($out);
         return $sql === '' ? null : $sql;
+    }
+
+    /**
+     * A table only the source has is created on the other server, and the
+     * migration runs there. From PostgreSQL 18 to an older one, a NOT NULL
+     * constraint under a name of its own was written `CONSTRAINT "x" NOT NULL
+     * "c"`, a syntax error there, and the whole migration failed.
+     */
+    public function testATableOnlyTheSourceHasIsCreatedOnTheOtherServer(): void
+    {
+        $table = "CREATE TABLE moved (id int PRIMARY KEY, old_name text NOT NULL, at date NOT NULL) PARTITION BY RANGE (id);
+                  CREATE TABLE moved_1 PARTITION OF moved FOR VALUES FROM (0) TO (1000);
+                  ALTER TABLE moved RENAME COLUMN old_name TO name;";
+        $source = $this->db('ms', self::BASE . $table);
+        $target = $this->otherDb('mt', self::BASE);
+
+        $up = $this->upAcross($source, $target);
+        $this->assertNotNull($up);
+        (new PDO("pgsql:host={$this->otherHost};port={$this->otherPort};dbname=$target", $this->user, $this->pass,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]))->exec($up);
+        $this->assertNull($this->upAcross($source, $target), 'the table created on the other server still differs');
     }
 
     /** @return array<string, array{string}> */
