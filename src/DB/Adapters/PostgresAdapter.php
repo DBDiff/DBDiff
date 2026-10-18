@@ -616,10 +616,10 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // duplicate per-table queries that fetchColumns() and fetchConstraints()
         // previously issued separately.
         $nnRows = $connection->select(
-            "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name,
+            "SELECT rel.relname AS table_name, con.conname, con.convalidated, att.attname AS column_name, con.conislocal,
                     EXISTS (SELECT 1 FROM pg_constraint o
                              WHERE o.connamespace = con.connamespace AND o.conname = con.conname
-                               AND o.oid <> con.oid) AS shared_name
+                               AND o.oid <> con.oid AND o.conislocal) AS shared_name
              FROM pg_constraint con
              JOIN pg_class rel ON con.conrelid = rel.oid
              JOIN pg_namespace nsp ON rel.relnamespace = nsp.oid
@@ -630,6 +630,13 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $namedNotNull  = [];
         $nnColsByTable = [];
         foreach ($nnRows as $r) {
+            // A partition's or child's NOT NULL inherited from its parent has
+            // the parent's name, and comes with the parent: it is the column's
+            // NOT NULL, as on a server before PostgreSQL 18. Nor do those
+            // copies make the parent's own name a shared one.
+            if (!$r['conislocal']) {
+                continue;
+            }
             $default = $r['table_name'] . '_' . $r['column_name'] . '_not_null';
             // A default name another constraint of the schema also has is named
             // outright: left to PostgreSQL, it picks the next free one instead

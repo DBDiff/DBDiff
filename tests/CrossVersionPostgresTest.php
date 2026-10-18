@@ -36,6 +36,13 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         // before 15, colliculocale in 15 and 16, colllocale from 17).
         'collation' => "CREATE COLLATION vt_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
                         ALTER TABLE vt ADD COLUMN folded text COLLATE vt_ci;",
+        // From PostgreSQL 18 a NOT NULL is a constraint, and a partition's is
+        // inherited under its parent's name: read as a constraint of its own,
+        // each partition, and the parent, differed from an older server.
+        'partitions' => "CREATE TABLE ev (id int, at date NOT NULL, a int NOT NULL) PARTITION BY RANGE (at);
+                         CREATE TABLE ev_2026 PARTITION OF ev FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+                         CREATE TABLE ev_2027 PARTITION OF ev FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
+                         CREATE INDEX ev_i ON ev (id) WHERE a = 1;",
         // A view recreated for nothing had its comments set again, which
         // read as comments changed although they were identical.
         'comments' => "CREATE VIEW vt_c AS SELECT vt.id, vt.name FROM vt WHERE vt.a = 1;
