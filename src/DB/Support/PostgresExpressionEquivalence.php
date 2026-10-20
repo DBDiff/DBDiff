@@ -135,21 +135,20 @@ final class PostgresExpressionEquivalence {
                 . "EXCEPTION WHEN others THEN NULL; END;";
         }
         $out = array_fill_keys($bodies, null);
-        $pdo->beginTransaction();
-        try {
-            $pdo->exec("CREATE TEMP TABLE dbdiff_canon_out (i int, def text);\n"
-                . "DO \$dbdiff_canon\$ BEGIN\n" . implode("\n", $blocks) . "\nEND \$dbdiff_canon\$;");
-            $list = array_values($bodies);
-            foreach ($connection->select('SELECT i, def FROM pg_temp.dbdiff_canon_out') as $row) {
-                $out[$list[(int) $row['i']]] = $row['def'];
+        return PostgresSnapshot::scratch($pdo, function () use ($pdo, $connection, $blocks, $bodies, $out): array {
+            try {
+                $pdo->exec("CREATE TEMP TABLE dbdiff_canon_out (i int, def text);\n"
+                    . "DO \$dbdiff_canon\$ BEGIN\n" . implode("\n", $blocks) . "\nEND \$dbdiff_canon\$;");
+                $list = array_values($bodies);
+                foreach ($connection->select('SELECT i, def FROM pg_temp.dbdiff_canon_out') as $row) {
+                    $out[$list[(int) $row['i']]] = $row['def'];
+                }
+            } catch (\Throwable $e) {
+                // Rendered one at a time instead, as before.
+                return [];
             }
-        } catch (\Throwable $e) {
-            // Rendered one at a time instead, as before.
-            return [];
-        } finally {
-            $pdo->rollBack();
-        }
-        return $out;
+            return $out;
+        });
     }
 
     /**
@@ -240,24 +239,22 @@ final class PostgresExpressionEquivalence {
             && array_key_exists($parts[1], self::$rendered[spl_object_id($connection)] ?? [])) {
             return self::view($connection, $definition);
         }
-        $pdo = $connection->getPdo();
-        $pdo->beginTransaction();
-        try {
-            return match ($kind) {
-                'check'   => self::check($connection, $table, $definition),
-                'index'   => self::index($connection, $table, $definition),
-                'policy'  => self::policy($connection, $table, $definition),
-                'trigger' => self::trigger($connection, $table, $definition),
-                'view'    => self::view($connection, $definition),
-                'domain'  => self::domain($connection, $table, $definition),
-                'generated' => self::generated($connection, $table, $definition),
-                default   => null,
-            };
-        } catch (\Throwable $e) {
-            return null;
-        } finally {
-            $pdo->rollBack();
-        }
+        return PostgresSnapshot::scratch($connection->getPdo(), function () use ($connection, $kind, $table, $definition): ?string {
+            try {
+                return match ($kind) {
+                    'check'   => self::check($connection, $table, $definition),
+                    'index'   => self::index($connection, $table, $definition),
+                    'policy'  => self::policy($connection, $table, $definition),
+                    'trigger' => self::trigger($connection, $table, $definition),
+                    'view'    => self::view($connection, $definition),
+                    'domain'  => self::domain($connection, $table, $definition),
+                    'generated' => self::generated($connection, $table, $definition),
+                    default   => null,
+                };
+            } catch (\Throwable $e) {
+                return null;
+            }
+        });
     }
 
     /** A temporary table with the same columns, to attach things to. */

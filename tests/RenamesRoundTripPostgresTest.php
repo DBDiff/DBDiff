@@ -28,6 +28,25 @@ class RenamesRoundTripPostgresTest extends PostgresRoundTripTestCase
         $this->assertStringNotContainsString('DROP COLUMN', $up);
     }
 
+    /**
+     * A column renamed on the source keeps its NOT NULL constraint's old name
+     * on PostgreSQL 18, and renaming the target's column gives the target's
+     * the same: adding it again failed with "already exists".
+     */
+    public function testAColumnRenamedOnTheSourceKeepsItsNotNull(): void
+    {
+        $up = $this->assertRoundTrip(
+            'col_renamed_source',
+            "CREATE TABLE people (id int PRIMARY KEY, name text NOT NULL);
+             ALTER TABLE people RENAME COLUMN name TO full_name;",
+            "CREATE TABLE people (id int PRIMARY KEY, name text NOT NULL);
+             INSERT INTO people VALUES (1, 'Ann'), (2, 'Bo');",
+            fn(string $db) => $this->rows($db, "SELECT attname, attnotnull FROM pg_attribute WHERE attrelid = 'people'::regclass AND attnum > 0 ORDER BY attnum")
+        );
+        $this->assertStringContainsString('RENAME COLUMN "name" TO "full_name"', $up);
+        $this->assertStringNotContainsString('ADD CONSTRAINT', $up);
+    }
+
     public function testColumnsSharingADefinitionAreNotGuessed(): void
     {
         [$up] = $this->diff(
@@ -67,6 +86,27 @@ class RenamesRoundTripPostgresTest extends PostgresRoundTripTestCase
         );
         $this->assertStringContainsString('ALTER TABLE "clients" RENAME TO "customers"', $up);
         $this->assertStringNotContainsString('DROP TABLE', $up);
+    }
+
+    /**
+     * A table renamed on the source keeps its NOT NULL constraints' old names
+     * from PostgreSQL 18, where they are constraints: read as constraints of
+     * their own beside the target's plain NOT NULLs, it no longer matched its
+     * old self, was created afresh, and its primary key's old name clashed
+     * with the target's.
+     */
+    public function testATableRenamedOnTheSourceIsStillARename(): void
+    {
+        $up = $this->assertRoundTrip(
+            'renamed_source',
+            "CREATE TABLE settings (key text PRIMARY KEY, value jsonb NOT NULL);
+             ALTER TABLE settings RENAME TO config;",
+            "CREATE TABLE settings (key text PRIMARY KEY, value jsonb NOT NULL);
+             INSERT INTO settings VALUES ('plan', '{\"tier\": \"pro\"}'), ('flags', '{}');",
+            fn(string $db) => $this->rows($db, "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'")
+        );
+        $this->assertStringContainsString('ALTER TABLE "settings" RENAME TO "config"', $up);
+        $this->assertStringNotContainsString('CREATE TABLE', $up);
     }
 
     public function testTablesSharingAStructureAreNotGuessed(): void

@@ -461,14 +461,19 @@ class LocalTableData {
                     $sourceValue = $value;
                     
                     if (in_array($theKey, $key)) $keys[$theKey] = $value;
-                    
-                    if (isset($row[$targetKey])) {
-                        $targetValue = $row[$targetKey];
-                        if ($sourceValue != $targetValue) {
-                            $diff[$theKey] = new \Diff\DiffOp\DiffOpChange($targetValue, $sourceValue);
-                        }
-                    } else {
-                        $diff[$theKey] = new \Diff\DiffOp\DiffOpChange(NULL, $sourceValue);
+
+                    // A column only the source has is the UP's to add and the
+                    // DOWN's to drop: the DOWN does not set it (UpdateDataSQL).
+                    if (!in_array($theKey, $columns2, true)) {
+                        $diff[$theKey] = new \Diff\DiffOp\DiffOpAdd($sourceValue);
+                        continue;
+                    }
+                    $targetValue = $row[$targetKey] ?? null;
+                    if ($sourceValue === null && $targetValue === null) {
+                        continue;
+                    }
+                    if ($sourceValue === null || $targetValue === null || $sourceValue != $targetValue) {
+                        $diff[$theKey] = new \Diff\DiffOp\DiffOpChange($targetValue, $sourceValue);
                     }
                 }
             }

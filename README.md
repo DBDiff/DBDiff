@@ -433,6 +433,9 @@ _Flags always override settings in `.dbdiff`._
 | `--schemas=<list>` | PostgreSQL: the schemas to compare (supports globs). Defaults to `public`. `--schemas='*'` compares every schema but the system's own; `--schemas=public,app` compares two. Objects outside `public` are named in full in the migration, and a schema only one side has is created or dropped. |
 | `--ignore-schemas=<list>` | PostgreSQL: schemas to skip (supports globs). On its own, compares every other schema. Example: `--ignore-schemas=auth,storage,extensions` |
 | `--allow-destructive` | Generate the migration even when it contains data-losing changes. See [Destructive Change Protection](#destructive-change-protection). |
+| `--renames=auto\|off` | PostgreSQL: `auto` (the default) renames a column, table or sequence whose only difference is its name, keeping its data, where exactly one such pair exists. `off` drops and adds instead. |
+| `--no-snapshot` | PostgreSQL: read each query on its own. By default each side is read as of one instant, in a `REPEATABLE READ` transaction held for the run, so a change made while the diff runs is seen by all of its reads or by none. As with `pg_dump`, what the reads lock stays locked until the run ends, so DDL on that side waits for it. |
+| `--source-snapshot=<id>` / `--target-snapshot=<id>` | PostgreSQL: read that side as of a snapshot another session exported with `pg_export_snapshot()` and holds open, so a tool running DBDiff as part of a larger read sees one instant throughout. |
 | `--debug` | Enable verbose error output. |
 | `server1.db1:server2.db2` | Databases to compare. Or a single table: `server1.db1.table1:server2.db2.table1`. |
 

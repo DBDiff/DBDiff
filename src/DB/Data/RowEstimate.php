@@ -1,5 +1,6 @@
 <?php namespace DBDiff\DB\Data;
 
+use DBDiff\DB\Support\PostgresSnapshot;
 use Illuminate\Database\Connection;
 
 /**
@@ -40,12 +41,12 @@ class RowEstimate
     private static function stats(Connection $conn, string $table): ?array
     {
         try {
-            $row = $conn->selectOne(
+            $row = PostgresSnapshot::attempt($conn, fn() => $conn->selectOne(
                 "SELECT c.relkind AS kind, c.reltuples::float8 AS tuples, c.relpages AS pages,
                         pg_relation_size(c.oid) / current_setting('block_size')::int AS current_pages
                    FROM pg_class c WHERE c.oid = to_regclass(?)",
                 [$table]
-            );
+            ));
         } catch (\Throwable) {
             return null;
         }

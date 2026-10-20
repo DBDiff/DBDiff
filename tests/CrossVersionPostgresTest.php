@@ -36,6 +36,17 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         // before 15, colliculocale in 15 and 16, colllocale from 17).
         'collation' => "CREATE COLLATION vt_ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
                         ALTER TABLE vt ADD COLUMN folded text COLLATE vt_ci;",
+        // From PostgreSQL 18 a NOT NULL is a constraint, and a partition's is
+        // inherited under its parent's name: read as a constraint of its own,
+        // each partition, and the parent, differed from an older server.
+        'partitions' => "CREATE TABLE ev (id int, at date NOT NULL, a int NOT NULL) PARTITION BY RANGE (at);
+                         CREATE TABLE ev_2026 PARTITION OF ev FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+                         CREATE TABLE ev_2027 PARTITION OF ev FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
+                         CREATE INDEX ev_i ON ev (id) WHERE a = 1;",
+        // A renamed column keeps its NOT NULL's old name on PostgreSQL 18,
+        // where it is a constraint; an older server has no name for it.
+        'renamed' => "CREATE TABLE rn (id int, old_name text NOT NULL); ALTER TABLE rn RENAME COLUMN old_name TO name;
+                      CREATE INDEX rn_i ON vt (id) WHERE a = 1;",
         // A view recreated for nothing had its comments set again, which
         // read as comments changed although they were identical.
         'comments' => "CREATE VIEW vt_c AS SELECT vt.id, vt.name FROM vt WHERE vt.a = 1;
@@ -100,6 +111,56 @@ class CrossVersionPostgresTest extends PostgresRoundTripTestCase
         $sql = trim(preg_replace('/^--.*$/m', '', file_get_contents($out)));
         unlink($out);
         return $sql === '' ? null : $sql;
+    }
+
+    /**
+     * A table only the source has is created on the other server, and the
+     * migration runs there. From PostgreSQL 18 to an older one, a NOT NULL
+     * constraint under a name of its own was written `CONSTRAINT "x" NOT NULL
+     * "c"`, a syntax error there, and the whole migration failed.
+     */
+    public function testATableOnlyTheSourceHasIsCreatedOnTheOtherServer(): void
+    {
+        $table = "CREATE TABLE moved (id int PRIMARY KEY, old_name text NOT NULL, at date NOT NULL) PARTITION BY RANGE (id);
+                  CREATE TABLE moved_1 PARTITION OF moved FOR VALUES FROM (0) TO (1000);
+                  ALTER TABLE moved RENAME COLUMN old_name TO name;";
+        $source = $this->db('ms', self::BASE . $table);
+        $target = $this->otherDb('mt', self::BASE);
+
+        $up = $this->upAcross($source, $target);
+        $this->assertNotNull($up);
+        (new PDO("pgsql:host={$this->otherHost};port={$this->otherPort};dbname=$target", $this->user, $this->pass,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]))->exec($up);
+        $this->assertNull($this->upAcross($source, $target), 'the table created on the other server still differs');
+    }
+
+    /**
+     * MAINTAIN arrived in PostgreSQL 17. A view a 17 source grants it on, and
+     * default privileges that give it, were written for an older target with
+     * it: GRANT MAINTAIN failed there, and the replaced view, and every view
+     * reading it, were left out with it.
+     */
+    public function testMaintainIsLeftOutForAnOlderServer(): void
+    {
+        $other = intdiv((int) $this->otherAdmin->query('SHOW server_version_num')->fetchColumn(), 10000);
+        if (intdiv($this->serverVersion, 10000) < 17 || $other >= 17) {
+            $this->markTestSkipped('Needs a PostgreSQL 17 or newer source and an older target.');
+        }
+        $role = "DO \$\$ BEGIN CREATE ROLE dbdiff_xv_reader NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;";
+        $this->admin->exec($role);
+        $this->otherAdmin->exec($role);
+        $source = $this->db('mn_s', self::BASE . "CREATE VIEW mv AS SELECT id FROM vt WHERE a = 2;
+            GRANT SELECT, MAINTAIN ON mv TO dbdiff_xv_reader;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, MAINTAIN ON TABLES TO dbdiff_xv_reader;");
+        $target = $this->otherDb('mn_t', self::BASE . "CREATE VIEW mv AS SELECT id FROM vt WHERE a = 1;
+            GRANT SELECT ON mv TO dbdiff_xv_reader;");
+
+        $up = $this->upAcross($source, $target);
+        $this->assertNotNull($up);
+        $this->assertStringNotContainsStringIgnoringCase('MAINTAIN', $up);
+        (new PDO("pgsql:host={$this->otherHost};port={$this->otherPort};dbname=$target", $this->user, $this->pass,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]))->exec($up);
+        $this->assertNull($this->upAcross($source, $target), 'the older server still differs');
     }
 
     /** @return array<string, array{string}> */

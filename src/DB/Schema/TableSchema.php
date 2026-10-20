@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB\Schema;
 
+use DBDiff\DB\Support\MySQLColumns;
+
 use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
 
@@ -106,12 +108,15 @@ class TableSchema {
         }
 
         $differ = new MapDiffer();
-        $diffs = $differ->doDiff($targetColumns, $sourceColumns);
+        $diffs = $driver === 'mysql'
+            ? self::comparedAs([MySQLColumns::class, 'comparable'], $differ, $targetColumns, $sourceColumns)
+            : $differ->doDiff($targetColumns, $sourceColumns);
 
         // A column renamed, not dropped and added: its data stays.
         $columnRenames = [];
+        $keptNotNull = [];
         if ($driver === 'pgsql' && ($params->renames ?? 'auto') !== 'off') {
-            [$diffs, $columnRenames, $renameDiffs] = $this->columnRenameDiffs($table, $diffs, $sourceSchema);
+            [$diffs, $columnRenames, $renameDiffs, $keptNotNull] = $this->columnRenameDiffs($table, $diffs, $sourceSchema, $targetSchema);
             $diffSequence = array_merge($diffSequence, $renameDiffs);
         }
 
@@ -218,9 +223,27 @@ class TableSchema {
 
         return array_merge(
             $diffSequence,
-            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames),
-            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames)
+            $this->keyDiffs($table, $sourceSchema['keys'], $targetSchema['keys'], $columnRenames,
+                $driver === 'mysql' ? [$sourceSchema['constraints'] ?? [], $targetSchema['constraints'] ?? []] : null),
+            $this->constraintDiffs($table, $sourceSchema['constraints'], $targetSchema['constraints'], $columnRenames, $keptNotNull)
         );
+    }
+
+    /**
+     * The diff of two column maps compared through `$comparable`, carrying
+     * each column's definition as its server wrote it.
+     */
+    private static function comparedAs(callable $comparable, MapDiffer $differ, array $target, array $source): array {
+        $diffs = $differ->doDiff(array_map($comparable, $target), array_map($comparable, $source));
+        foreach ($diffs as $column => $diff) {
+            $diffs[$column] = match (true) {
+                $diff instanceof \Diff\DiffOp\DiffOpChange => new \Diff\DiffOp\DiffOpChange($target[$column], $source[$column]),
+                $diff instanceof \Diff\DiffOp\DiffOpAdd    => new \Diff\DiffOp\DiffOpAdd($source[$column]),
+                $diff instanceof \Diff\DiffOp\DiffOpRemove => new \Diff\DiffOp\DiffOpRemove($target[$column]),
+                default => $diff,
+            };
+        }
+        return $diffs;
     }
 
     /**
@@ -228,23 +251,42 @@ class TableSchema {
      * from PostgreSQL 18, the NOT NULL constraint named after the column,
      * whose default name follows it — and the diffs that are left.
      *
-     * @return array{0: array, 1: array<string, string>, 2: list<object>}
+     * @return array{0: array, 1: array<string, string>, 2: list<object>, 3: list<string>} the NOT NULLs a rename keeps as they are last
      */
-    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema): array {
-        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs);
+    private function columnRenameDiffs(string $table, array $diffs, array $sourceSchema, array $targetSchema): array {
+        [$diffs, $columnRenames] = ColumnRenames::detect($table, $diffs, [
+            'source' => ColumnRenames::namedNotNullColumns($sourceSchema['constraints'] ?? []),
+            'target' => ColumnRenames::namedNotNullColumns($targetSchema['constraints'] ?? []),
+        ]);
         $out = [];
+        $kept = [];
         foreach ($columnRenames as $to => $from) {
             $out[] = new AlterTableRenameColumn($table, $to, $from);
             $notNull = ColumnRenames::defaultNotNull($this->manager->getDB('target'), $table, $from, $to);
-            if ($notNull !== null && !isset($sourceSchema['constraints'][$notNull[1]])) {
+            if ($notNull === null) {
+                continue;
+            }
+            // A column renamed on the source kept its NOT NULL's old name,
+            // and the rename gives the target's the same: it stays as it is.
+            if (isset($sourceSchema['constraints'][$notNull[0]])) {
+                $kept[] = $notNull[0];
+            } elseif (!isset($sourceSchema['constraints'][$notNull[1]])) {
                 $out[] = new AlterTableRenameConstraint($table, $notNull[1], $notNull[0]);
             }
         }
-        return [$diffs, $columnRenames, $out];
+        return [$diffs, $columnRenames, $out, $kept];
     }
 
-    /** Index and key diffs; one a rename carried along is renamed or left alone. */
-    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames): array {
+    /**
+     * Index and key diffs; one a rename carried along is renamed or left alone.
+     *
+     * MySQL keeps an index for every foreign key and refuses to drop the last
+     * one a foreign key can use. So with `$foreignKeys` — each side's
+     * constraints — a key whose leading columns are a foreign key's is marked:
+     * one dropped is dropped once the keys added have been, and the DOWN of
+     * one added likewise (see DiffSorter).
+     */
+    private function keyDiffs(string $table, array $sourceKeys, array $targetKeys, array $columnRenames, ?array $foreignKeys = null): array {
         $out = [];
         [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetKeys, $sourceKeys);
         $kept += ColumnRenames::carried($this->tableRenames, $targetKeys, $sourceKeys)[0];
@@ -255,20 +297,43 @@ class TableSchema {
         $diffs = array_diff_key((new MapDiffer())->doDiff($targetKeys, $sourceKeys), $kept);
         foreach ($diffs as $key => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                $out[] = new AlterTableDropKey($table, $key, $diff);
+                $drop = new AlterTableDropKey($table, $key, $diff);
+                $drop->forForeignKey = $foreignKeys !== null && self::servesForeignKey((string) $diff->getOldValue(), $foreignKeys[0]);
+                $out[] = $drop;
             } else if ($diff instanceof \Diff\DiffOp\DiffOpChange) {
                 $out[] = new AlterTableChangeKey($table, $key, $diff);
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
-                $out[] = new AlterTableAddKey($table, $key, $diff);
+                $add = new AlterTableAddKey($table, $key, $diff);
+                $add->forForeignKey = $foreignKeys !== null && self::servesForeignKey((string) $diff->getNewValue(), $foreignKeys[1]);
+                $out[] = $add;
             }
         }
         return $out;
     }
 
+    /** Whether a MySQL key definition's leading columns are those of one of the foreign keys among `$constraints`. */
+    private static function servesForeignKey(string $keyDefinition, array $constraints): bool {
+        $columns = fn(string $list): array => preg_match_all('/`((?:[^`]|``)+)`/', $list, $m) ? $m[1] : [];
+        if (!preg_match('/\(([^)]*)\)/', $keyDefinition, $keyList)) {
+            return false;
+        }
+        $keyColumns = $columns($keyList[1]);
+        foreach ($constraints as $constraint) {
+            if (preg_match('/\bFOREIGN KEY\s*\(([^)]*)\)/i', (string) $constraint, $fk)) {
+                $fkColumns = $columns($fk[1]);
+                if ($fkColumns !== [] && array_slice($keyColumns, 0, count($fkColumns)) === $fkColumns) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** Constraint diffs; one a rename carried along is renamed or left alone. */
-    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames): array {
+    private function constraintDiffs(string $table, array $sourceConstraints, array $targetConstraints, array $columnRenames, array $keptNotNull = []): array {
         $out = [];
         [$kept, $renamed] = ColumnRenames::carried($columnRenames, $targetConstraints, $sourceConstraints);
+        $kept += array_fill_keys($keptNotNull, true);
         $kept += ColumnRenames::carried($this->tableRenames, $targetConstraints, $sourceConstraints)[0];
         foreach ($renamed as $from => $to) {
             $out[] = new AlterTableRenameConstraint($table, $to, $from);

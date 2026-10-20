@@ -18,15 +18,23 @@ class UpdateDataSQL implements SQLGenInterface {
         $this->dialect = $dialect ?? DialectRegistry::get();
     }
     
+    /*
+     * A column only one side's rows have is a column only that side's table
+     * has. The UP drops one only the target has before the rows are updated,
+     * and the DOWN one only the source has, so naming it in the UPDATE failed
+     * with "unknown column": it is left out, and an UPDATE with nothing left
+     * to set is not written.
+     */
     public function getUp(): string {
         $t      = $this->dialect->qualify($this->obj->table);
         $d      = $this->dialect;
-        $values = $this->obj->diff['diff'];
+        $values = array_filter($this->obj->diff['diff'], fn($diff) => !$diff instanceof DiffOpRemove);
+        if ($values === []) {
+            return '';
+        }
         array_walk($values, function (&$diff, $column) use ($d) {
             $q = $d->quote($column);
-            if ($diff instanceof DiffOpRemove) {
-                $diff = "$q = NULL";
-            } elseif (!method_exists($diff, 'getNewValue') || is_null($diff->getNewValue())) {
+            if (!method_exists($diff, 'getNewValue') || is_null($diff->getNewValue())) {
                 $diff = "$q = NULL";
             } else {
                 $diff = "$q = " . BinaryValue::formatSQL($diff->getNewValue(), $d);
@@ -42,12 +50,13 @@ class UpdateDataSQL implements SQLGenInterface {
     public function getDown(): string {
         $t      = $this->dialect->qualify($this->obj->table);
         $d      = $this->dialect;
-        $values = $this->obj->diff['diff'];
+        $values = array_filter($this->obj->diff['diff'], fn($diff) => !$diff instanceof DiffOpAdd);
+        if ($values === []) {
+            return '';
+        }
         array_walk($values, function (&$diff, $column) use ($d) {
             $q = $d->quote($column);
-            if ($diff instanceof DiffOpAdd) {
-                $diff = "$q = NULL";
-            } elseif (!method_exists($diff, 'getOldValue') || is_null($diff->getOldValue())) {
+            if (!method_exists($diff, 'getOldValue') || is_null($diff->getOldValue())) {
                 $diff = "$q = NULL";
             } else {
                 $diff = "$q = " . BinaryValue::formatSQL($diff->getOldValue(), $d);

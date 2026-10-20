@@ -140,13 +140,33 @@ final class TableRenames {
             $sql
         ) ?? $sql;
         $unnamed = fn(string $sql) => preg_replace(['/^CONSTRAINT\s+(?:"(?:[^"]|"")*"|\S+)\s+/', '/INDEX\s+(?:"(?:[^"]|"")*"|\S+)\s+ON\s/'], ['', 'INDEX ON '], $sql) ?? $sql;
-        $columns = array_map($neutral, $schema['columns'] ?? []);
+        // A NOT NULL is the column's, or from PostgreSQL 18 a constraint of
+        // its own, as which a renamed table's keeps its old name: read alike,
+        // as the columns it holds for.
+        $notNull = [];
+        $columns = [];
+        foreach ($schema['columns'] ?? [] as $name => $definition) {
+            $plain = preg_replace('/(?<!\bIS)\s+NOT NULL\b/', '', $neutral($definition), 1, $inline);
+            $columns[$name] = $plain;
+            if ($inline) {
+                $notNull[] = $name;
+            }
+        }
+        $constraints = [];
+        foreach (array_values($schema['constraints'] ?? []) as $constraint) {
+            $c = $unnamed($neutral($constraint));
+            if (preg_match('/^NOT NULL\s+"((?:[^"]|"")+)"(?:\s+NOT VALID)?$/', $c, $m)) {
+                $notNull[] = str_replace('""', '"', $m[1]);
+            } else {
+                $constraints[] = $c;
+            }
+        }
         $keys = array_map(fn($k) => $unnamed($neutral($k)), array_values($schema['keys'] ?? []));
-        $constraints = array_map(fn($c) => $unnamed($neutral($c)), array_values($schema['constraints'] ?? []));
         sort($keys);
         sort($constraints);
+        sort($notNull);
         return json_encode([
-            $columns, $keys, $constraints,
+            $columns, $keys, $constraints, array_values(array_unique($notNull)),
             $schema['unlogged'] ?? false, $schema['reloptions'] ?? null,
             $schema['replicaIdentity'] ?? 'DEFAULT', $schema['statistics'] ?? [], $schema['storage'] ?? [],
         ]);

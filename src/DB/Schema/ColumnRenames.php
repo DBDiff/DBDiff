@@ -24,13 +24,15 @@ final class ColumnRenames {
      * @return array{0: array<string, object>, 1: array<string, string>} the diffs without the
      *         renamed pairs, and the renames, new name => old name
      */
-    public static function detect(string $table, array $diffs): array {
+    public static function detect(string $table, array $diffs, array $namedNotNull = ['source' => [], 'target' => []]): array {
         $removed = [];
         $added   = [];
         foreach ($diffs as $column => $diff) {
-            if ($diff instanceof DiffOpRemove && ($shape = self::shape($diff->getOldValue())) !== null) {
+            if ($diff instanceof DiffOpRemove
+                && ($shape = self::shape($diff->getOldValue(), in_array($column, $namedNotNull['target'] ?? [], true))) !== null) {
                 $removed[$shape][] = $column;
-            } elseif ($diff instanceof DiffOpAdd && ($shape = self::shape($diff->getNewValue())) !== null) {
+            } elseif ($diff instanceof DiffOpAdd
+                && ($shape = self::shape($diff->getNewValue(), in_array($column, $namedNotNull['source'] ?? [], true))) !== null) {
                 $added[$shape][] = $column;
             }
         }
@@ -55,13 +57,33 @@ final class ColumnRenames {
         return [$diffs, $renames];
     }
 
-    /** The definition without the column's name, or null when it cannot be matched. */
-    private static function shape(string $definition): ?string {
+    /**
+     * The definition without the column's name, or null when it cannot be
+     * matched. Its NOT NULL is the column's or, from PostgreSQL 18, a
+     * constraint under a name of its own (`$namedNotNull`) — a column renamed
+     * on the source keeps its old one — and reads the same either way.
+     */
+    private static function shape(string $definition, bool $namedNotNull = false): ?string {
         if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(|nextval\(|\bserial\b|\bbigserial\b|\bsmallserial\b/i', $definition)) {
             return null;
         }
         $rest = preg_replace('/^\s*(?:"(?:[^"]|"")*"|\S+)\s+/', '', $definition, 1);
-        return $rest === null || $rest === $definition ? null : trim($rest);
+        if ($rest === null || $rest === $definition) {
+            return null;
+        }
+        $rest = preg_replace('/(?<!\bIS)\s+NOT NULL\b/', '', trim($rest), 1, $inline);
+        return $rest . ($inline || $namedNotNull ? ' NOT NULL' : '');
+    }
+
+    /** The columns whose NOT NULL is a constraint of a name of its own, among a table's constraints. */
+    public static function namedNotNullColumns(array $constraints): array {
+        $out = [];
+        foreach ($constraints as $definition) {
+            if (preg_match('/^CONSTRAINT\s+(?:"(?:[^"]|"")*"|\S+)\s+NOT NULL\s+"((?:[^"]|"")+)"/', (string) $definition, $m)) {
+                $out[] = str_replace('""', '"', $m[1]);
+            }
+        }
+        return $out;
     }
 
     /**

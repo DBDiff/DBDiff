@@ -1,6 +1,8 @@
 <?php namespace DBDiff\DB;
 
 use DBDiff\DB\Support\PostgresSessionOptions;
+use DBDiff\DB\Support\PostgresSnapshotSet;
+use DBDiff\DB\Support\PostgresPeers;
 use DBDiff\DB\Support\ServerSettings;
 
 use DBDiff\DB\Support\ComputedColumns;
@@ -22,8 +24,12 @@ class DBManager {
     /** The schema useSchema() last pointed the connections at. */
     protected ?string $schema = null;
 
+    /** The PostgreSQL snapshot each side is read as of. */
+    public readonly PostgresSnapshotSet $snapshots;
+
     function __construct() {
-        $this->capsule = new Capsule;
+        $this->capsule   = new Capsule;
+        $this->snapshots = new PostgresSnapshotSet;
         $dispatcher    = new Dispatcher();
         $dispatcher->listen(StatementPrepared::class, function ($event) {
             $event->statement->setFetchMode(\PDO::FETCH_ASSOC);
@@ -47,23 +53,20 @@ class DBManager {
                 continue;
             }
 
-            // SQLite uses the db value as a file path; no server block required.
-            if ($this->driver === 'sqlite') {
-                $config = $this->adapter->buildConnectionConfig([], $input['db']);
-            } else {
-                $server = $params->{$input['server']};
-                ServerSettings::requireFor($server, $input['server']);
-                // --supabase / --sslmode supply an sslmode where the server's own
-                // URL does not name one.
-                if (isset($params->sslmode) && empty($server['sslmode'])) {
-                    $server['sslmode'] = $params->sslmode;
-                }
-                $config = $this->adapter->buildConnectionConfig($server, $input['db']);
-            }
-
+            $config = ServerSettings::connectionConfig($this->adapter, $this->driver, $params, $input);
             $this->capsule->addConnection($config, $key);
             // The URL's session settings, on a connection just created.
             PostgresSessionOptions::apply($this->capsule->getConnection($key));
+
+            if ($this->driver === 'pgsql' && ($params->snapshot ?? true)) {
+                $this->snapshots->take($this->capsule, $key, $config, $params);
+            }
+        }
+        if ($this->driver === 'pgsql') {
+            PostgresPeers::forget();
+            if (isset($params->input['source'], $params->input['target'])) {
+                PostgresPeers::compare($this->getDB('source'), $this->getDB('target'));
+            }
         }
     }
 
@@ -87,6 +90,7 @@ class DBManager {
             $this->capsule->getDatabaseManager()->purge($name);
             $this->capsule->addConnection($config, $name);
             PostgresSessionOptions::apply($this->capsule->getConnection($name));
+            $this->snapshots->rejoin($this->getDB($name), $name);
         }
     }
 

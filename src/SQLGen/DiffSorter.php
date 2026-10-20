@@ -8,8 +8,10 @@ class DiffSorter {
      * sorts in the slot on the left when orderClass() says so.
      */
     public const SUB_SLOTS = [
-        'CreateRoutineEarly' => 'CreateRoutine',
-        'DropRoutineEarly'   => 'DropRoutine',
+        'CreateRoutineEarly'    => 'CreateRoutine',
+        'DropRoutineEarly'      => 'DropRoutine',
+        'AlterTableAddKeyLate'  => 'AlterTableAddKey',
+        'AlterTableDropKeyLate' => 'AlterTableDropKey',
     ];
 
     private $up_order = [
@@ -108,7 +110,10 @@ class DiffSorter {
         "AlterTableDropColumn",
 
         "AlterTableAddKey",
+        "AlterTableAddKeyLate",
         "AlterTableChangeKey",
+        // MySQL: a key a foreign key needs is dropped once one that serves it exists.
+        "AlterTableDropKeyLate",
 
         "AlterTableAddConstraint",
         "AlterTableChangeConstraint",
@@ -267,6 +272,9 @@ class DiffSorter {
 
         "AlterTableChangeKey",
         "AlterTableDropKey",
+        "AlterTableDropKeyLate",
+        // MySQL: undoing an added key a foreign key may use, once the one it replaced is back.
+        "AlterTableAddKeyLate",
         // Once the index it may name is back.
         "AlterTableReplicaIdentity",
 
@@ -359,14 +367,18 @@ class DiffSorter {
     }
 
     /**
-     * The class name a diff sorts as; an early routine has its own slot
-     * (SUB_SLOTS), and a new view reading a changed one sorts among the
-     * changed views, by dependency — see ViewReplacementPlan.
+     * The class name a diff sorts as; an early routine, and a MySQL key a
+     * foreign key needs, have their own slot (SUB_SLOTS), and a new view
+     * reading a changed one sorts among the changed views, by dependency —
+     * see ViewReplacementPlan.
      */
     private static function orderClass(object $diff): string {
         $class = (new \ReflectionClass($diff))->getShortName();
         if ($class === 'CreateView' && !empty($diff->late)) {
             return 'AlterView';
+        }
+        if (in_array($class, ['AlterTableDropKey', 'AlterTableAddKey'], true) && !empty($diff->forForeignKey)) {
+            return $class . 'Late';
         }
         return in_array($class, ['CreateRoutine', 'DropRoutine'], true) && !empty($diff->early)
             ? $class . 'Early'

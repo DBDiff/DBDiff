@@ -98,7 +98,14 @@ class DiffCommand extends Command
                 . 'Back up your data before using this flag.')
             ->addOption('renames', null, InputOption::VALUE_REQUIRED,
                 'PostgreSQL: "auto" (default) renames a column or table whose only difference is its name, '
-                . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto');
+                . 'keeping its data, where exactly one such pair exists; "off" drops and adds instead.', 'auto')
+            ->addOption('source-snapshot', null, InputOption::VALUE_REQUIRED,
+                'PostgreSQL: read the source as of this snapshot, exported by a session that holds it open.')
+            ->addOption('target-snapshot', null, InputOption::VALUE_REQUIRED,
+                'PostgreSQL: read the target as of this snapshot, exported by a session that holds it open.')
+            ->addOption('no-snapshot', null, InputOption::VALUE_NONE,
+                'PostgreSQL: read each query on its own, rather than each side as of one instant. '
+                . 'The snapshot keeps what the diff reads locked until it ends, as pg_dump does.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -169,6 +176,9 @@ class DiffCommand extends Command
         $params->memoryLimit      = $input->getOption('memory-limit');
         $params->allowDestructive = (bool) $input->getOption('allow-destructive');
         $params->renames          = $input->getOption('renames') === 'off' ? 'off' : 'auto';
+        $params->snapshot         = !$input->getOption('no-snapshot');
+        $params->sourceSnapshot   = $input->getOption('source-snapshot') ?: null;
+        $params->targetSnapshot   = $input->getOption('target-snapshot') ?: null;
 
         if ($input->getOption('tables')) {
             $params->tables = array_map('trim', explode(',', $input->getOption('tables')));
@@ -333,6 +343,16 @@ class DiffCommand extends Command
 
         $p1 = DsnParser::toServerAndDb(DsnParser::parse($s1url));
         $p2 = DsnParser::toServerAndDb(DsnParser::parse($s2url));
+
+        // Both are read and written with one driver. A MySQL source and a
+        // PostgreSQL target had the PostgreSQL server spoken to as MySQL,
+        // which waited for a greeting that never came.
+        if ($p1['driver'] !== $p2['driver']) {
+            throw new \InvalidArgumentException(
+                "--server1-url is {$p1['driver']} and --server2-url is {$p2['driver']}: "
+                . 'DBDiff compares two databases of the same engine.'
+            );
+        }
 
         $params->driver  = $p1['driver'];
         $params->server1 = $p1['server'];
