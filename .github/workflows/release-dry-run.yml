@@ -27,6 +27,9 @@ env:
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
+  # The PHP built into the binaries, to the patch: a cached download of an
+  # older one is never reused.
+  SPC_PHP_RELEASE: "8.3.36"
   # Pin static-php-cli to a known-good release. 'latest' (2.8.4/2.8.5) regressed
   # the Windows php-src extraction; 2.8.3 built all targets cleanly. Bump
   # deliberately after verifying a newer SPC works on Windows.
@@ -130,18 +133,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: spc-cache
-          key: spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/release-dry-run.yml') }}
+          key: spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_RELEASE }}-${{ hashFiles('.github/workflows/release-dry-run.yml') }}
           restore-keys: |
-            spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_VERSION }}-
+            spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_RELEASE }}-
 
       - name: Cache SPC build artifacts (Windows)
         if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
           path: spc-cache
-          key: spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/release-dry-run.yml') }}
+          key: spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_RELEASE }}-${{ hashFiles('.github/workflows/release-dry-run.yml') }}
           restore-keys: |
-            spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_VERSION }}-
+            spc-dryrun-${{ matrix.target }}-php${{ env.SPC_PHP_RELEASE }}-
 
       # ── Unix build ──────────────────────────────────────────────────────
       - name: Download SPC (Unix)
@@ -193,7 +196,7 @@ jobs:
 
             ./spc download \
               "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
-              --with-php="${{ env.SPC_PHP_VERSION }}"
+              --with-php="${{ env.SPC_PHP_RELEASE }}"
             ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
           fi
 
@@ -241,7 +244,7 @@ jobs:
         run: |
           .\spc.exe doctor --auto-fix
           New-Item -ItemType Directory -Force -Path source | Out-Null
-          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_RELEASE }}"
 
           # Work around an SPC bug that silently produces a binary without
           # pdo_pgsql.

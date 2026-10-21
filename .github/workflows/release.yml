@@ -26,6 +26,9 @@ env:
   # automatically just because the zlib PHP extension is requested).
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
+  # The PHP built into the binaries, to the patch: a cached download of an
+  # older one is never reused.
+  SPC_PHP_RELEASE: "8.3.36"
   # Pin static-php-cli to a known-good release. 'latest' (2.8.4/2.8.5) regressed
   # the Windows php-src extraction; 2.8.3 built all targets cleanly. Keep this in
   # sync with release-dry-run.yml and bump only after the dry run passes on a
@@ -247,7 +250,7 @@ jobs:
 
           ./spc download \
             "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
-            --with-php="${{ env.SPC_PHP_VERSION }}"
+            --with-php="${{ env.SPC_PHP_RELEASE }}"
           ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
 
       # ── Combine static micro SAPI + PHAR → single binary (Unix) ──────────
@@ -296,7 +299,7 @@ jobs:
           # target directory to already exist — failing otherwise with
           # "The system cannot find the path specified."
           New-Item -ItemType Directory -Force -Path source | Out-Null
-          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_RELEASE }}"
 
           # Work around an SPC bug that silently produces a binary without
           # pdo_pgsql.
