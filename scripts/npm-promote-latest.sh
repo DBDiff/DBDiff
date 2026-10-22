@@ -30,11 +30,18 @@ done
 packages+=("@dbdiff/cli")
 
 echo "Moving '$tag' to $version as $(npm whoami "${npm_args[@]}")"
+# A version just published can take a few minutes to be readable from the
+# registry, so a release that moves the tag straight after publishing waits.
+attempts="${NPM_PROMOTE_ATTEMPTS:-20}"
 for pkg in "${packages[@]}"; do
-  if ! npm view "$pkg@$version" version >/dev/null 2>&1; then
-    echo "  $pkg@$version is not published; stopping before anything else moves" >&2
-    exit 1
-  fi
+  for ((i = 1; ; i++)); do
+    npm view "$pkg@$version" version --prefer-online >/dev/null 2>&1 && break
+    if (( i >= attempts )); then
+      echo "  $pkg@$version is not published; stopping before anything else moves" >&2
+      exit 1
+    fi
+    sleep "${NPM_PROMOTE_WAIT:-15}"
+  done
 done
 for pkg in "${packages[@]}"; do
   npm dist-tag add "$pkg@$version" "$tag" "${npm_args[@]}"
