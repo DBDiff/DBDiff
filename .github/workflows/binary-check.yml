@@ -15,7 +15,7 @@ name: Binary Smoke & Integration CI
 #   The first run takes 30-60 min (PHP 8.3 source compilation). Subsequent runs
 #   hit the actions/cache and complete in ~3-5 min.  The cache is keyed on the
 #   PHP version + extension list (captured in the workflow file hash) so it is
-#   automatically invalidated whenever SPC_EXTENSIONS or SPC_PHP_VERSION changes.
+#   automatically invalidated whenever SPC_EXTENSIONS or SPC_PHP_RELEASE changes.
 
 on:
   push:
@@ -25,6 +25,9 @@ on:
 
 env:
   SPC_PHP_VERSION: "8.3"
+  # The PHP built into the binaries, to the patch: a cached download of an
+  # older one is never reused.
+  SPC_PHP_RELEASE: "8.3.36"
   # Pin static-php-cli to a known-good release (see release.yml). Keep in sync.
   SPC_VERSION: "2.8.3"
   SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
@@ -130,11 +133,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: spc-cache
-          # Cache is invalidated when SPC_EXTENSIONS / SPC_PHP_VERSION changes
+          # Cache is invalidated when SPC_EXTENSIONS / SPC_PHP_RELEASE changes
           # (captured in the workflow file hash) or when bumped manually.
-          key: spc-linux-x64-v1-php${{ env.SPC_PHP_VERSION }}-${{ hashFiles('.github/workflows/binary-check.yml') }}
+          key: spc-linux-x64-v1-php${{ env.SPC_PHP_RELEASE }}-${{ hashFiles('.github/workflows/binary-check.yml') }}
           restore-keys: |
-            spc-linux-x64-v1-php${{ env.SPC_PHP_VERSION }}-
+            spc-linux-x64-v1-php${{ env.SPC_PHP_RELEASE }}-
 
       - name: Download SPC
         run: |
@@ -189,7 +192,7 @@ jobs:
 
             ./spc download \
               "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
-              --with-php="${{ env.SPC_PHP_VERSION }}"
+              --with-php="${{ env.SPC_PHP_RELEASE }}"
             ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
           fi
 
@@ -210,6 +213,12 @@ jobs:
           chmod +x dbdiff
 
       # ── Smoke tests ────────────────────────────────────────────────────────
+      # The PHP built in is the one pinned, to the patch — not a cached older one.
+      - name: Check the binary's PHP version
+        run: |
+          strings dbdiff | grep -q "X-Powered-By: PHP/${{ env.SPC_PHP_RELEASE }}$" \
+            || { echo "::error::the binary does not carry PHP ${{ env.SPC_PHP_RELEASE }}"; strings dbdiff | grep -m1 "X-Powered-By: PHP/"; exit 1; }
+
       - name: Smoke-test binary (--version, --help)
         run: |
           ./dbdiff --version
@@ -364,7 +373,7 @@ jobs:
         run: |
           {
             echo "${{ env.SPC_VERSION }}"
-            echo "${{ env.SPC_PHP_VERSION }}"
+            echo "${{ env.SPC_PHP_RELEASE }}"
             echo "${{ env.SPC_EXTENSIONS }}"
             echo "${{ env.SPC_WINDOWS_LIBS }}"
           } > spc-win-inputs.txt
@@ -402,7 +411,7 @@ jobs:
         run: |
           .\spc.exe doctor --auto-fix
           New-Item -ItemType Directory -Force -Path source | Out-Null
-          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_VERSION }}"
+          .\spc.exe download "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_WINDOWS_LIBS }}" --with-php="${{ env.SPC_PHP_RELEASE }}"
 
           # SPC strips an archive's single top-level directory, then its
           # postgresql_win builder copies from that stripped level. The copies

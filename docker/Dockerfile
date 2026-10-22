@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.3
+ARG PHP_VERSION=8.3.36
 FROM docker.io/library/php:${PHP_VERSION}-cli
 
 # Set working directory
