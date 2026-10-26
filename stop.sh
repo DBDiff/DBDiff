@@ -77,17 +77,11 @@ cleanup_docker() {
         echo "$containers" | xargs -r docker rm -f 2>/dev/null && echo "✅ Project containers removed"
     fi
     
-    # Remove project images (including PHPMyAdmin)
+    # Remove project images
     local images=$(docker images --filter "reference=dbdiff*" --format "{{.ID}}" 2>/dev/null)
-    local phpmyadmin_images=$(docker images --filter "reference=phpmyadmin/phpmyadmin*" --format "{{.ID}}" 2>/dev/null)
-    if [ -n "$images" ] || [ -n "$phpmyadmin_images" ]; then
+    if [ -n "$images" ]; then
         echo "Removing project images..."
-        if [ -n "$images" ]; then
-            echo "$images" | xargs -r docker rmi -f 2>/dev/null
-        fi
-        if [ -n "$phpmyadmin_images" ]; then
-            echo "$phpmyadmin_images" | xargs -r docker rmi -f 2>/dev/null
-        fi
+        echo "$images" | xargs -r docker rmi -f 2>/dev/null
         echo "✅ Project images removed"
     fi
     
@@ -132,7 +126,6 @@ force_cleanup() {
     # Remove all project images to start fresh
     echo "Removing project images..."
     docker images --filter "reference=dbdiff*" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
-    docker images --filter "reference=phpmyadmin/phpmyadmin*" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
     
     # Clean up all unused resources aggressively
     echo "Cleaning all unused Docker resources..."
