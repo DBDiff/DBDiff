@@ -447,56 +447,6 @@ services:
       - /usr/src/dbdiff/vendor
     command: tail -f /dev/null
 
-  # PHPMyAdmin services
-  phpmyadmin-mysql80:
-
-    depends_on:
-      db-mysql80:
-        condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
-    restart: always
-    ports:
-      - ${PHPMYADMIN_PORT_MYSQL80}:80
-    environment:
-      PMA_HOST: db-mysql80
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-
-  phpmyadmin-mysql84:
-    depends_on:
-      db-mysql84:
-        condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
-    restart: always
-    ports:
-      - ${PHPMYADMIN_PORT_MYSQL84}:80
-    environment:
-      PMA_HOST: db-mysql84
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-
-  phpmyadmin-mysql93:
-    depends_on:
-      db-mysql93:
-        condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
-    restart: always
-    ports:
-      - ${PHPMYADMIN_PORT_MYSQL93}:80
-    environment:
-      PMA_HOST: db-mysql93
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-
-  phpmyadmin-mysql96:
-    depends_on:
-      db-mysql96:
-        condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
-    restart: always
-    ports:
-      - ${PHPMYADMIN_PORT_MYSQL96}:80
-    environment:
-      PMA_HOST: db-mysql96
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-
   # PHP × PostgreSQL CLI services (used for Postgres end-to-end tests)
   cli-php83-postgres16:
     depends_on:
