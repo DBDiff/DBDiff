@@ -453,7 +453,7 @@ services:
     depends_on:
       db-mysql80:
         condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
+    image: docker.io/library/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL80}:80
@@ -465,7 +465,7 @@ services:
     depends_on:
       db-mysql84:
         condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
+    image: docker.io/library/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL84}:80
@@ -477,7 +477,7 @@ services:
     depends_on:
       db-mysql93:
         condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
+    image: docker.io/library/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL93}:80
@@ -489,7 +489,7 @@ services:
     depends_on:
       db-mysql96:
         condition: service_healthy
-    image: docker.io/phpmyadmin/phpmyadmin:5.2
+    image: docker.io/library/phpmyadmin:5.2
     restart: always
     ports:
       - ${PHPMYADMIN_PORT_MYSQL96}:80
