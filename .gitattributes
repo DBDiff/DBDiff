@@ -15,6 +15,7 @@
 /tests/                 export-ignore
 /scripts/               export-ignore
 /.github/               export-ignore
+/_includes/             export-ignore
 
 # npm packaging: the platform binaries and their manifests are published to npm,
 # and mean nothing to a Composer consumer.
