@@ -52,12 +52,6 @@ export DB_PORT_MYSQL84=${DB_PORT_MYSQL84:-3307}
 export DB_PORT_MYSQL93=${DB_PORT_MYSQL93:-3308}
 export DB_PORT_MYSQL96=${DB_PORT_MYSQL96:-3309}
 
-# PHPMyAdmin Ports
-export PHPMYADMIN_PORT_MYSQL80=${PHPMYADMIN_PORT_MYSQL80:-8080}
-export PHPMYADMIN_PORT_MYSQL84=${PHPMYADMIN_PORT_MYSQL84:-8081}
-export PHPMYADMIN_PORT_MYSQL93=${PHPMYADMIN_PORT_MYSQL93:-8082}
-export PHPMYADMIN_PORT_MYSQL96=${PHPMYADMIN_PORT_MYSQL96:-8083}
-
 # Set defaults if not loaded from .env
 export COMPOSE_BAKE=${COMPOSE_BAKE:-true}
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-dbdiff}
@@ -142,7 +136,6 @@ fi
 
 # Port configuration - derive arrays from individual variables
 DB_PORTS=(${DB_PORT_MYSQL80:-3306} ${DB_PORT_MYSQL84:-3307} ${DB_PORT_MYSQL93:-3308} ${DB_PORT_MYSQL96:-3309})
-PHPMYADMIN_PORTS=(${PHPMYADMIN_PORT_MYSQL80:-18080} ${PHPMYADMIN_PORT_MYSQL84:-18081} ${PHPMYADMIN_PORT_MYSQL93:-18082} ${PHPMYADMIN_PORT_MYSQL96:-18083})
 
 # Database connection details
 DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-"rootpass"}
@@ -196,10 +189,6 @@ check_port_conflicts() {
         "${DB_PORT_MYSQL84:-3307}" 
         "${DB_PORT_MYSQL93:-3308}"
         "${DB_PORT_MYSQL96:-3309}" 
-        "${PHPMYADMIN_PORT_MYSQL80:-18080}" 
-        "${PHPMYADMIN_PORT_MYSQL84:-18081}" 
-        "${PHPMYADMIN_PORT_MYSQL93:-18082}"
-        "${PHPMYADMIN_PORT_MYSQL96:-18083}"
     )
     local conflicts=()
     
@@ -286,17 +275,11 @@ cleanup_docker() {
         return 0
     fi
     
-    # Remove project images (including PHPMyAdmin)
+    # Remove project images
     local images=$(docker images --filter "reference=dbdiff*" --format "{{.ID}}" 2>/dev/null)
-    local phpmyadmin_images=$(docker images --filter "reference=phpmyadmin/phpmyadmin*" --format "{{.ID}}" 2>/dev/null)
-    if [ -n "$images" ] || [ -n "$phpmyadmin_images" ]; then
+    if [ -n "$images" ]; then
         echo "Removing project images..."
-        if [ -n "$images" ]; then
-            echo "$images" | xargs -r docker rmi -f 2>/dev/null
-        fi
-        if [ -n "$phpmyadmin_images" ]; then
-            echo "$phpmyadmin_images" | xargs -r docker rmi -f 2>/dev/null
-        fi
+        echo "$images" | xargs -r docker rmi -f 2>/dev/null
         echo "✅ Project images removed"
     fi
     
@@ -469,16 +452,6 @@ test_combination() {
         return 1
     fi
 
-    # Start PHPMyAdmin service for this database
-    local phpmyadmin_service="phpmyadmin-${mysql_version}"
-    echo ""
-    echo "🌐 Starting PHPMyAdmin service: $phpmyadmin_service"
-    if ! run_docker_compose_with_timeout 120 "PHPMyAdmin service startup" up -d $phpmyadmin_service; then
-        echo "⚠️  Failed to start PHPMyAdmin service $phpmyadmin_service (non-critical, continuing with tests)"
-    else
-        echo "✅ PHPMyAdmin started successfully"
-    fi
-
     # Build CLI service if needed
     echo ""
     echo "🔨 Building CLI service: $service_name"
@@ -606,7 +579,6 @@ force_cleanup_before_start() {
     # Remove all project images to start fresh
     echo "Removing project images..."
     docker images --filter "reference=dbdiff*" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
-    docker images --filter "reference=phpmyadmin/phpmyadmin*" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
     
     # Clean up all unused resources aggressively
     echo "Cleaning all unused Docker resources..."
@@ -767,12 +739,11 @@ run_watch_mode_all() {
     done
 }
 
-# Function to start additional services for watch mode (CLI and PHPMyAdmin)
+# Function to start additional services for watch mode (CLI)
 start_additional_services_for_watch() {
     local php_version=$1
     local mysql_version=$2
     local cli_service="cli-php${php_version//.}-${mysql_version}"
-    local phpmyadmin_service="phpmyadmin-${mysql_version}"
     
     echo "🚀 Starting additional services for manual use..."
     
@@ -780,12 +751,6 @@ start_additional_services_for_watch() {
     echo "Starting CLI service: $cli_service"
     if ! run_docker_compose_with_timeout 120 "CLI service startup" up -d $cli_service; then
         echo "⚠️  Failed to start CLI service $cli_service (non-critical)"
-    fi
-    
-    # Start PHPMyAdmin service
-    echo "Starting PHPMyAdmin service: $phpmyadmin_service"
-    if ! run_docker_compose_with_timeout 120 "PHPMyAdmin service startup" up -d $phpmyadmin_service; then
-        echo "⚠️  Failed to start PHPMyAdmin service $phpmyadmin_service (non-critical)"
     fi
     
     echo "✅ Additional services started"
@@ -830,27 +795,6 @@ show_running_services() {
     if echo "$running_services" | grep -q "db-mysql"; then
         echo ""
     fi
-    
-    # PHPMyAdmin services
-    local has_phpmyadmin=false
-    echo "🔧 PHPMyAdmin Web Interfaces:"
-    if echo "$running_services" | grep -q "phpmyadmin-mysql80"; then
-        echo "  • MySQL ${MYSQL_VERSION_80:-8.0}:  http://localhost:${PHPMYADMIN_PORT_MYSQL80:-18080}"
-        has_phpmyadmin=true
-    fi
-    if echo "$running_services" | grep -q "phpmyadmin-mysql84"; then
-        echo "  • MySQL ${MYSQL_VERSION_84:-8.4}:  http://localhost:${PHPMYADMIN_PORT_MYSQL84:-18081}"
-        has_phpmyadmin=true
-    fi
-    if echo "$running_services" | grep -q "phpmyadmin-mysql93"; then
-        echo "  • MySQL ${MYSQL_VERSION_93:-9.3}:  http://localhost:${PHPMYADMIN_PORT_MYSQL93:-18082}"
-        has_phpmyadmin=true
-    fi
-    
-    if [ "$has_phpmyadmin" = "false" ]; then
-        echo "  (No PHPMyAdmin services currently running)"
-    fi
-    echo ""
     
     # CLI services
     local has_cli=false

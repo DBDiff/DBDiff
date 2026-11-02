@@ -16,7 +16,6 @@ cp .env.example .env
 Key configuration options:
 - `DB_PORT_MYSQL80`, `DB_PORT_MYSQL84`, `DB_PORT_MYSQL93` - MySQL database ports
 - `DB_PORT_POSTGRES16` - PostgreSQL 16 database port (default: `5432`)
-- `PHPMYADMIN_PORT_MYSQL80`, `PHPMYADMIN_PORT_MYSQL84`, `PHPMYADMIN_PORT_MYSQL93` - PHPMyAdmin ports  
 - `DB_ROOT_PASSWORD`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database credentials (shared by MySQL and PostgreSQL)
 - `DATABASE_STARTUP_TIMEOUT`, `PHPUNIT_TEST_TIMEOUT` - Timeout configurations
 
@@ -121,23 +120,12 @@ Podman runs containers as your own user by default. If port binding below 1024 f
 - `db-dolt` - Dolt (accessible on localhost:3310)
 - `db-postgres16` - PostgreSQL 16 (accessible on localhost:5432)
 
-### PHPMyAdmin Services
-- `phpmyadmin-mysql80` - PHPMyAdmin for MySQL 8.0 (http://localhost:8080)
-- `phpmyadmin-mysql84` - PHPMyAdmin for MySQL 8.4 (http://localhost:8081)
-- `phpmyadmin-mysql93` - PHPMyAdmin for MySQL 9.3 (http://localhost:8082)
-
 ## Usage Examples
 
-### Start specific database and PHPMyAdmin
+### Start a specific database
 ```bash
-# Start MySQL 8.0 with PHPMyAdmin
-docker-compose up -d db-mysql80 phpmyadmin-mysql80
-
-# Start MySQL 8.4 with PHPMyAdmin
-docker-compose up -d db-mysql84 phpmyadmin-mysql84
-
-# Start MySQL 9.3 with PHPMyAdmin
-docker-compose up -d db-mysql93 phpmyadmin-mysql93
+docker-compose up -d db-mysql80
+docker-compose up -d db-postgres16
 ```
 
 ### Run DBDiff with specific PHP/MySQL combination
@@ -256,11 +244,11 @@ Use `./stop.sh` to manually clean up all containers and resources, especially us
 
 ### Start all services
 ```bash
-# Start all databases and PHPMyAdmin instances
+# Start all databases
 docker-compose up -d
 
 # Or start specific combination
-docker-compose up -d db-mysql80 phpmyadmin-mysql80 cli-php83-mysql80
+docker-compose up -d db-mysql80 cli-php83-mysql80
 ```
 
 ### Cleanup
@@ -286,10 +274,9 @@ Default MySQL credentials (configurable via `.env`):
 - MySQL 9.3: `localhost:3308` (DB_PORT_MYSQL93)
 - PostgreSQL 16: `localhost:5432` (DB_PORT_POSTGRES16)
 
-### PHPMyAdmin Access (configurable via .env)
-- MySQL 8.0: http://localhost:18080 (PHPMYADMIN_PORT_MYSQL80)
-- MySQL 8.4: http://localhost:18081 (PHPMYADMIN_PORT_MYSQL84)
-- MySQL 9.3: http://localhost:18082 (PHPMYADMIN_PORT_MYSQL93)
+### Inspecting the databases
+Point any database client (the `mysql` or `psql` command line, DBeaver,
+TablePlus and the like) at the ports above to look inside a test database.
 
 ## Continuous Integration
 
