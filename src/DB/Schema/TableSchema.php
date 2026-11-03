@@ -131,7 +131,7 @@ class TableSchema {
         $cascadedColumns = [];
         if ($driver === 'pgsql' && count($droppedColumns) > 1) {
             foreach ($droppedColumns as $col => $def) {
-                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+STORED/i', $def, $m)) {
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\((.+)\)\s+(?:STORED|VIRTUAL)/i', $def, $m)) {
                     $expr = $m[1];
                     foreach ($droppedColumns as $otherCol => $otherDef) {
                         if ($otherCol !== $col && !preg_match('/GENERATED\s+ALWAYS\s+AS\s+/i', $otherDef)
@@ -176,7 +176,7 @@ class TableSchema {
                 }
                 $changeCol = new AlterTableChangeColumn($table, $column, $diff);
                 $oldDef = $diff->getOldValue();
-                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $oldDef)
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+(?:STORED|VIRTUAL)/i', $oldDef)
                     || preg_match('/GENERATED\s+.*AS\s+IDENTITY/i', $oldDef)) {
                     $changeCol->isGenerated = true;
                 }
@@ -216,7 +216,7 @@ class TableSchema {
                 $addCol = new AlterTableAddColumn($table, $column, $diff);
                 $addCol->ordinal = $sourceOrdinal[$column] ?? null;
                 $newDef = $diff->getNewValue();
-                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+STORED/i', $newDef)) {
+                if (preg_match('/GENERATED\s+ALWAYS\s+AS\s+\(.+\)\s+(?:STORED|VIRTUAL)/i', $newDef)) {
                     $addCol->isGenerated = true;
                 }
                 $diffSequence[] = $addCol;

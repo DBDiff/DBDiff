@@ -43,6 +43,8 @@ final class PostgresColumnDefinition {
     public ?string $identityOptions = null;
     /** The expression of a stored generated column, without its outer parentheses. */
     public ?string $generated = null;
+    /** STORED or VIRTUAL (PostgreSQL 18), for a generated column. */
+    public ?string $generatedKind = null;
     /**
      * A serial column — an integer column defaulting to its own sequence,
      * which PostgresSchemaHelper renders as `serial`. `type` holds the
@@ -103,6 +105,8 @@ final class PostgresColumnDefinition {
         $from = self::parse($fromDef);
         return !$from->isGenerated()
             || $from->generated !== $to->generated
+            // Stored and virtual cannot be switched in place.
+            || ($from->generatedKind ?? 'STORED') !== ($to->generatedKind ?? 'STORED')
             || $from->typeWithCollation() !== $to->typeWithCollation();
     }
 
@@ -168,7 +172,13 @@ final class PostgresColumnDefinition {
             }
             $i++;
         }
-        return !$identity && self::is($tokens, $i, 'STORED') ? $i + 1 : $i;
+        foreach (['STORED', 'VIRTUAL'] as $kind) {
+            if (!$identity && self::is($tokens, $i, $kind)) {
+                $this->generatedKind = $kind;
+                return $i + 1;
+            }
+        }
+        return $i;
     }
 
     private static function is(array $tokens, int $i, string $keyword): bool {

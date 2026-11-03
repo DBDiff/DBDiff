@@ -361,6 +361,7 @@ final class PostgresColumnDependants {
                     CASE WHEN co.collname IS NOT NULL AND co.collname <> 'default'
                          THEN quote_ident(co.collname) END AS collation,
                     pg_get_expr(ad.adbin, ad.adrelid) AS expression,
+                    g.attgenerated::text AS generated_kind,
                     g.attnotnull AS not_null,
                     quote_literal(col_description(c.oid, g.attnum)) AS comment,
                     (SELECT json_agg(pg_get_indexdef(i.indexrelid) ORDER BY i.indexrelid::regclass::text)
@@ -400,6 +401,7 @@ final class PostgresColumnDependants {
             'type'        => $row['type'],
             'collation'   => $row['collation'],
             'expression'  => $row['expression'],
+            'kind'        => $row['generated_kind'] === 'v' ? 'VIRTUAL' : 'STORED',
             'notNull'     => (bool) $row['not_null'],
             'comment'     => $row['comment'] ?? null,
             'indexes'     => self::json($row['indexes'] ?? null),

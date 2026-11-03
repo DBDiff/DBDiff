@@ -52,6 +52,8 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
             'domains' => $q("SELECT t.typname, con.conname, pg_get_constraintdef(con.oid), con.convalidated
                                FROM pg_constraint con JOIN pg_type t ON t.oid = con.contypid
                               ORDER BY 1, 2"),
+            'generated' => $q("SELECT attrelid::regclass::text, attname, attgenerated::text FROM pg_attribute
+                                 WHERE attgenerated <> '' ORDER BY 1, 2"),
             'partitions' => $q("SELECT i.inhrelid::regclass::text, i.inhparent::regclass::text
                                   FROM pg_inherits i ORDER BY 1"),
         ];
@@ -114,6 +116,34 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
              CREATE TABLE parts.ev_0 PARTITION OF ev FOR VALUES WITH (modulus 2, remainder 0);
              CREATE TABLE parts.ev_1 PARTITION OF ev FOR VALUES WITH (modulus 2, remainder 1);',
             'CREATE SCHEMA parts;');
+    }
+
+    /** Pagila on PostgreSQL 18: a virtual generated column stays virtual. */
+    /** @dataProvider renderers */
+    public function testAVirtualGeneratedColumn(string $mode): void
+    {
+        $this->requireVersion(180000);
+        $this->roundTrip('virtual', $mode,
+            'CREATE TABLE film (id int PRIMARY KEY, length smallint, hours numeric GENERATED ALWAYS AS (round(length / 60.0, 2)) VIRTUAL);',
+            '');
+    }
+
+    /** Stored and virtual are different columns, so a change between them is a difference. */
+    public function testStoredBecomingVirtualIsADifference(): void
+    {
+        $this->requireVersion(180000);
+        $up = $this->assertRoundTrip('stored_virtual',
+            'CREATE TABLE film (id int PRIMARY KEY, length smallint, hours numeric GENERATED ALWAYS AS (round(length / 60.0, 2)) VIRTUAL);',
+            'CREATE TABLE film (id int PRIMARY KEY, length smallint, hours numeric GENERATED ALWAYS AS (round(length / 60.0, 2)) STORED);',
+            fn(string $db) => $this->catalog($db));
+        $this->assertStringContainsString('VIRTUAL', $up);
+    }
+
+    private function requireVersion(int $min): void
+    {
+        if ($this->serverVersion < $min) {
+            $this->markTestSkipped('Needs PostgreSQL ' . intdiv($min, 10000) . ' or newer.');
+        }
     }
 
     /** AdventureWorks: a domain in use gains a NOT VALID check, which only ALTER DOMAIN can add. */

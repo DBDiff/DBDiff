@@ -128,7 +128,7 @@ final class ColumnDependantsSQL {
         $collate = $generated['collation'] ? " COLLATE {$generated['collation']}" : '';
         $notNull = $generated['notNull'] ? ' NOT NULL' : '';
         return "ALTER TABLE $table ADD COLUMN $name {$generated['type']}$collate"
-            . " GENERATED ALWAYS AS ({$generated['expression']}) STORED$notNull;";
+            . " GENERATED ALWAYS AS ({$generated['expression']}) " . ($generated['kind'] ?? 'STORED') . "$notNull;";
     }
 
     /** @return string[] */

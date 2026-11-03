@@ -233,6 +233,8 @@ class PostgresSchemaHelper {
                     -- modifier is more than a number, such as
                     -- `interval day to second(3)`.
                     format_type(a.atttypid, a.atttypmod) AS formatted_type,
+                    -- 's' stored, 'v' virtual (PostgreSQL 18), '' neither.
+                    a.attgenerated::text AS generated_kind,
                     -- Inherited from a parent: a partition's columns, or a
                     -- child's under INHERITS. Its type follows the parent's and
                     -- cannot be changed on its own (issue #232).
@@ -322,6 +324,16 @@ class PostgresSchemaHelper {
      * What follows the type on a non-serial column: an identity clause, a
      * generated-column expression, or a plain DEFAULT.
      */
+    /**
+     * VIRTUAL or STORED. PostgreSQL 18 makes VIRTUAL the default, so a
+     * generated column written without either is virtual there; writing every
+     * one STORED turned a virtual column into a stored one, and the re-diff
+     * called them identical.
+     */
+    public static function generatedKind(array $row): string {
+        return ($row['generated_kind'] ?? 's') === 'v' ? 'VIRTUAL' : 'STORED';
+    }
+
     private static function columnSuffix(array $row): string {
         if ($row['is_identity'] === 'YES') {
             return ' GENERATED ' . ($row['identity_generation'] ?? 'BY DEFAULT') . ' AS IDENTITY'
@@ -329,7 +341,7 @@ class PostgresSchemaHelper {
         }
 
         if ($row['is_generated'] === 'ALWAYS') {
-            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') STORED';
+            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') ' . self::generatedKind($row);
         }
 
         return $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
