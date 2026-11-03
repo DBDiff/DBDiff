@@ -54,6 +54,7 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
                               ORDER BY 1, 2"),
             'generated' => $q("SELECT attrelid::regclass::text, attname, attgenerated::text FROM pg_attribute
                                  WHERE attgenerated <> '' ORDER BY 1, 2"),
+            'sequences' => $q("SELECT c.relname FROM pg_class c WHERE c.relkind = 'S' ORDER BY 1"),
             'partitions' => $q("SELECT i.inhrelid::regclass::text, i.inhparent::regclass::text
                                   FROM pg_inherits i ORDER BY 1"),
         ];
@@ -116,6 +117,24 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
              CREATE TABLE parts.ev_0 PARTITION OF ev FOR VALUES WITH (modulus 2, remainder 0);
              CREATE TABLE parts.ev_1 PARTITION OF ev FOR VALUES WITH (modulus 2, remainder 1);',
             'CREATE SCHEMA parts;');
+    }
+
+    /**
+     * GitLab's `uploads`: a partitioned table's id from a sequence it owns,
+     * each attached partition carrying a copy of the default. One sequence
+     * on the target, not the original plus a `uploads_id_seq1`.
+     */
+    /** @dataProvider renderers */
+    public function testAPartitionedTablesOwnSequence(string $mode): void
+    {
+        $this->roundTrip('part_seq', $mode,
+            "CREATE TABLE u (id bigint NOT NULL, k text NOT NULL) PARTITION BY LIST (k);
+             CREATE SEQUENCE u_id_seq; ALTER SEQUENCE u_id_seq OWNED BY u.id;
+             ALTER TABLE u ALTER id SET DEFAULT nextval('u_id_seq');
+             CREATE TABLE u_a (id bigint DEFAULT nextval('u_id_seq') NOT NULL, k text NOT NULL);
+             ALTER TABLE u ATTACH PARTITION u_a FOR VALUES IN ('a');
+             CREATE TABLE u_b PARTITION OF u FOR VALUES IN ('b');",
+            '');
     }
 
     /** Pagila on PostgreSQL 18: a virtual generated column stays virtual. */
