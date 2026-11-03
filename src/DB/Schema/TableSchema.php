@@ -157,7 +157,11 @@ class TableSchema {
 
         foreach ($diffs as $column => $diff) {
             if ($diff instanceof \Diff\DiffOp\DiffOpRemove) {
-                if (!isset($cascadedColumns[$column])) {
+                // A column the table only has from its parent — a partition's,
+                // or a child's under INHERITS — goes when the parent's does;
+                // PostgreSQL refuses to drop it from the child itself.
+                if (!isset($cascadedColumns[$column])
+                    && !in_array($column, $targetSchema['inheritedColumns'] ?? [], true)) {
                     $dropCol = new AlterTableDropColumn($table, $column, $diff);
                     // Ahead of the change to a column it reads, which PostgreSQL
                     // refuses while it is there (issue #233).
@@ -202,6 +206,13 @@ class TableSchema {
                 $changes[$column] = $changeCol;
                 $diffSequence[] = $changeCol;
             } else if ($diff instanceof \Diff\DiffOp\DiffOpAdd) {
+                // Likewise a column the source table inherits arrives with the
+                // parent's ADD COLUMN. Adding it to each partition as well was
+                // refused ("cannot add column to a partition"), failing the
+                // whole migration of any partitioned table that gained one.
+                if (in_array($column, $sourceSchema['inheritedColumns'] ?? [], true)) {
+                    continue;
+                }
                 $addCol = new AlterTableAddColumn($table, $column, $diff);
                 $addCol->ordinal = $sourceOrdinal[$column] ?? null;
                 $newDef = $diff->getNewValue();

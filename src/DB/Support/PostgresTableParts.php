@@ -22,12 +22,27 @@ final class PostgresTableParts
      */
     public static function partitionDDL(Connection $connection, string $table, array $partition): string {
         $ddl = 'CREATE TABLE ' . SchemaScope::name($connection, $table)
-            . ' PARTITION OF ' . SchemaScope::name($connection, $partition['parent']) . " {$partition['bound']}"
+            . ' PARTITION OF ' . self::parentName($connection, $partition) . " {$partition['bound']}"
             . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
         foreach (self::partitionOwnDDL($connection, $table) as $statement) {
             $ddl .= ";\n$statement";
         }
         return $ddl;
+    }
+
+    /**
+     * The parent, named in its own schema. A partition need not live beside
+     * its parent — GitLab keeps hash partitions of `public` tables in a
+     * schema of their own — and naming the parent in the partition's schema
+     * asked for a relation that does not exist.
+     */
+    private static function parentName(Connection $connection, array $partition): string {
+        $schema = $partition['parent_schema'] ?? null;
+        if ($schema === null) {
+            return SchemaScope::name($connection, $partition['parent']);
+        }
+        $quoted = PostgresIdent::quote($partition['parent']);
+        return $schema === 'public' ? $quoted : PostgresIdent::quote($schema) . '.' . $quoted;
     }
 
     /**

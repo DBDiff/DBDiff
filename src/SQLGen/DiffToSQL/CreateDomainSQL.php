@@ -15,8 +15,22 @@ class CreateDomainSQL implements SQLGenInterface {
         $this->dialect = $dialect ?? DialectRegistry::get();
     }
 
+    /**
+     * CREATE DOMAIN does not accept NOT VALID, so a constraint the source holds
+     * unvalidated is added after the domain exists, still unvalidated.
+     */
     public function getUp(): string {
-        return $this->obj->definition . ';';
+        [$head, $constraints] = AlterDomainSQL::splitConstraints($this->obj->definition);
+        $create = $head;
+        $later  = [];
+        foreach ($constraints as $name => $body) {
+            if (str_ends_with($body, ' NOT VALID')) {
+                $later[] = 'ALTER DOMAIN ' . $this->dialect->qualify($this->obj->name) . " ADD CONSTRAINT $name $body;";
+            } else {
+                $create .= " CONSTRAINT $name $body";
+            }
+        }
+        return implode("\n", [$create . ';', ...$later]);
     }
 
     public function getDown(): string {

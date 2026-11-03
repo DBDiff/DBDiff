@@ -150,14 +150,66 @@ class ObjectKindsSQLTest extends TestCase
         $this->assertSame($def . ';', $sql->getDown());
     }
 
-    public function testAlterDomainRecreates(): void
+    /**
+     * A domain is amended in place: DROP DOMAIN fails while a column uses it,
+     * and CREATE DOMAIN cannot hold a NOT VALID check.
+     */
+    public function testAlterDomainAmendsNotNullInPlace(): void
     {
         $src = 'CREATE DOMAIN "d" AS text NOT NULL';
         $tgt = 'CREATE DOMAIN "d" AS text';
         $sql = new AlterDomainSQL(new AlterDomain('d', $src, $tgt), $this->pg);
 
+        $this->assertSame('ALTER DOMAIN "d" SET NOT NULL;', $sql->getUp());
+        $this->assertSame('ALTER DOMAIN "d" DROP NOT NULL;', $sql->getDown());
+    }
+
+    public function testAlterDomainAmendsDefaultAndConstraintsInPlace(): void
+    {
+        $src = 'CREATE DOMAIN "Phone" AS character varying(25) DEFAULT \'\'::character varying'
+             . ' CONSTRAINT phone_len CHECK ((length((VALUE)::text) <= 40)) NOT VALID'
+             . ' CONSTRAINT "Phone_Digits" CHECK (((VALUE)::text ~ \'^[0-9 ]*$\'::text))';
+        $tgt = 'CREATE DOMAIN "Phone" AS character varying(25)'
+             . ' CONSTRAINT "Phone_Digits" CHECK (((VALUE)::text ~ \'^[0-9]*$\'::text))';
+        $sql = new AlterDomainSQL(new AlterDomain('Phone', $src, $tgt), $this->pg);
+
+        $this->assertSame(implode("\n", [
+            'ALTER DOMAIN "Phone" DROP CONSTRAINT IF EXISTS "Phone_Digits";',
+            'ALTER DOMAIN "Phone" SET DEFAULT \'\'::character varying;',
+            'ALTER DOMAIN "Phone" ADD CONSTRAINT phone_len CHECK ((length((VALUE)::text) <= 40)) NOT VALID;',
+            'ALTER DOMAIN "Phone" ADD CONSTRAINT "Phone_Digits" CHECK (((VALUE)::text ~ \'^[0-9 ]*$\'::text));',
+        ]), $sql->getUp());
+        $this->assertSame(implode("\n", [
+            'ALTER DOMAIN "Phone" DROP CONSTRAINT IF EXISTS phone_len;',
+            'ALTER DOMAIN "Phone" DROP CONSTRAINT IF EXISTS "Phone_Digits";',
+            'ALTER DOMAIN "Phone" DROP DEFAULT;',
+            'ALTER DOMAIN "Phone" ADD CONSTRAINT "Phone_Digits" CHECK (((VALUE)::text ~ \'^[0-9]*$\'::text));',
+        ]), $sql->getDown());
+    }
+
+    /** A new base type is beyond ALTER DOMAIN, so that alone still replaces it. */
+    public function testAlterDomainBaseTypeRecreates(): void
+    {
+        $src = 'CREATE DOMAIN "d" AS bigint';
+        $tgt = 'CREATE DOMAIN "d" AS integer';
+        $sql = new AlterDomainSQL(new AlterDomain('d', $src, $tgt), $this->pg);
+
         $this->assertSame("DROP DOMAIN IF EXISTS \"d\";\n" . $src . ';', $sql->getUp());
         $this->assertSame("DROP DOMAIN IF EXISTS \"d\";\n" . $tgt . ';', $sql->getDown());
+    }
+
+    /** CREATE DOMAIN refuses NOT VALID; the check is added afterwards, still unvalidated. */
+    public function testCreateDomainAddsNotValidCheckAfterwards(): void
+    {
+        $def = 'CREATE DOMAIN "dd" AS text CONSTRAINT a_ok CHECK ((VALUE <> \'\'::text))'
+             . ' CONSTRAINT dd_len CHECK ((length(VALUE) < 5)) NOT VALID';
+        $sql = new CreateDomainSQL(new CreateDomain('dd', $def), $this->pg);
+
+        $this->assertSame(
+            "CREATE DOMAIN \"dd\" AS text CONSTRAINT a_ok CHECK ((VALUE <> ''::text));\n"
+            . 'ALTER DOMAIN "dd" ADD CONSTRAINT dd_len CHECK ((length(VALUE) < 5)) NOT VALID;',
+            $sql->getUp()
+        );
     }
 
     // ── Materialised views ────────────────────────────────────────────────
