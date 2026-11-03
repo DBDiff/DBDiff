@@ -324,16 +324,6 @@ class PostgresSchemaHelper {
      * What follows the type on a non-serial column: an identity clause, a
      * generated-column expression, or a plain DEFAULT.
      */
-    /**
-     * VIRTUAL or STORED. PostgreSQL 18 makes VIRTUAL the default, so a
-     * generated column written without either is virtual there; writing every
-     * one STORED turned a virtual column into a stored one, and the re-diff
-     * called them identical.
-     */
-    public static function generatedKind(array $row): string {
-        return ($row['generated_kind'] ?? 's') === 'v' ? 'VIRTUAL' : 'STORED';
-    }
-
     private static function columnSuffix(array $row): string {
         if ($row['is_identity'] === 'YES') {
             return ' GENERATED ' . ($row['identity_generation'] ?? 'BY DEFAULT') . ' AS IDENTITY'
@@ -341,7 +331,11 @@ class PostgresSchemaHelper {
         }
 
         if ($row['is_generated'] === 'ALWAYS') {
-            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') ' . self::generatedKind($row);
+            // VIRTUAL or STORED, as the server has it. PostgreSQL 18 makes
+            // VIRTUAL the default, so writing every one STORED turned a
+            // virtual column into a stored one.
+            $kind = ($row['generated_kind'] ?? 's') === 'v' ? 'VIRTUAL' : 'STORED';
+            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') ' . $kind;
         }
 
         return $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';
