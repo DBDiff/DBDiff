@@ -384,6 +384,7 @@ final class PostgresExpressionEquivalence {
         $new = PostgresColumnDefinition::parse($diff->diff->getNewValue());
         return $old->isGenerated() && $new->isGenerated()
             && $old->generated !== $new->generated
+            && $old->generatedKind === $new->generatedKind
             && $old->typeWithCollation() === $new->typeWithCollation()
             && $old->notNull === $new->notNull
             && $old->compression === $new->compression;

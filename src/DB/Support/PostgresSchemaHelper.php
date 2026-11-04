@@ -78,6 +78,7 @@ class PostgresSchemaHelper {
                     CASE WHEN c.relkind = 'p'
                          THEN pg_get_partkeydef(c.oid) END AS partition_by,
                     parent.relname AS parent,
+                    pn.nspname AS parent_schema,
                     CASE WHEN c.relispartition
                          THEN pg_get_expr(c.relpartbound, c.oid) END AS bound,
                     -- UNLOGGED is not decoration: an unlogged table is not
@@ -88,6 +89,7 @@ class PostgresSchemaHelper {
                JOIN pg_namespace n ON n.oid = c.relnamespace
                LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
                LEFT JOIN pg_class parent ON parent.oid = i.inhparent
+               LEFT JOIN pg_namespace pn ON pn.oid = parent.relnamespace
               WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?",
             [$table]
         );
@@ -97,6 +99,7 @@ class PostgresSchemaHelper {
             'partition_by' => $row['partition_by'] ?? null,
             'is_partition' => (bool) ($row['relispartition'] ?? false),
             'parent'       => $row['parent'] ?? null,
+            'parent_schema' => $row['parent_schema'] ?? null,
             'bound'        => $row['bound'] ?? null,
             'unlogged'     => ($row['relpersistence'] ?? 'p') === 'u',
             'reloptions'   => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
@@ -230,6 +233,8 @@ class PostgresSchemaHelper {
                     -- modifier is more than a number, such as
                     -- `interval day to second(3)`.
                     format_type(a.atttypid, a.atttypmod) AS formatted_type,
+                    -- 's' stored, 'v' virtual (PostgreSQL 18), '' neither.
+                    a.attgenerated::text AS generated_kind,
                     -- Inherited from a parent: a partition's columns, or a
                     -- child's under INHERITS. Its type follows the parent's and
                     -- cannot be changed on its own (issue #232).
@@ -326,7 +331,11 @@ class PostgresSchemaHelper {
         }
 
         if ($row['is_generated'] === 'ALWAYS') {
-            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') STORED';
+            // VIRTUAL or STORED, as the server has it. PostgreSQL 18 makes
+            // VIRTUAL the default, so writing every one STORED turned a
+            // virtual column into a stored one.
+            $kind = ($row['generated_kind'] ?? 's') === 'v' ? 'VIRTUAL' : 'STORED';
+            return ' GENERATED ALWAYS AS (' . ($row['generation_expression'] ?? '') . ') ' . $kind;
         }
 
         return $row['column_default'] !== null ? ' DEFAULT ' . $row['column_default'] : '';

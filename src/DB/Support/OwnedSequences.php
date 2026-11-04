@@ -35,9 +35,16 @@ final class OwnedSequences
                       WHEN 'int4'::regtype THEN 2147483647
                       ELSE 9223372036854775807 END
                 AND (SELECT count(*) FROM pg_depend uses
+                       JOIN pg_attrdef ad ON ad.oid = uses.objid
+                       JOIN pg_attribute col ON col.attrelid = ad.adrelid AND col.attnum = ad.adnum
                       WHERE uses.refobjid = $oid
                         AND uses.refclassid = 'pg_class'::regclass
-                        AND uses.classid = 'pg_attrdef'::regclass) <= 1";
+                        AND uses.classid = 'pg_attrdef'::regclass
+                        -- A partition's copy of its parent's default is not a
+                        -- second use: counted, a partitioned table's own serial
+                        -- was modelled standalone while its column was still
+                        -- written bigserial, and the target got two sequences.
+                        AND col.attinhcount = 0) <= 1";
     }
 
     /**

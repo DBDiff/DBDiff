@@ -459,6 +459,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                             -- hashed: without them a table differing only there
                             -- was skipped by the pre-scan and never compared.
                             format_type(a.atttypid, a.atttypmod)                 || '|' ||
+                            a.attgenerated::text                                 || '|' ||
                             COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
                             a.attstorage::text                                   || '|' ||
                             COALESCE(NULLIF(a.attcompression::text, ''), '')     || '|' ||

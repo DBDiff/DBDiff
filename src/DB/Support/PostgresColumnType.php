@@ -49,6 +49,11 @@ class PostgresColumnType {
     /**
      * A domain names itself; its own definition carries the underlying type.
      * Outside `public` it is named in full, as the migration is read there.
+     *
+     * In `public` the name is quoted whenever it would not survive unquoted.
+     * Written bare, a domain called `"Name"` folded to `name` — PostgreSQL's
+     * own 63-byte identifier type — so every column declared with it was
+     * created with a different type, and `"Flag"` failed as an unknown type.
      */
     private static function domainType(array $col): ?string {
         if (empty($col['domain_name'])) {
@@ -56,8 +61,23 @@ class PostgresColumnType {
         }
         $schema = $col['domain_schema'] ?? null;
         return $schema && !in_array($schema, ['public', 'pg_catalog'], true)
-            ? '"' . str_replace('"', '""', $schema) . '"."' . str_replace('"', '""', $col['domain_name']) . '"'
-            : $col['domain_name'];
+            ? PostgresIdent::quote($schema) . '.' . PostgresIdent::quote($col['domain_name'])
+            : self::bareOrQuoted($col['domain_name']);
+    }
+
+    /** A name as written: bare when it is a plain lower-case identifier, quoted otherwise. */
+    private static function bareOrQuoted(string $name): string {
+        return preg_match('/^[a-z_][a-z0-9_]*$/', $name) ? $name : PostgresIdent::quote($name);
+    }
+
+    /**
+     * The server's own spelling, `format_type(atttypid, atttypmod)`, read with
+     * the migration's search_path, so it quotes and qualifies the way the
+     * migration needs.
+     */
+    private static function serverSpelling(array $col): ?string {
+        $formatted = $col['formatted_type'] ?? null;
+        return ($formatted === null || $formatted === '') ? null : $formatted;
     }
 
     /**
@@ -95,14 +115,26 @@ class PostgresColumnType {
     private static function aliasedType(array $col): ?string {
         return match ($col['data_type']) {
             'double precision' => 'double precision',
-            'ARRAY'            => $col['udt_name'],
+            // An array is spelled by the server. Its udt_name is the catalog's
+            // internal name (`_varchar`), which drops the element's modifier —
+            // varchar(20)[] became varchar[], bit(4)[] became bit(1)[] — and
+            // names a mixed-case or non-public element type that does not
+            // resolve (`_Mood`). Comparing two such spellings then called the
+            // columns equal, so the lost modifier was never reported.
+            'ARRAY'            => self::serverSpelling($col) ?? $col['udt_name'],
             // information_schema reports every enum, composite and extension
             // type as the literal string 'USER-DEFINED'; the real name is in
             // udt_name. Without this an enum column was emitted as
             //   "status" USER-DEFINED
             // which is a syntax error, so no table using an enum could be
             // created — and enums are ubiquitous in Supabase schemas.
-            'USER-DEFINED'     => PostgresSchemaHelper::qualifiedUdt($col),
+            //
+            // A type modifier on such a type is extension-defined —
+            // vector(1536) — and only the server can spell it; without it the
+            // column was created as a bare `vector`, on which an HNSW index
+            // fails ("column does not have dimensions").
+            'USER-DEFINED'     => ((int) ($col['atttypmod'] ?? -1) >= 0 ? self::serverSpelling($col) : null)
+                                  ?? PostgresSchemaHelper::qualifiedUdt($col),
             default            => null,
         };
     }
