@@ -94,6 +94,14 @@ class AlterTableChangeColumn {
      */
     public array $keepsSerialSequence = [];
 
+    /**
+     * Per direction, the `ALTER SEQUENCE ... OWNED BY` a standalone sequence
+     * this column owns on one side only needs (OwnedSequences::ownershipChange).
+     *
+     * @var array{up?: string, down?: string}
+     */
+    public array $sequenceOwnership = [];
+
     function __construct($table, $column, $diff) {
         $this->table = $table;
         $this->column = $column;

@@ -49,7 +49,9 @@ class AlterTableChangeColumnSQL implements SQLGenInterface {
                 $this->obj->keepsSerialSequence[$direction] ?? false
             )
             : $this->dialect;
-        return $dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
+        $sql = $dialect->changeColumn($this->obj->table, $this->obj->column, $toDef, $fromDef);
+        $ownership = $this->obj->sequenceOwnership[$direction] ?? '';
+        return $ownership === '' ? $sql : ltrim("$sql\n$ownership", "\n");
     }
 
     /**

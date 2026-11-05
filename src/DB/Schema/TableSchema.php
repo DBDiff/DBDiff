@@ -1,6 +1,7 @@
 <?php namespace DBDiff\DB\Schema;
 
 use DBDiff\DB\Support\MySQLColumns;
+use DBDiff\DB\Support\OwnedSequences;
 
 use Diff\Differ\MapDiffer;
 use Diff\Differ\ListDiffer;
@@ -182,6 +183,11 @@ class TableSchema {
                 }
                 if ($driver === 'pgsql' && PostgresColumnDefinition::needsSerialSequence($oldDef, $diff->getNewValue())) {
                     $this->attachSerialSequence($changeCol, $table, $column);
+                }
+                if ($driver === 'pgsql') {
+                    $changeCol->sequenceOwnership = OwnedSequences::ownershipChange(
+                        $this->manager->getDB('source'), $this->manager->getDB('target'), $table, $column
+                    );
                 }
                 // Read from the target: that is the database the migration
                 // runs against, and its views, policies and triggers are the

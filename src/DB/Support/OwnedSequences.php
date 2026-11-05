@@ -17,17 +17,30 @@ final class OwnedSequences
      * A sequence owned by a column but with options of its own, or shared by
      * several defaults, is a sequence in its own right: modelled standalone and
      * created with all its options, its ownership set once the column exists.
-     * Used by the sequence kind and the pg_dump renderer, which must agree on
-     * which sequences a table's DDL creates.
+     * Used by the sequence kind and by both table renderers, which must agree
+     * on which sequences a table's DDL creates: when the built-in renderer
+     * decided on its own, a column whose sequence the sequence kind had already
+     * created (START 1000, say) was still written bigserial, and the target got
+     * the original unowned beside an owned `_seq1` counting from 1.
      */
     public static function serialShaped(string $seq, string $oid): string {
         return "EXISTS (
                     SELECT 1 FROM pg_depend own
+                      JOIN pg_class owner ON owner.oid = own.refobjid
+                      JOIN pg_attribute owncol ON owncol.attrelid = own.refobjid
+                                              AND owncol.attnum = own.refobjsubid
                      WHERE own.objid = $oid
                        AND own.classid = 'pg_class'::regclass
                        AND own.refclassid = 'pg_class'::regclass
                        AND own.refobjsubid > 0
-                       AND own.deptype = 'a')
+                       AND own.deptype = 'a'
+                       -- Named as `serial` would name it. GitLab's p_ci_build_needs
+                       -- owns ci_build_needs_id_seq, kept from before the table
+                       -- was renamed; written bigserial, the target's sequence
+                       -- came out as p_ci_build_needs_id_seq. A name past 63
+                       -- bytes never matches, and is created explicitly.
+                       AND (SELECT seqrel.relname FROM pg_class seqrel WHERE seqrel.oid = $oid)
+                           = owner.relname || '_' || owncol.attname || '_seq')
                 AND $seq.seqstart = 1 AND $seq.seqincrement = 1 AND $seq.seqmin = 1
                 AND $seq.seqcache = 1 AND NOT $seq.seqcycle
                 AND $seq.seqmax = CASE $seq.seqtypid
@@ -55,9 +68,64 @@ final class OwnedSequences
      */
     public static function standaloneOf(Connection $connection, string $table): array
     {
+        return array_map(fn() => true, self::standaloneColumns($connection, $table));
+    }
+
+    /**
+     * `ALTER SEQUENCE ... OWNED BY` for each sequence of this table that is
+     * not its column's serial. The built-in renderer writes such a column with
+     * its explicit default, the sequence kind creates the sequence beforehand,
+     * and nothing else records which column owns it; without this, the
+     * sequence outlived a dropped column and read as unowned on every re-diff.
+     *
+     * @return list<string>
+     */
+    public static function ownershipStatements(Connection $connection, string $table): array
+    {
+        $statements = [];
+        foreach (self::standaloneColumns($connection, $table) as $sequence => $column) {
+            $statements[] = 'ALTER SEQUENCE ' . SchemaScope::name($connection, $sequence)
+                . ' OWNED BY ' . SchemaScope::name($connection, $table) . '.' . PostgresIdent::quote($column);
+        }
+        return $statements;
+    }
+
+    /**
+     * For a column on both sides, the `OWNED BY` each direction needs when
+     * the column owns a standalone sequence on one side and not the other.
+     * A serial column's change carries its own; a standalone sequence's
+     * ownership was otherwise set only with a new table, and an existing
+     * table's column gaining a default from it left the sequence unowned.
+     * Named as the target reads them, where the migration runs.
+     *
+     * @return array{up?: string, down?: string}
+     */
+    public static function ownershipChange(Connection $source, Connection $target, string $table, string $column): array
+    {
+        $owned = fn(Connection $side) => array_keys(self::standaloneColumns($side, $table), $column, true);
+        $atSource = $owned($source);
+        $atTarget = $owned($target);
+        $owner = SchemaScope::name($target, $table) . '.' . PostgresIdent::quote($column);
+        $set = fn(array $sequences, string $to) => implode("\n", array_map(
+            fn(string $sequence) => 'ALTER SEQUENCE ' . SchemaScope::name($target, $sequence) . " OWNED BY $to;",
+            $sequences
+        ));
+
+        $gained = array_diff($atSource, $atTarget);
+        $lost = array_diff($atTarget, $atSource);
+        return array_filter([
+            'up' => implode("\n", array_filter([$set($gained, $owner), $set($lost, 'NONE')])),
+            'down' => implode("\n", array_filter([$set($lost, $owner), $set($gained, 'NONE')])),
+        ]);
+    }
+
+    /** @return array<string, string> sequence name => owning column */
+    private static function standaloneColumns(Connection $connection, string $table): array
+    {
         $rows = $connection->select(
-            "SELECT s.relname AS name
+            "SELECT s.relname AS name, a.attname AS col
                FROM pg_depend d
+               JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
                JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
                JOIN pg_sequence sq ON sq.seqrelid = s.oid
                JOIN pg_class t ON t.oid = d.refobjid
@@ -66,10 +134,12 @@ final class OwnedSequences
                 AND NOT (" . self::serialShaped('sq', 's.oid') . ")",
             [$table]
         );
-        $names = [];
+        $columns = [];
         foreach ($rows as $row) {
-            $names[((array) $row)['name']] = true;
+            $row = (array) $row;
+            $columns[$row['name']] = $row['col'];
         }
-        return $names;
+        ksort($columns);
+        return $columns;
     }
 }
