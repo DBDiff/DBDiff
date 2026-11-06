@@ -465,10 +465,13 @@ class PostgresSchemaHelper {
      * Deliberately narrow. `owned_sequence` is null when the column merely
      * references a sequence rather than owning it, and serial implies NOT NULL,
      * so a nullable column keeps its default too — serial would change the
-     * semantics rather than preserve them.
+     * semantics rather than preserve them. So does a column whose sequence is
+     * not serial-shaped (OwnedSequences::serialShaped): serial would create a
+     * second sequence beside the one the sequence kind creates.
      */
     public static function serialTypeFor(array $row): ?string {
         $isOwnedSerial = !empty($row['owned_sequence'])
+            && !empty($row['serial_shaped'])
             && $row['is_nullable'] === 'NO'
             && preg_match('/^nextval\(/i', (string) $row['column_default']) === 1;
 

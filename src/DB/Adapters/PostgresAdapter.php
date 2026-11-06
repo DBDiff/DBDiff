@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
+use DBDiff\DB\Support\OwnedSequences;
 use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresTableParts;
@@ -224,6 +225,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         $attrs = PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? [];
         $name  = SchemaScope::name($connection, $table);
         foreach (array_merge(
+            OwnedSequences::ownershipStatements($connection, $table),
             PostgresSchemaHelper::storageStatements($name, $attrs),
             PostgresTableSettings::tableSettingStatements(
                 $name,
@@ -274,6 +276,31 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                JOIN pg_namespace n ON n.oid = c.relnamespace
               WHERE n.nspname = " . SchemaScope::literal($connection) . "
                 AND p.relnamespace = c.relnamespace"
+        ) as $row) {
+            $map[$row['child']][] = $row['parent'];
+        }
+
+        // So does a table whose default draws on a sequence another table owns
+        // (GitLab's packages_composer_packages on packages_packages_id_seq).
+        // Dropping the owner drops the sequence, which PostgreSQL refuses while
+        // the other default still uses it:
+        //   cannot drop table packages_packages because other objects depend on it
+        foreach ($connection->select(
+            "SELECT DISTINCT u.relname AS child, o.relname AS parent
+               FROM pg_depend uses
+               JOIN pg_attrdef ad ON ad.oid = uses.objid
+               JOIN pg_class u ON u.oid = ad.adrelid
+               JOIN pg_depend own ON own.objid = uses.refobjid
+                                 AND own.classid = 'pg_class'::regclass
+                                 AND own.refclassid = 'pg_class'::regclass
+                                 AND own.refobjsubid > 0
+                                 AND own.deptype = 'a'
+               JOIN pg_class o ON o.oid = own.refobjid
+              WHERE uses.classid = 'pg_attrdef'::regclass
+                AND uses.refclassid = 'pg_class'::regclass
+                AND u.oid <> o.oid
+                AND u.relnamespace = " . SchemaScope::oid($connection) . "
+                AND o.relnamespace = u.relnamespace"
         ) as $row) {
             $map[$row['child']][] = $row['parent'];
         }
@@ -595,6 +622,12 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                     -- round trip: the bulk fetch is required to stay at a constant
                     -- number of queries no matter how many tables are involved.
                     pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name) AS owned_sequence,
+                    -- Whether that sequence is the column's serial, decided as the
+                    -- sequence kind decides it: see OwnedSequences::serialShaped.
+                    COALESCE((SELECT " . OwnedSequences::serialShaped('sq', 'sq.seqrelid') . "
+                                FROM pg_sequence sq
+                               WHERE sq.seqrelid = to_regclass(pg_get_serial_sequence(
+                                         format('%I.%I', table_schema, table_name), column_name))), false) AS serial_shaped,
                     datetime_precision, is_identity, identity_generation,
                     -- An identity column carries a sequence, and that sequence's
                     -- options are part of the column definition: recreating it

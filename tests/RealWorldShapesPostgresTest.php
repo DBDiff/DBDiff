@@ -54,7 +54,17 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
                               ORDER BY 1, 2"),
             'generated' => $q("SELECT attrelid::regclass::text, attname, attgenerated::text FROM pg_attribute
                                  WHERE attgenerated <> '' ORDER BY 1, 2"),
-            'sequences' => $q("SELECT c.relname FROM pg_class c WHERE c.relkind = 'S' ORDER BY 1"),
+            // Options and owner too: a sequence that kept its name but lost its
+            // START, or its owner, reads the same by name alone.
+            'sequences' => $q("SELECT c.relname, s.seqstart, s.seqmin,
+                                      (SELECT d.refobjid::regclass::text || '.' || a.attname
+                                         FROM pg_depend d
+                                         JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+                                        WHERE d.objid = c.oid AND d.classid = 'pg_class'::regclass
+                                          AND d.deptype IN ('a', 'i'))
+                                 FROM pg_class c JOIN pg_sequence s ON s.seqrelid = c.oid ORDER BY 1"),
+            'defaults' => $q("SELECT adrelid::regclass::text, pg_get_expr(adbin, adrelid)
+                                FROM pg_attrdef ORDER BY 1, 2"),
             'partitions' => $q("SELECT i.inhrelid::regclass::text, i.inhparent::regclass::text
                                   FROM pg_inherits i ORDER BY 1"),
         ];
@@ -134,6 +144,83 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
              CREATE TABLE u_a (id bigint DEFAULT nextval('u_id_seq') NOT NULL, k text NOT NULL);
              ALTER TABLE u ATTACH PARTITION u_a FOR VALUES IN ('a');
              CREATE TABLE u_b PARTITION OF u FOR VALUES IN ('b');",
+            '');
+    }
+
+    /**
+     * GitLab's `organizations`, verbatim: ids from 1000, the sequence owned by
+     * the column. Written bigserial beside the sequence the sequence kind had
+     * already created, the target counted from 1 on an `organizations_id_seq1`.
+     */
+    /** @dataProvider renderers */
+    public function testAnOwnedSequenceWithOptionsOfItsOwn(string $mode): void
+    {
+        $this->roundTrip('seq_opts', $mode,
+            "CREATE TABLE organizations (id bigint NOT NULL, name text DEFAULT ''::text NOT NULL);
+             CREATE SEQUENCE organizations_id_seq
+                 START WITH 1000
+                 INCREMENT BY 1
+                 MINVALUE 1000
+                 NO MAXVALUE
+                 CACHE 1;
+             ALTER SEQUENCE organizations_id_seq OWNED BY organizations.id;
+             ALTER TABLE ONLY organizations ALTER COLUMN id SET DEFAULT nextval('organizations_id_seq'::regclass);
+             ALTER TABLE ONLY organizations ADD CONSTRAINT organizations_pkey PRIMARY KEY (id);",
+            '');
+    }
+
+    /**
+     * GitLab's `packages_packages_id_seq`, verbatim: owned by one table and
+     * feeding another's default too.
+     */
+    /** @dataProvider renderers */
+    public function testAnOwnedSequenceSharedByTwoTables(string $mode): void
+    {
+        $this->roundTrip('seq_shared', $mode,
+            "CREATE TABLE packages_packages (id bigint NOT NULL, name character varying NOT NULL);
+             CREATE SEQUENCE packages_packages_id_seq
+                 START WITH 1
+                 INCREMENT BY 1
+                 NO MINVALUE
+                 NO MAXVALUE
+                 CACHE 1;
+             ALTER SEQUENCE packages_packages_id_seq OWNED BY packages_packages.id;
+             CREATE TABLE packages_composer_packages (
+                 id bigint DEFAULT nextval('packages_packages_id_seq'::regclass) NOT NULL,
+                 project_id bigint NOT NULL);
+             ALTER TABLE ONLY packages_packages ALTER COLUMN id SET DEFAULT nextval('packages_packages_id_seq'::regclass);",
+            '');
+    }
+
+    /**
+     * GitLab's `p_ci_build_needs`, verbatim: a partitioned table renamed from
+     * `ci_build_needs`, still owning `ci_build_needs_id_seq`. Written
+     * bigserial, the target's sequence was named after the new table.
+     */
+    /** @dataProvider renderers */
+    public function testAPartitionedTableOwningASequenceNamedForItsOldName(string $mode): void
+    {
+        $this->roundTrip('seq_renamed', $mode,
+            "CREATE TABLE p_ci_build_needs (
+                 name text NOT NULL,
+                 artifacts boolean DEFAULT true NOT NULL,
+                 optional boolean DEFAULT false NOT NULL,
+                 build_id bigint NOT NULL,
+                 partition_id bigint NOT NULL,
+                 id bigint NOT NULL,
+                 project_id bigint
+             )
+             PARTITION BY LIST (partition_id);
+             CREATE SEQUENCE ci_build_needs_id_seq
+                 START WITH 1
+                 INCREMENT BY 1
+                 NO MINVALUE
+                 NO MAXVALUE
+                 CACHE 1;
+             ALTER SEQUENCE ci_build_needs_id_seq OWNED BY p_ci_build_needs.id;
+             ALTER TABLE ONLY p_ci_build_needs ALTER COLUMN id SET DEFAULT nextval('ci_build_needs_id_seq'::regclass);
+             CREATE TABLE ci_build_needs (LIKE p_ci_build_needs INCLUDING DEFAULTS);
+             ALTER TABLE p_ci_build_needs ATTACH PARTITION ci_build_needs FOR VALUES IN (100);",
             '');
     }
 
