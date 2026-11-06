@@ -4,6 +4,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use DBDiff\DB\Support\QueryHelper;
+use DBDiff\Exceptions\DBException;
 
 
 class MySQLAdapter implements DBAdapterInterface {
@@ -171,9 +172,27 @@ class MySQLAdapter implements DBAdapterInterface {
             $type = $row['ROUTINE_TYPE']; // PROCEDURE or FUNCTION
             $stmt = $connection->select("SHOW CREATE $type `$name`");
             $key  = $type === 'PROCEDURE' ? 'Create Procedure' : 'Create Function';
-            $routines[$name] = $this->normalizeCreateStatement($stmt[0][$key]);
+            $definition = $stmt[0][$key] ?? null;
+            if ($definition === null) {
+                throw new DBException(self::unreadableRoutine($db, $type, $name));
+            }
+            $routines[$name] = $this->normalizeCreateStatement($definition);
         }
         return $routines;
+    }
+
+    /**
+     * MySQL lists a routine to anyone with privileges on its schema, but shows
+     * its body only to its definer or to a user holding SHOW_ROUTINE (8.0.20+)
+     * or global SELECT; everyone else gets NULL rather than an error. Carrying
+     * on would be wrong either way: skipped on the source, the routine would
+     * read as dropped and the migration would drop it from the target.
+     */
+    private static function unreadableRoutine(string $db, string $type, string $name): string {
+        $kind = strtolower($type);
+        return "Can't read the definition of $kind `$db`.`$name`: MySQL hides a routine's body from "
+            . "users who did not define it. Grant the user DBDiff connects as the SHOW_ROUTINE "
+            . "privilege (GRANT SHOW_ROUTINE ON *.* TO <user>), or connect as the routine's definer.";
     }
 
     public function getEnums(Connection $connection): array {
