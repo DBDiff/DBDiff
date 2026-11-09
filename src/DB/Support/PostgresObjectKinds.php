@@ -38,7 +38,7 @@ final class PostgresObjectKinds {
      * because the MINVALUE and MAXVALUE defaults follow the sequence's type: a
      * bigint sequence recreated as an integer one is a different sequence.
      */
-    public static function sequences(Connection $connection): array {
+    public static function sequences(Connection $connection, bool $serials = false): array {
         $result = $connection->select(
             "SELECT c.relname AS name,
                     format_type(sq.seqtypid, NULL) AS data_type,
@@ -64,7 +64,10 @@ final class PostgresObjectKinds {
                -- right, and was lost as one: recreated as the column's serial,
                -- its type taken from the column and its START, CACHE and
                -- bounds dropped, and created after a table already using it.
-               AND NOT (" . OwnedSequences::serialShaped('sq', 'c.oid') . ")
+               --
+               -- With $serials, those serials instead: DBSchema compares one
+               -- against a standalone sequence of its name on the other side.
+               AND " . ($serials ? '' : 'NOT ') . "(" . OwnedSequences::serialShaped('sq', 'c.oid') . ")
              ORDER BY c.relname"
         );
         $sequences = [];

@@ -362,11 +362,7 @@ class DBSchema {
                 PostgresObjectKinds::domains($target),
                 CreateDomain::class, DropDomain::class, AlterDomain::class
             ),
-            $this->diffNamedObjects(
-                PostgresObjectKinds::sequences($source),
-                PostgresObjectKinds::sequences($target),
-                CreateSequence::class, DropSequence::class, AlterSequence::class
-            ),
+            $this->diffSequences($source, $target),
             // getViews() reads pg_views, which holds only ordinary views.
             $this->diffNamedObjects(
                 PostgresObjectKinds::materializedViews($source),
@@ -412,6 +408,26 @@ class DBSchema {
                 $sourceTables,
                 $targetTables
             )
+        );
+    }
+
+    /**
+     * Standalone sequences, each compared with the sequence of its name on the
+     * other side even where that one is a serial's own (which its table's DDL
+     * creates, so it is otherwise left out). A serial whose column lost its
+     * default is standalone on one side and a serial on the other; compared
+     * only among standalone ones, it read as missing, and the migration
+     * created a sequence that already existed or dropped one still in use.
+     */
+    private function diffSequences(\Illuminate\Database\Connection $source, \Illuminate\Database\Connection $target): array {
+        $sourceSequences = PostgresObjectKinds::sequences($source);
+        $targetSequences = PostgresObjectKinds::sequences($target);
+        $sourceSerials = PostgresObjectKinds::sequences($source, true);
+        $targetSerials = PostgresObjectKinds::sequences($target, true);
+        return $this->diffNamedObjects(
+            $sourceSequences + array_intersect_key($sourceSerials, $targetSequences),
+            $targetSequences + array_intersect_key($targetSerials, $sourceSequences),
+            CreateSequence::class, DropSequence::class, AlterSequence::class
         );
     }
 
