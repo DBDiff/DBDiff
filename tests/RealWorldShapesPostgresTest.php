@@ -224,6 +224,104 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
             '');
     }
 
+    /**
+     * GitLab's `zoekt_tasks`, verbatim: the id comes from a trigger, so the
+     * column has no default, but it still owns its sequence. Read as the
+     * column's own serial, nothing created the sequence, and the trigger
+     * failed on the first insert.
+     */
+    /** @dataProvider renderers */
+    public function testAnOwnedSequenceATriggerDrawsOn(string $mode): void
+    {
+        $this->roundTrip('seq_trigger', $mode,
+            "CREATE FUNCTION assign_zoekt_tasks_id_value() RETURNS trigger
+                 LANGUAGE plpgsql
+                 AS \$\$
+             BEGIN
+             IF NEW.\"id\" IS NOT NULL THEN
+               RAISE WARNING 'Manually assigning ids is not allowed, the value will be ignored';
+             END IF;
+             NEW.\"id\" := nextval('zoekt_tasks_id_seq'::regclass);
+             RETURN NEW;
+
+             END
+             \$\$;
+             CREATE TABLE zoekt_tasks (
+                 id bigint NOT NULL,
+                 partition_id bigint DEFAULT 1 NOT NULL,
+                 zoekt_node_id bigint NOT NULL,
+                 zoekt_repository_id bigint NOT NULL,
+                 project_identifier bigint NOT NULL,
+                 perform_at timestamp with time zone DEFAULT now() NOT NULL,
+                 created_at timestamp with time zone NOT NULL,
+                 updated_at timestamp with time zone NOT NULL,
+                 state smallint DEFAULT 0 NOT NULL,
+                 task_type smallint NOT NULL,
+                 retries_left smallint DEFAULT 5 NOT NULL,
+                 claimed_until timestamp with time zone,
+                 CONSTRAINT c_zoekt_tasks_on_retries_left CHECK (((retries_left > 0) OR ((retries_left = 0) AND (state = 255))))
+             )
+             PARTITION BY LIST (partition_id);
+             CREATE SEQUENCE zoekt_tasks_id_seq
+                 START WITH 1
+                 INCREMENT BY 1
+                 NO MINVALUE
+                 NO MAXVALUE
+                 CACHE 1;
+             ALTER SEQUENCE zoekt_tasks_id_seq OWNED BY zoekt_tasks.id;
+             ALTER TABLE ONLY zoekt_tasks
+                 ADD CONSTRAINT zoekt_tasks_pkey PRIMARY KEY (id, partition_id);
+             CREATE TRIGGER assign_zoekt_tasks_id_trigger BEFORE INSERT ON zoekt_tasks FOR EACH ROW EXECUTE FUNCTION assign_zoekt_tasks_id_value();",
+            '');
+    }
+
+    /**
+     * GitLab's `p_sent_notifications`, verbatim: the id's default draws on
+     * `sent_notifications_id_seq`, while the column owns a sequence of its
+     * own that nothing uses. Written bigserial, the target's default drew on
+     * the owned one instead.
+     */
+    /** @dataProvider renderers */
+    public function testADefaultDrawingOnASequenceItsColumnDoesNotOwn(string $mode): void
+    {
+        $this->roundTrip('seq_not_owned', $mode,
+            "CREATE SEQUENCE sent_notifications_id_seq
+                 START WITH 1
+                 INCREMENT BY 1
+                 NO MINVALUE
+                 NO MAXVALUE
+                 CACHE 1;
+             CREATE TABLE p_sent_notifications (
+                 id bigint DEFAULT nextval('sent_notifications_id_seq'::regclass) NOT NULL,
+                 project_id bigint,
+                 noteable_id bigint,
+                 recipient_id bigint,
+                 issue_email_participant_id bigint,
+                 namespace_id bigint NOT NULL,
+                 created_at timestamp with time zone NOT NULL,
+                 partition integer DEFAULT 1 NOT NULL,
+                 noteable_type text,
+                 commit_id text,
+                 reply_key text NOT NULL,
+                 in_reply_to_discussion_id text,
+                 CONSTRAINT check_18a72130c5 CHECK ((char_length(commit_id) <= 255)),
+                 CONSTRAINT check_21ab645552 CHECK ((char_length(reply_key) <= 255)),
+                 CONSTRAINT check_4c25a085c6 CHECK ((char_length(noteable_type) <= 255)),
+                 CONSTRAINT check_7e7dc3845d CHECK ((char_length(in_reply_to_discussion_id) <= 255))
+             )
+             PARTITION BY LIST (partition);
+             CREATE SEQUENCE p_sent_notifications_id_seq
+                 START WITH 1
+                 INCREMENT BY 1
+                 NO MINVALUE
+                 NO MAXVALUE
+                 CACHE 1;
+             ALTER SEQUENCE p_sent_notifications_id_seq OWNED BY p_sent_notifications.id;
+             ALTER TABLE ONLY p_sent_notifications
+                 ADD CONSTRAINT p_sent_notifications_pkey PRIMARY KEY (id, partition);",
+            '');
+    }
+
     /** Pagila on PostgreSQL 18: a virtual generated column stays virtual. */
     /** @dataProvider renderers */
     public function testAVirtualGeneratedColumn(string $mode): void

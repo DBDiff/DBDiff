@@ -12,7 +12,14 @@ final class OwnedSequences
     /**
      * SQL true when the sequence `$seq` (a pg_sequence alias, its relation's
      * oid in `$oid`) is a serial column's own: owned by its column, every
-     * option at what `serial` gives it, and feeding no other default.
+     * option at what `serial` gives it, and feeding exactly one default.
+     *
+     * Exactly one, not at most one. GitLab's zoekt_tasks fills its id from a
+     * trigger, so the column has no default but still owns its sequence: read
+     * as a serial, nothing created it — the column had no default to be
+     * written bigserial for. And p_sent_notifications owns a sequence nothing
+     * uses while its default draws on another; read as a serial, the column
+     * was written bigserial and the target's default changed sequence.
      *
      * A sequence owned by a column but with options of its own, or shared by
      * several defaults, is a sequence in its own right: modelled standalone and
@@ -57,7 +64,7 @@ final class OwnedSequences
                         -- second use: counted, a partitioned table's own serial
                         -- was modelled standalone while its column was still
                         -- written bigserial, and the target got two sequences.
-                        AND col.attinhcount = 0) <= 1";
+                        AND col.attinhcount = 0) = 1";
     }
 
     /**
@@ -102,25 +109,31 @@ final class OwnedSequences
      */
     public static function ownershipChange(Connection $source, Connection $target, string $table, string $column): array
     {
-        $owned = fn(Connection $side) => array_keys(self::standaloneColumns($side, $table), $column, true);
-        $atSource = $owned($source);
-        $atTarget = $owned($target);
+        // A standalone sequence one side's column owns and the other's does
+        // not own at all. Not merely "not standalone there": a serial whose
+        // default was dropped is standalone on one side and the column's
+        // serial on the other, and its ownership was cleared.
+        $standalone = fn(Connection $side) => array_keys(self::standaloneColumns($side, $table), $column, true);
+        $owned = fn(Connection $side) => array_keys(self::standaloneColumns($side, $table, false), $column, true);
         $owner = SchemaScope::name($target, $table) . '.' . PostgresIdent::quote($column);
         $set = fn(array $sequences, string $to) => implode("\n", array_map(
             fn(string $sequence) => 'ALTER SEQUENCE ' . SchemaScope::name($target, $sequence) . " OWNED BY $to;",
             $sequences
         ));
 
-        $gained = array_diff($atSource, $atTarget);
-        $lost = array_diff($atTarget, $atSource);
+        $gained = array_diff($standalone($source), $owned($target));
+        $lost = array_diff($standalone($target), $owned($source));
         return array_filter([
             'up' => implode("\n", array_filter([$set($gained, $owner), $set($lost, 'NONE')])),
             'down' => implode("\n", array_filter([$set($lost, $owner), $set($gained, 'NONE')])),
         ]);
     }
 
-    /** @return array<string, string> sequence name => owning column */
-    private static function standaloneColumns(Connection $connection, string $table): array
+    /**
+     * @param bool $onlyStandalone false: every sequence a column owns, serials too
+     * @return array<string, string> sequence name => owning column
+     */
+    private static function standaloneColumns(Connection $connection, string $table, bool $onlyStandalone = true): array
     {
         $rows = $connection->select(
             "SELECT s.relname AS name, a.attname AS col
@@ -131,7 +144,7 @@ final class OwnedSequences
                JOIN pg_class t ON t.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = t.relnamespace
               WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ? AND d.deptype = 'a'
-                AND NOT (" . self::serialShaped('sq', 's.oid') . ")",
+                AND " . ($onlyStandalone ? "NOT (" . self::serialShaped('sq', 's.oid') . ")" : 'true'),
             [$table]
         );
         $columns = [];
