@@ -78,7 +78,13 @@ class DBDiff {
             throw new DestructiveChangeException($lintResult);
         }
 
-        $sqlGenerator = new SQLGenerator($diff, (bool) ($params->units ?? false));
+        $delimiter = $params->delimiter ?? null;
+        if ($delimiter !== null && ($params->driver ?? 'mysql') !== 'mysql') {
+            throw new \InvalidArgumentException(
+                '--delimiter is for MySQL: psql reads $$-quoted bodies and the sqlite3 shell reads trigger bodies without it.'
+            );
+        }
+        $sqlGenerator = new SQLGenerator($diff, (bool) ($params->units ?? false), $delimiter);
         $up   = ($params->include !== 'down') ? $sqlGenerator->getUp()   : '';
         $down = ($params->include !== 'up')   ? $sqlGenerator->getDown() : '';
 

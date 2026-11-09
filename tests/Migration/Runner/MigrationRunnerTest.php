@@ -851,4 +851,49 @@ class MigrationRunnerTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertEmpty($results[0]['warnings']);
     }
+
+    // ── Statements whose text contains a semicolon ───────────────────────────
+
+    public function testUpKeepsASemicolonInsideAStringLiteral(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+        $this->scaffoldMigration($dir, 'literal', '20260101120000',
+            "CREATE TABLE notes (body TEXT DEFAULT 'a;b');\n"
+            . "INSERT INTO notes (body) VALUES ('first; second'), ('it''s; quoted');"
+        );
+
+        $results = (new MigrationRunner($this->makeConfig($dir)))->up();
+
+        $this->assertSame('applied', $results[0]['status'], $results[0]['error'] ?? '');
+        $pdo = new \PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(
+            ['first; second', "it's; quoted"],
+            $pdo->query('SELECT body FROM notes ORDER BY rowid')->fetchAll(\PDO::FETCH_COLUMN)
+        );
+    }
+
+    public function testUpKeepsATriggerBodyWhole(): void
+    {
+        $dir = $this->tmpDir . '/migrations';
+        mkdir($dir, 0755, true);
+        $this->scaffoldMigration($dir, 'trigger', '20260101120000',
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, qty INTEGER);\n"
+            . "CREATE TABLE log (msg TEXT);\n"
+            . "CREATE TRIGGER items_log AFTER INSERT ON items BEGIN\n"
+            . "  INSERT INTO log VALUES (CASE WHEN NEW.qty > 1 THEN 'many' ELSE 'one' END);\n"
+            . "  INSERT INTO log VALUES ('done; really');\n"
+            . "END;\n"
+            . "INSERT INTO items (qty) VALUES (5);"
+        );
+
+        $results = (new MigrationRunner($this->makeConfig($dir)))->up();
+
+        $this->assertSame('applied', $results[0]['status'], $results[0]['error'] ?? '');
+        $pdo = new \PDO('sqlite:' . $this->dbPath);
+        $this->assertSame(
+            ['many', 'done; really'],
+            $pdo->query('SELECT msg FROM log ORDER BY rowid')->fetchAll(\PDO::FETCH_COLUMN)
+        );
+    }
 }

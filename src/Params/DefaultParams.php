@@ -33,6 +33,14 @@ class DefaultParams {
     */
     public $units = false;
 
+    /*
+     MySQL only: write each CREATE PROCEDURE, FUNCTION, TRIGGER and EVENT
+     between `DELIMITER <token>` lines, as mysqldump does, so the migration runs
+     in the mysql client and MySQL Workbench as well as through DBDiff. Null
+     leaves statements ending in `;`.
+    */
+    public ?string $delimiter = null;
+
     /* 
      By default, DBDiff will look for a .dbdiff file in the current directory
      which is valid YAML, which may also be overridden with a config file that

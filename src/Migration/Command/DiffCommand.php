@@ -72,6 +72,8 @@ class DiffCommand extends Command
             ->addOption('units',       null, InputOption::VALUE_NONE,
                 'Mark each change\'s statements as one unit (-- dbdiff:unit <Kind> <object> ... -- dbdiff:end), '
                 . 'for tools that apply changes one at a time')
+            ->addOption('delimiter',   null, InputOption::VALUE_OPTIONAL,
+                'MySQL: wrap routines, triggers and events in DELIMITER lines for the mysql client (default token $$)', false)
             ->addOption('config',      null, InputOption::VALUE_REQUIRED, 'Path to a .dbdiff config file (YAML)')
             ->addOption('output',      null, InputOption::VALUE_REQUIRED,
                 'Output file path (default: migration.<ext> in cwd). '
@@ -169,6 +171,7 @@ class DiffCommand extends Command
         $params->include     = $input->hasParameterOption('--include') ? $this->normaliseInclude($input->getOption('include')) : null;
         $params->nocomments  = (bool) $input->getOption('nocomments');
         $params->units       = (bool) $input->getOption('units');
+        $params->delimiter   = self::delimiterOption($input->getOption('delimiter'));
         $params->debug       = (bool) $input->getOption('debug');
         $params->template    = $input->getOption('template') ?? '';
         $params->config      = $input->getOption('config');
@@ -194,6 +197,25 @@ class DiffCommand extends Command
         }
 
         return $params;
+    }
+
+    /**
+     * `--delimiter` alone means `$$`; absent (false) means none. The token
+     * must be something the mysql client can end a statement with: no spaces,
+     * quotes or semicolons.
+     */
+    private static function delimiterOption(string|bool|null $value): ?string
+    {
+        if ($value === false) {
+            return null;
+        }
+        $token = $value ?? '$$';
+        if ($token === '' || preg_match('/[\s;\'"`\\\\]/', $token)) {
+            throw new \InvalidArgumentException(
+                "--delimiter needs a token without spaces, quotes, backslashes or semicolons, such as \$\$ or //; got '$token'."
+            );
+        }
+        return $token;
     }
 
     /**

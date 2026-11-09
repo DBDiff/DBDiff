@@ -10,8 +10,11 @@ class SQLGenerator implements SQLGenInterface {
     protected $diffSorter;
     protected $diff;
 
-    /** @param bool $units  mark each change as one unit (see MigrationGenerator::UNIT_BEGIN) */
-    public function __construct($diff, private bool $units = false) {
+    /**
+     * @param bool        $units      mark each change as one unit (see MigrationGenerator::UNIT_BEGIN)
+     * @param string|null $delimiter  MySQL: put routine bodies between DELIMITER lines (see MySqlDelimiter)
+     */
+    public function __construct($diff, private bool $units = false, private ?string $delimiter = null) {
         $this->diffSorter = new DiffSorter;
         $this->diff = array_merge($diff['schema'], $diff['data']);
     }
@@ -19,12 +22,12 @@ class SQLGenerator implements SQLGenInterface {
     public function getUp() {
         Logger::info("Now generating UP migration");
         $diff = $this->diffSorter->sort($this->diff, 'up');
-        return MigrationGenerator::generate($diff, 'getUp', $this->units);
+        return MigrationGenerator::generate($diff, 'getUp', $this->units, $this->delimiter);
     }
 
     public function getDown() {
         Logger::info("Now generating DOWN migration");
         $diff = $this->diffSorter->sort($this->diff, 'down');
-        return MigrationGenerator::generate($diff, 'getDown', $this->units);
+        return MigrationGenerator::generate($diff, 'getDown', $this->units, $this->delimiter);
     }
 }
