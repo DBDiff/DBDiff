@@ -446,8 +446,12 @@ class MigrationRunner
         $this->connection->beginTransaction();
 
         try {
+            // Sent as text, as the database's own client sends them: a
+            // migration has no bindings, and Dolt cannot prepare a routine
+            // or trigger with a BEGIN … END body ("cannot prepare multiple
+            // statements") that it runs as a plain query.
             foreach ($statements as $statement) {
-                $this->connection->statement($statement);
+                $this->connection->unprepared($statement);
             }
 
             // MySQL ends a transaction itself at any DDL statement (an implicit

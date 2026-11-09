@@ -35,14 +35,28 @@ class DelimiterOutputMySQLTest extends TestCase
           DECLARE i INT DEFAULT 0;
           WHILE i < n DO
             SET i = i + 1;
-            INSERT INTO notes VALUES (i, CASE WHEN i = 1 THEN 'first; one' ELSE NULL END);
+            IF i = 1 THEN INSERT INTO notes VALUES (1, 'first; one'); ELSE INSERT INTO notes (id) VALUES (n); END IF;
           END WHILE;
         END;
+        SQL;
+
+    /** Dolt has procedures and triggers but no stored functions. */
+    private const FUNCTION = <<<'SQL'
         CREATE FUNCTION label(n INT) RETURNS varchar(20) DETERMINISTIC
         BEGIN
           RETURN CONCAT('n=', n, ';');
         END;
         SQL;
+
+    private function dolt(): bool
+    {
+        return getenv('DBDIFF_ENGINE') === 'dolt';
+    }
+
+    private function source(): string
+    {
+        return self::SOURCE . ($this->dolt() ? '' : "\n" . self::FUNCTION);
+    }
 
     protected function setUp(): void
     {
@@ -102,19 +116,22 @@ class DelimiterOutputMySQLTest extends TestCase
         $pdo->exec('CALL add_notes(2)');
         $this->assertSame(['first; one', 'empty; filled'],
             $pdo->query('SELECT body FROM notes ORDER BY id')->fetchAll(PDO::FETCH_COLUMN));
-        $this->assertSame('n=7;', $pdo->query('SELECT label(7)')->fetchColumn());
+        if (!$this->dolt()) {
+            $this->assertSame('n=7;', $pdo->query('SELECT label(7)')->fetchColumn());
+        }
     }
 
     public function testTheMigrationRunsInTheMysqlClientAndThroughDBDiff(): void
     {
-        $source = $this->database('src', self::SOURCE);
+        $source = $this->database('src', $this->source());
         $empty  = 'CREATE TABLE notes (id int PRIMARY KEY, body varchar(100));';
+        $routines = $this->dolt() ? 2 : 3;
 
         [$code, $sql, $display] = $this->diff($source, $this->database('tgt', $empty), ['--delimiter' => null]);
         $this->assertSame(0, $code, $display);
         $this->assertStringContainsString("DELIMITER \$\$\nCREATE PROCEDURE", $sql);
-        $this->assertSame(3, substr_count($sql, "DELIMITER \$\$\n"), $sql);
-        $this->assertSame(3, substr_count($sql, "DELIMITER ;\n"), $sql);
+        $this->assertSame($routines, substr_count($sql, "DELIMITER \$\$\n"), $sql);
+        $this->assertSame($routines, substr_count($sql, "DELIMITER ;\n"), $sql);
 
         // The mysql client: what #287 asked for. CI's runners have one.
         exec('command -v mysql', $found, $missing);
@@ -151,7 +168,7 @@ class DelimiterOutputMySQLTest extends TestCase
 
     public function testWithoutTheOptionStatementsEndInSemicolons(): void
     {
-        $source = $this->database('src', self::SOURCE);
+        $source = $this->database('src', $this->source());
         [$code, $sql] = $this->diff($source, $this->database('tgt', 'CREATE TABLE notes (id int PRIMARY KEY, body varchar(100));'), []);
         $this->assertSame(0, $code);
         $this->assertStringNotContainsString('DELIMITER', $sql);

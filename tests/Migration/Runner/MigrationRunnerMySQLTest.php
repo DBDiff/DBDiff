@@ -96,7 +96,7 @@ class MigrationRunnerMySQLTest extends TestCase
               DECLARE i INT DEFAULT 0;
               WHILE i < n DO
                 SET i = i + 1;
-                INSERT INTO notes VALUES (i, CASE WHEN i = 1 THEN 'one; first' ELSE NULL END);
+                IF i = 1 THEN INSERT INTO notes VALUES (1, 'one; first'); ELSE INSERT INTO notes (id) VALUES (n); END IF;
               END WHILE;
             END;
             CALL fill(2);
@@ -113,14 +113,14 @@ class MigrationRunnerMySQLTest extends TestCase
 
             DELIMITER $$
 
-            CREATE FUNCTION label(n INT) RETURNS varchar(20) DETERMINISTIC
+            CREATE PROCEDURE note(IN n INT)
             BEGIN
-              RETURN CONCAT('n=', n, ';');
+              INSERT INTO notes VALUES (n, CONCAT('n=', n, ';'));
             END$$
 
             DELIMITER ;
 
-            INSERT INTO notes VALUES (1, label(1));
+            CALL note(1);
             SQL);
 
         $this->assertSame('applied', $results[0]['status'], (string) ($results[0]['error'] ?? ''));
