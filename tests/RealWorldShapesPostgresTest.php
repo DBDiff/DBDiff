@@ -12,6 +12,10 @@
  *
  * Each runs with pg_dump rendering new tables and with DBDiff's own renderer,
  * which is what runs wherever no pg_dump as new as the server is installed.
+ *
+ * The definitions marked verbatim are from GitLab's db/structure.sql,
+ * Copyright (c) 2011-present GitLab Inc., under the MIT Expat licence
+ * (https://gitlab.com/gitlab-org/gitlab/-/blob/master/LICENSE).
  */
 class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
 {
