@@ -421,7 +421,8 @@ class MigrationRunner
 
     /**
      * Execute multi-statement SQL inside a single transaction.
-     * Splits on semicolons, ignoring empty statements and comment-only lines.
+     * Splits where the database's own client would (see SqlStatementSplitter),
+     * ignoring empty statements and comment-only ones.
      *
      * Enum label additions run first, each committed on its own: PostgreSQL
      * will not let a label added inside a transaction be used before that
@@ -433,7 +434,7 @@ class MigrationRunner
     {
         $statements = array_filter(
             $this->splitStatements($sql),
-            fn(string $s) => trim(preg_replace('/--[^\n]*/', '', $s)) !== ''
+            fn(string $s) => trim(preg_replace(['/--[^\n]*/', '~/\*.*?\*/~s'], '', $s)) !== ''
         );
         foreach ($statements as $i => $statement) {
             if (AlterEnumSQL::isValueAddition($statement)) {
@@ -445,11 +446,23 @@ class MigrationRunner
         $this->connection->beginTransaction();
 
         try {
+            // Sent as text, as the database's own client sends them: a
+            // migration has no bindings, and Dolt cannot prepare a routine
+            // or trigger with a BEGIN … END body ("cannot prepare multiple
+            // statements") that it runs as a plain query.
             foreach ($statements as $statement) {
-                $this->connection->statement($statement);
+                $this->connection->unprepared($statement);
             }
 
-            $this->connection->commit();
+            // MySQL ends a transaction itself at any DDL statement (an implicit
+            // commit), and PDO's commit() then throws "There is no active
+            // transaction" for a migration that applied. With nothing left open,
+            // rollBack() only resets the connection's transaction count.
+            if ($this->connection->getPdo()->inTransaction()) {
+                $this->connection->commit();
+            } else {
+                $this->connection->rollBack();
+            }
         } catch (\Throwable $e) {
             $this->connection->rollBack();
             throw $e;
@@ -457,19 +470,13 @@ class MigrationRunner
     }
 
     /**
-     * Naively split SQL on semicolons.
-     * Complex cases (e.g. stored procedures with BEGIN…END) may need the
-     * --delimiter override that more advanced runners support — keep it simple
-     * for now since DBDiff targets schema migrations, not stored routines.
+     * The file's statements as the database's own client would send them.
      *
      * @return string[]
      */
     private function splitStatements(string $sql): array
     {
-        return array_filter(
-            array_map('trim', explode(';', $sql)),
-            fn(string $s) => $s !== ''
-        );
+        return SqlStatementSplitter::split($sql, $this->config->driver);
     }
 
     private function findFile(string $dir, string $version): ?MigrationFile

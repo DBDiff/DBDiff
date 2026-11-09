@@ -25,7 +25,7 @@ class MigrationGenerator {
     public const UNIT_BEGIN = '-- dbdiff:unit';
     public const UNIT_END   = '-- dbdiff:end';
 
-    public static function generate($diffs, $method, bool $units = false) {
+    public static function generate($diffs, $method, bool $units = false, ?string $delimiter = null) {
         $dialect = DialectRegistry::get();
         $sql = "";
         foreach ($diffs as $diff) {
@@ -40,6 +40,9 @@ class MigrationGenerator {
             $sqlGenClass = __NAMESPACE__."\\DiffToSQL\\".$reflection->getShortName()."SQL";
             $gen         = new $sqlGenClass($diff, $dialect->inSchema($diff->schema ?? null));
             $statement   = $gen->$method();
+            if ($delimiter !== null && $statement !== '') {
+                $statement = MySqlDelimiter::wrap($statement, $delimiter);
+            }
             if ($statement !== '') {
                 $sql .= $units ? self::unit($diff, $statement) : $statement."\n";
             }

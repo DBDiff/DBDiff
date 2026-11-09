@@ -425,6 +425,7 @@ _Flags always override settings in `.dbdiff`._
 | `--include=up\|down\|both` | Directions to include. Defaults to `up`. (`all` is accepted as an alias for `both`.) |
 | `--nocomments` | Strip comment headers from output. |
 | `--units` | Mark each change's statements as one unit: `-- dbdiff:unit <Kind> <object>` before them, `-- dbdiff:end` after. For tools that review or apply changes one at a time — an enum label swap, a column type change with its views stood aside or a serial column turned into an identity is several statements that only work together and in order. The markers are SQL comments; the migration runs the same with or without them. |
+| `--delimiter[=<token>]` | MySQL: write each procedure, function, trigger and event between `DELIMITER <token>` lines (`$$` when no token is given), as mysqldump does, so the migration runs as written in the `mysql` client and MySQL Workbench. `dbdiff migration:up` reads these lines too. |
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Where to write. A **file path** for `native`, `liquibase-xml` and `liquibase-yaml`; a **directory** for `flyway` and `laravel`, which name their own files. Defaults to `migration.sql` in the current directory. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
@@ -497,6 +498,8 @@ DBDiff includes a built-in migration runner. All `migration:*` commands accept:
 | `migration:validate` | Verify on-disk checksums match the history table. | — |
 | `migration:repair` | Remove failed entries so they can be retried. | `--force` — skip confirmation |
 | `migration:baseline` | Mark current DB state as the migration baseline. | `--baseline-version=<YYYYMMDDHHmmss>`, `--description=<text>`, `--force` |
+
+`migration:up` and `migration:down` send a file one statement at a time, split where the database's own client would split it: a semicolon inside a string, a comment, a PostgreSQL `$$` body or a routine's or trigger's `BEGIN … END` doesn't end a statement, and `DELIMITER` lines written for the `mysql` client are honoured.
 
 #### Migration file formats
 
