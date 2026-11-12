@@ -21,13 +21,45 @@ final class PostgresTableParts
      * constraint or index declared on it rather than inherited.
      */
     public static function partitionDDL(Connection $connection, string $table, array $partition): string {
+        $named = self::partitionNotNullNames($connection, $table);
         $ddl = 'CREATE TABLE ' . SchemaScope::name($connection, $table)
-            . ' PARTITION OF ' . self::parentName($connection, $partition) . " {$partition['bound']}"
+            . ' PARTITION OF ' . self::parentName($connection, $partition)
+            . ($named !== [] ? ' (' . implode(', ', $named) . ')' : '')
+            . " {$partition['bound']}"
             . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
         foreach (self::partitionOwnDDL($connection, $table) as $statement) {
             $ddl .= ";\n$statement";
         }
         return $ddl;
+    }
+
+    /**
+     * NOT NULL constraints a partition names other than PARTITION OF would.
+     *
+     * Since PostgreSQL 18 a NOT NULL is a named constraint. A partition made
+     * with PARTITION OF takes its parent's names, while one created on its own
+     * and then attached keeps its own (payment_p2022_01_customer_id_not_null),
+     * and PostgreSQL will not rename an inherited constraint afterwards. Named
+     * in PARTITION OF's column list, they come out as the source has them.
+     * Before 18 there are none, so nothing is added.
+     *
+     * @return list<string> column constraint clauses: `col CONSTRAINT name NOT NULL`
+     */
+    private static function partitionNotNullNames(Connection $connection, string $table): array {
+        $rows = $connection->select(
+            "WITH p AS (SELECT c.oid FROM pg_class c WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ?)
+             SELECT quote_ident(a.attname) || ' CONSTRAINT ' || quote_ident(k.conname) || ' NOT NULL' AS clause
+               FROM pg_constraint k
+               JOIN p ON k.conrelid = p.oid
+               JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = k.conkey[1]
+               LEFT JOIN pg_inherits h ON h.inhrelid = p.oid
+               LEFT JOIN pg_attribute pa ON pa.attrelid = h.inhparent AND pa.attname = a.attname AND NOT pa.attisdropped
+               LEFT JOIN pg_constraint pk ON pk.conrelid = h.inhparent AND pk.contype = 'n' AND pk.conkey[1] = pa.attnum
+              WHERE k.contype = 'n' AND k.conname IS DISTINCT FROM pk.conname
+              ORDER BY a.attnum",
+            [$table]
+        );
+        return array_map(fn($row) => (string) ((array) $row)['clause'], $rows);
     }
 
     /**
