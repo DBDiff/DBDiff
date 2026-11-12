@@ -336,6 +336,32 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
             '');
     }
 
+    /**
+     * Pagila on PostgreSQL 18: payment's partitions were created on their own
+     * and attached, so their NOT NULL constraints carry their own names. One
+     * made with a bare PARTITION OF took the parent's, which PostgreSQL then
+     * will not rename. One made with PARTITION OF keeps the parent's names, as
+     * does a partition whose names were renamed to differ only on one column.
+     */
+    /** @dataProvider renderers */
+    public function testPartitionsKeepTheirOwnNotNullNames(string $mode): void
+    {
+        $this->requireVersion(180000);
+        $this->renderer($mode);
+        $this->assertRoundTrip("part_notnull_$mode",
+            "CREATE TABLE payment (payment_id int NOT NULL, customer_id int NOT NULL, amount numeric CONSTRAINT payment_amount_nn NOT NULL,
+                                   payment_date timestamptz NOT NULL) PARTITION BY RANGE (payment_date);
+             CREATE TABLE payment_p2022_01 (payment_id int NOT NULL, customer_id int NOT NULL, amount numeric NOT NULL,
+                                            payment_date timestamptz NOT NULL);
+             ALTER TABLE payment ATTACH PARTITION payment_p2022_01 FOR VALUES FROM ('2022-01-01') TO ('2022-02-01');
+             CREATE TABLE payment_p2022_02 PARTITION OF payment FOR VALUES FROM ('2022-02-01') TO ('2022-03-01');",
+            '',
+            fn(string $db) => $this->connect($db)->query(
+                "SELECT conrelid::regclass::text, conname FROM pg_constraint
+                  WHERE contype = 'n' AND connamespace = 'public'::regnamespace ORDER BY 1, 2"
+            )->fetchAll(PDO::FETCH_NUM));
+    }
+
     /** Stored and virtual are different columns, so a change between them is a difference. */
     public function testStoredBecomingVirtualIsADifference(): void
     {
