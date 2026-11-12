@@ -233,7 +233,7 @@ jobs:
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }} postgresql-common
 
         # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
         # its own regardless of what was just installed — on these runners it
@@ -587,7 +587,7 @@ jobs:
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
+        sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }} postgresql-common
 
         # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
         # its own regardless of what was just installed — on these runners it
@@ -787,7 +787,7 @@ jobs:
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends postgresql-client-18
+        sudo apt-get install -y --no-install-recommends postgresql-client-18 postgresql-common
 
     - name: Install SupaForge
       working-directory: supaforge/packages/cli
