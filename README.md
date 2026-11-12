@@ -30,7 +30,7 @@
 - Supports MySQL, PostgreSQL, and SQLite via `--driver`
 - Every schema of a PostgreSQL database, or just the ones you choose, with
   `--schemas` / `--ignore-schemas`
-- Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string
+- Connect via DSN URLs (`--server1-url`, `--server2-url`, `--db-url`) — works with any connection string — or through a [Unix socket](#unix-sockets)
 - [Supabase](https://supabase.com)-ready via `--supabase` one-flag shorthand (not required when using DSN URLs)
 - Diffs tables, partitions, views, materialized views, triggers, stored procedures/functions, enum types, composite types, domains, sequences, collations, row level security policies, comments, extensions, and data — with deterministic, predictable output
 - Up and down SQL generated in the same file
@@ -565,6 +565,23 @@ Pass `--format=native` to `migration:new` to override the auto-detected format.
 ```
 
 Each URL's own `sslmode` and `options` apply to that server's connection, as they do for psql and pg_dump — `?sslmode=require&options=-c%20default_transaction_read_only%3Don` keeps a session on the source read-only, for example.
+
+### Unix sockets
+
+To connect through a Unix-domain socket rather than TCP, set `socket` on a server in your config file. Local installs such as MAMP and Homebrew use sockets, as do servers with TCP turned off and managed-database proxies such as Cloud SQL's:
+
+```yaml
+server1:
+  user: root
+  password: root
+  socket: /Applications/MAMP/tmp/mysql/mysql.sock   # MySQL: the socket file
+server2:
+  user: app
+  password: secret
+  socket: /var/run/postgresql                       # PostgreSQL: its directory
+```
+
+In a URL, `?socket=` works for both drivers, and MySQL's `?unix_socket=` and libpq's `?host=<directory>` work too: `mysql://root:pw@localhost/shop?socket=/tmp/mysql.sock`, `postgres://app:secret@/orders?host=/var/run/postgresql`. A PostgreSQL socket file (`/tmp/.s.PGSQL.5433`) is read as its directory and port.
 
 If your password contains special characters, use `dbdiff url:encode` (see [`url:encode`](#urlencode--password-encoder) in the Command-Line API section):
 

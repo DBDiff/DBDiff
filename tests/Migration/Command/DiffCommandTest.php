@@ -245,4 +245,31 @@ class DiffCommandTest extends TestCase
         $this->assertSame('my desc',  $params->description);
         $this->assertTrue($params->debug);
     }
+
+    /**
+     * `driver:` in a config file was overridden by --driver's own default, so
+     * a config naming pgsql or sqlite was read as MySQL.
+     */
+    public function testTheConfigFilesDriverIsUsedWhenNoneIsTyped(): void
+    {
+        $dir = sys_get_temp_dir() . '/dbdiff-config-driver-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        (new \PDO("sqlite:$dir/a.db"))->exec('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+        new \PDO("sqlite:$dir/b.db");
+        file_put_contents("$dir/dbdiff.yml", "driver: sqlite\n");
+
+        $exitCode = $this->tester->execute([
+            'input'    => "server1.$dir/a.db:server1.$dir/b.db",
+            '--config' => "$dir/dbdiff.yml",
+            '--output' => "$dir/out.sql",
+        ]);
+
+        $this->assertSame(0, $exitCode, $this->tester->getDisplay());
+        $this->assertStringContainsString('CREATE TABLE', (string) file_get_contents("$dir/out.sql"));
+        array_map('unlink', glob("$dir/*") ?: []);
+        rmdir($dir);
+        // The run set process-wide state for SQLite; later tests expect none.
+        \DBDiff\Params\ParamsFactory::reset();
+        \DBDiff\SQLGen\Dialect\DialectRegistry::setForDriver('mysql');
+    }
 }

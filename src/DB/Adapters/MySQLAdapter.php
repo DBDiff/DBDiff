@@ -4,16 +4,17 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use DBDiff\DB\Support\QueryHelper;
+use DBDiff\DB\Support\SocketConfig;
 use DBDiff\Exceptions\DBException;
 
 
 class MySQLAdapter implements DBAdapterInterface {
 
     public function buildConnectionConfig(array $server, string $db): array {
-        return [
+        return SocketConfig::apply([
             'driver'    => 'mysql',
-            'host'      => $server['host'],
-            'port'      => $server['port'],
+            'host'      => $server['host'] ?? 'localhost',
+            'port'      => $server['port'] ?? '3306',
             'database'  => $db,
             'username'  => $server['user'],
             'password'  => $server['password'],
@@ -23,7 +24,7 @@ class MySQLAdapter implements DBAdapterInterface {
             // read as '?', so a change between two of them went unseen.
             'charset'   => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
-        ];
+        ], 'mysql', $server['socket'] ?? null);
     }
 
     public function getTables(Connection $connection): array {

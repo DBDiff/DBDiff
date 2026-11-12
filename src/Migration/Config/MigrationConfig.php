@@ -1,5 +1,6 @@
 <?php namespace DBDiff\Migration\Config;
 
+use DBDiff\DB\Support\SocketConfig;
 use DBDiff\Migration\Exceptions\ConfigException;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\Yaml\Exception\ParseException;
@@ -54,6 +55,8 @@ class MigrationConfig
     public string $user          = '';
     public string $password      = '';
     public string $sslMode       = '';
+    /** A Unix-domain socket to connect through instead of host and port (issue #44). */
+    public string $socket        = '';
 
     /**
      * Whether to configure the connection for pgbouncer / connection-pooler mode.
@@ -158,10 +161,10 @@ class MigrationConfig
                         \PDO::ATTR_EMULATE_PREPARES => true,
                     ];
                 }
-                return $cfg;
+                return SocketConfig::apply($cfg, 'pgsql', $this->socket);
 
             default: // mysql
-                return [
+                return SocketConfig::apply([
                     'driver'    => 'mysql',
                     'host'      => $this->host,
                     'port'      => $this->port,
@@ -171,7 +174,7 @@ class MigrationConfig
                     'charset'   => 'utf8mb4',
                     'collation' => 'utf8mb4_unicode_ci',
                     'prefix'    => '',
-                ];
+                ], 'mysql', $this->socket);
         }
     }
 
@@ -261,6 +264,7 @@ class MigrationConfig
         $this->user       = $db['user']     ?? $this->user;
         $this->password   = $db['password'] ?? $this->password;
         $this->sslMode    = $db['sslmode']  ?? $this->sslMode;
+        $this->socket     = $db['socket']   ?? $this->socket;
         $this->pgbouncer  = (bool) ($db['pgbouncer'] ?? $this->pgbouncer);
 
         // Populate migrations section
@@ -298,6 +302,9 @@ class MigrationConfig
         if (!empty($parsed['sslmode'])) {
             $this->sslMode = $parsed['sslmode'];
         }
+        if (!empty($parsed['socket'])) {
+            $this->socket = $parsed['socket'];
+        }
 
         if ($parsed['pgbouncer']) {
             $this->pgbouncer = true;
@@ -321,6 +328,7 @@ class MigrationConfig
             'user'             => 'user',
             'password'         => 'password',
             'sslmode'          => 'sslMode',
+            'socket'           => 'socket',
             'pgbouncer'        => 'pgbouncer',
             'migrations_dir'   => 'migrationsDir',
             'history_table'    => 'historyTable',

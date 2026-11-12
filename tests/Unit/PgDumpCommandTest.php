@@ -53,6 +53,20 @@ class PgDumpCommandTest extends TestCase
         return $command;
     }
 
+    /** A socket directory goes in ?host=, since it cannot stand where a host does (issue #44). */
+    public function testASocketDirectoryIsPassedAsTheHostParameter(): void
+    {
+        $this->assertContains(
+            '--dbname=postgresql://someone@:5433/thedb?host=%2Fvar%2Frun%2Fpostgresql',
+            $this->command(['host' => '/var/run/postgresql', 'port' => '5433'])
+        );
+    }
+
+    public function testATcpHostStaysInTheAuthority(): void
+    {
+        $this->assertContains('--dbname=postgresql://someone@db.example.invalid:5432/thedb', $this->command());
+    }
+
     public function testTheDumpIsNarrowedToOneSchema(): void
     {
         $this->assertContains('--schema=public', $this->command());

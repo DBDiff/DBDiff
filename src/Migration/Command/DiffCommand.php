@@ -256,7 +256,15 @@ class DiffCommand extends Command
             );
         }
 
-        $params->driver = $input->getOption('supabase') ? 'pgsql' : $input->getOption('driver');
+        // A typed --driver wins; then the config file's `driver`, which the
+        // option's own default used to override, so `driver: pgsql` in a config
+        // file did nothing; then mysql. Needed here, before the file is merged,
+        // because the input is parsed per driver.
+        $params->driver = match (true) {
+            (bool) $input->getOption('supabase')     => 'pgsql',
+            $input->hasParameterOption('--driver')   => $input->getOption('driver'),
+            default                                  => $this->fileConfigValue($params, 'driver') ?? 'mysql',
+        };
         $params->input  = $this->parseInput($rawInput, (string) $params->driver);
 
         if ($input->getOption('supabase')) {
@@ -477,6 +485,18 @@ class DiffCommand extends Command
         }
 
         return SupabaseProjectDetector::resolveDbUrl();
+    }
+
+    /** One top-level value from the config file, if it sets one. */
+    private function fileConfigValue(object $params, string $key): ?string
+    {
+        $configFile = $params->config ?? (getcwd() . '/.dbdiff');
+        if (!is_string($configFile) || !file_exists($configFile)) {
+            return null;
+        }
+        $value = (\Symfony\Component\Yaml\Yaml::parseFile($configFile) ?? [])[$key] ?? null;
+
+        return is_string($value) && $value !== '' ? strtolower($value) : null;
     }
 
     private function mergeFileConfig(object $params): void
