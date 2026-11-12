@@ -228,11 +228,12 @@ jobs:
       run: |
         set -euo pipefail
         sudo install -d /usr/share/postgresql-common/pgdg
-        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        sudo curl -fsSL --retry 5 --retry-all-errors -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
           https://www.postgresql.org/media/keys/ACCC4CF8.asc
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
+        sudo apt-get remove -y -qq libpq-dev
         sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
 
         # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
@@ -582,11 +583,12 @@ jobs:
       run: |
         set -euo pipefail
         sudo install -d /usr/share/postgresql-common/pgdg
-        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        sudo curl -fsSL --retry 5 --retry-all-errors -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
           https://www.postgresql.org/media/keys/ACCC4CF8.asc
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
+        sudo apt-get remove -y -qq libpq-dev
         sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres-version }}
 
         # /usr/bin/pg_dump is Debian's pg_wrapper, which chooses a version of
@@ -782,11 +784,12 @@ jobs:
       run: |
         set -euo pipefail
         sudo install -d /usr/share/postgresql-common/pgdg
-        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        sudo curl -fsSL --retry 5 --retry-all-errors -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
           https://www.postgresql.org/media/keys/ACCC4CF8.asc
         echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
         sudo apt-get update -qq
+        sudo apt-get remove -y -qq libpq-dev
         sudo apt-get install -y --no-install-recommends postgresql-client-18
 
     - name: Install SupaForge
