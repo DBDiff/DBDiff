@@ -339,9 +339,25 @@ final class PgDumpRenderer
         // from here, once the table exists.
         $standaloneSequence = $type === 'SEQUENCE' && isset($standalone[$fields[(int) $schemaIndex + 1] ?? '']);
 
+        // Only the entry's own names are matched: the schema and the owner
+        // around them are not. Matching every field put a table named like its
+        // schema (person.person) or its owner in charge of every entry in that
+        // schema, and the other tables were created twice.
+        $own = array_slice($fields, (int) $schemaIndex + 1, self::nameFields($type));
+
         return self::wantsType($type)
             && !$standaloneSequence
-            && array_intersect_key($names, array_flip($fields)) !== [];
+            && array_intersect_key($names, array_flip($own)) !== [];
+    }
+
+    /**
+     * How many fields after the schema name the entry: a constraint or a
+     * default is listed under its table and then its own name; everything else
+     * under its own name alone. The owner follows.
+     */
+    private static function nameFields(string $type): int
+    {
+        return in_array($type, ['CONSTRAINT', 'CHECK CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT'], true) ? 2 : 1;
     }
 
     /**
