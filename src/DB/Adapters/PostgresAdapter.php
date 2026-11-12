@@ -4,6 +4,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use DBDiff\DB\Support\OwnedSequences;
 use DBDiff\DB\Support\QueryHelper;
+use DBDiff\DB\Support\SocketConfig;
 use DBDiff\DB\Support\PgDumpRenderer;
 use DBDiff\DB\Support\PostgresTableParts;
 use DBDiff\DB\Support\PostgresColumnType;
@@ -39,7 +40,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
          WHERE ns.nspname = pg_indexes.schemaname AND ic.relname = pg_indexes.indexname)";
 
     public function buildConnectionConfig(array $server, string $db): array {
-        return [
+        return SocketConfig::apply([
             'driver'   => 'pgsql',
             'host'     => $server['host'] ?? 'localhost',
             'port'     => $server['port'] ?? '5432',
@@ -52,7 +53,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             'options'  => [self::disablePreparesAttribute() => true],
             // The URL's libpq `options`, applied once connected (PostgresSessionOptions).
             'session_options' => $server['options'] ?? '',
-        ];
+        ], 'pgsql', $server['socket'] ?? null);
     }
 
     /**

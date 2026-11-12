@@ -517,6 +517,19 @@ final class PgDumpRenderer
 
     private static function dsn(Connection $connection): string
     {
+        $host = (string) $connection->getConfig('host');
+        // A socket directory cannot stand where a host name goes in a URI;
+        // libpq takes it as ?host= instead (issue #44).
+        if (str_starts_with($host, '/')) {
+            return sprintf(
+                'postgresql://%s@:%s/%s?host=%s',
+                rawurlencode((string) $connection->getConfig('username')),
+                (string) $connection->getConfig('port'),
+                rawurlencode((string) $connection->getConfig('database')),
+                rawurlencode($host)
+            );
+        }
+
         return sprintf(
             'postgresql://%s@%s:%s/%s',
             rawurlencode((string) $connection->getConfig('username')),

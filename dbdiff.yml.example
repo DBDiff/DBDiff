@@ -21,6 +21,8 @@ server1:
   password: password
   port: 3306             # MySQL: 3306 | PostgreSQL: 5432
   host: 127.0.0.1
+  # socket: /tmp/mysql.sock   # A Unix socket instead of host and port —
+  #                           # MySQL: the socket file; PostgreSQL: its directory
 
 server2:
   user: user
@@ -95,6 +97,7 @@ database:
   user: root
   password: secret
   # sslmode: require     # Needed for Supabase / production Postgres
+  # socket: /var/run/postgresql   # A Unix socket instead of host and port
 
 # ── Migrations ────────────────────────────────────────────────────────────────
 migrations:

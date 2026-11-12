@@ -73,6 +73,11 @@ class DsnParser
         }
 
 
+        // A socket URL may leave the host out, as libpq allows
+        // (postgres://user@/db?host=/var/run/postgresql); parse_url() refuses an
+        // empty authority, so stand localhost in for it.
+        $url = preg_replace('#^([a-z][a-z0-9+.-]*://(?:[^@/?]*@)?)(?=/)#i', '$1localhost', $url) ?? $url;
+
         $parsed = parse_url($url);
 
         // If parse_url fails (commonly because credentials contain unencoded
@@ -112,6 +117,12 @@ class DsnParser
         }
 
         $sslMode   = $query['sslmode']   ?? '';
+        // A Unix-domain socket (issue #44): ?socket= for either driver, MySQL's
+        // ?unix_socket=, or libpq's ?host= naming a directory.
+        $socket = (string) ($query['socket'] ?? $query['unix_socket'] ?? '');
+        if ($socket === '' && $driver === 'pgsql' && str_starts_with((string) ($query['host'] ?? ''), '/')) {
+            $socket = (string) $query['host'];
+        }
         $pgbouncer = filter_var($query['pgbouncer'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         // Supabase heuristics — apply sensible defaults when we detect a Supabase host
@@ -129,6 +140,7 @@ class DsnParser
             // libpq session settings, `-c name=value …` — see PostgresSessionOptions.
             'options'   => (string) ($query['options'] ?? ''),
             'pgbouncer' => $pgbouncer,
+            'socket'    => $socket,
         ];
     }
 
@@ -242,7 +254,8 @@ class DsnParser
                 // be applied to both connections.
                 'sslmode'  => $parsed['sslmode'] ?? '',
                 'options'  => $parsed['options'] ?? '',
-            ], fn ($v, $k) => !in_array($k, ['sslmode', 'options'], true) || $v !== '', ARRAY_FILTER_USE_BOTH),
+                'socket'   => $parsed['socket'] ?? '',
+            ], fn ($v, $k) => !in_array($k, ['sslmode', 'options', 'socket'], true) || $v !== '', ARRAY_FILTER_USE_BOTH),
         ];
     }
 }
