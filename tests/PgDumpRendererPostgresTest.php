@@ -196,6 +196,37 @@ class PgDumpRendererPostgresTest extends TestCase
     }
 
     /**
+     * A table named like its schema (AdventureWorks' person.person) took in
+     * every entry of that schema, since the schema is part of each listing line,
+     * so the other tables were created with it and again on their own.
+     */
+    public function testATableNamedLikeItsSchemaRendersOnlyItself(): void
+    {
+        $this->connection->statement('CREATE TABLE public.public (id int PRIMARY KEY)');
+        $this->connection->statement('CREATE TABLE other (id int PRIMARY KEY, n int DEFAULT 1)');
+        $this->connection->statement('CREATE INDEX other_n_idx ON other (n)');
+
+        $ddl = $this->adapter->getCreateStatement($this->connection, 'public');
+
+        $this->assertCameFromPgDump($ddl);
+        $this->assertStringContainsString('CREATE TABLE public.public', $ddl);
+        $this->assertStringNotContainsString('other', $ddl);
+    }
+
+    /** The owner closes each listing line, so a table named after it did the same. */
+    public function testATableNamedLikeItsOwnerRendersOnlyItself(): void
+    {
+        $owner = (string) ((array) $this->connection->selectOne('SELECT current_user AS u'))['u'];
+        $this->connection->statement("CREATE TABLE \"$owner\" (id int PRIMARY KEY)");
+        $this->connection->statement('CREATE TABLE other (id int PRIMARY KEY, n int DEFAULT 1)');
+
+        $ddl = $this->adapter->getCreateStatement($this->connection, $owner);
+
+        $this->assertCameFromPgDump($ddl);
+        $this->assertStringNotContainsString('other', $ddl);
+    }
+
+    /**
      * Callers append their own terminator, so the renderer must not leave one —
      * this produced `PRIMARY KEY (id);;` before it was fixed.
      */
