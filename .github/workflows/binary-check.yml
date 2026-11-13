@@ -30,7 +30,7 @@ env:
   SPC_PHP_RELEASE: "8.3.36"
   # Pin static-php-cli to a known-good release (see release.yml). Keep in sync.
   SPC_VERSION: "2.8.3"
-  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json"
+  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
   # Windows links against prebuilt libraries rather than building them.
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
@@ -154,6 +154,10 @@ jobs:
       # ── Build/restore static PHP micro SAPI ──────────────────────────────
       - name: Build static PHP micro SAPI (cached)
         env:
+          # Only an exact hit is reused. A fallback key restores an older
+          # build, made with other extensions or flags, which reused would
+          # leave the change under test unbuilt.
+          EXACT_HIT: ${{ steps.spc-cache.outputs.cache-hit }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Restore cached artifacts so we can skip the 30-60 min compile.
@@ -170,7 +174,7 @@ jobs:
             cp -a spc-cache/downloads downloads
           fi
 
-          if [ -f buildroot/bin/micro.sfx ]; then
+          if [ "$EXACT_HIT" = "true" ] && [ -f buildroot/bin/micro.sfx ]; then
             # Nothing is compiled on a cache hit, so the musl toolchain is not
             # needed. Running doctor here anyway meant a fully cached run — one
             # that does no build at all — still reached out to musl.libc.org and
@@ -198,6 +202,9 @@ jobs:
             upx=()
             if [ "$(uname -s)" = Linux ]; then ./spc install-pkg upx; upx=(--with-upx-pack); fi
             ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro "${upx[@]}"
+            # The PHP this runtime was built from, kept with it: a packed
+            # binary's own strings cannot be read.
+            sed -n 's/^#define PHP_VERSION "\(.*\)"$/\1/p' source/php-src/main/php_version.h > buildroot/php-version.txt
           fi
 
           # Persist back to spc-cache/ so actions/cache saves it at job end.
@@ -221,11 +228,11 @@ jobs:
       # The PHP built in is the one pinned, to the patch — not a cached older one.
       - name: Check the binary's PHP version
         run: |
-          # The binary is UPX-packed, so its strings cannot be read; the headers
-          # SPC installed with that build name the PHP it was built from.
-          h=buildroot/include/php/main/php_version.h
-          grep -q "#define PHP_VERSION \"${{ env.SPC_PHP_RELEASE }}\"" "$h" \
-            || { echo "::error::the binary was not built from PHP ${{ env.SPC_PHP_RELEASE }}"; grep -m1 "PHP_VERSION " "$h"; exit 1; }
+          # The binary is UPX-packed, so its strings cannot be read; the build
+          # recorded the PHP it was made from beside the runtime.
+          built=$(cat buildroot/php-version.txt 2>/dev/null || true)
+          [ "$built" = "${{ env.SPC_PHP_RELEASE }}" ] \
+            || { echo "::error::the binary was built from PHP '${built:-unknown}', not ${{ env.SPC_PHP_RELEASE }}"; exit 1; }
 
       - name: Smoke-test binary (--version, --help)
         run: |

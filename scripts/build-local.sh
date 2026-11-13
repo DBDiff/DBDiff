@@ -64,7 +64,7 @@ echo "Container runtime: $CT"
 
 # ── SPC configuration (must match CI release workflow) ───────────────────────
 SPC_PHP_VERSION="8.3"
-SPC_EXTENSIONS="phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json"
+SPC_EXTENSIONS="phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
 SPC_LIBS="libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 
 # Named volume — caches ~200 MB of PHP source downloads so subsequent builds

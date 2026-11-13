@@ -61,7 +61,7 @@ echo "Using container runtime: $CT"
 
 # ── SPC extension / library lists (must match the CI workflow) ──────────────
 # Extensions embedded into the static PHP binary
-SPC_EXTENSIONS="phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json"
+SPC_EXTENSIONS="phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
 # Native library sources SPC must download alongside the extensions
 SPC_LIBS="libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 SPC_PHP_VERSION="8.3"
