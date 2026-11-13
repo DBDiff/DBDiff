@@ -61,7 +61,7 @@ echo "Using container runtime: $CT"
 
 # ── SPC extension / library lists (must match the CI workflow) ──────────────
 # Extensions embedded into the static PHP binary
-SPC_EXTENSIONS="phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+SPC_EXTENSIONS="phar,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
 # Native library sources SPC must download alongside the extensions
 SPC_LIBS="libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 SPC_PHP_VERSION="8.3"
@@ -122,7 +122,8 @@ $CT run --rm \
         mkdir -p /build && cd /build
         spc doctor --auto-fix
         spc download "php-src,micro,$SPC_EXTENSIONS,$SPC_LIBS" --with-php="$SPC_PHP_VERSION"
-        spc build "$SPC_EXTENSIONS" --build-micro
+        spc install-pkg upx
+        spc build "$SPC_EXTENSIONS" --build-micro --with-upx-pack
         cat buildroot/bin/micro.sfx /work/dist/dbdiff.phar > /work/packages/@dbdiff/cli-linux-x64/dbdiff
         chmod +x /work/packages/@dbdiff/cli-linux-x64/dbdiff
         /work/packages/@dbdiff/cli-linux-x64/dbdiff --version
@@ -166,7 +167,8 @@ $CT run --rm \
         mkdir -p /build && cd /build
         spc doctor --auto-fix
         spc download "php-src,micro,$SPC_EXTENSIONS,$SPC_LIBS" --with-php="$SPC_PHP_VERSION"
-        spc build "$SPC_EXTENSIONS" --build-micro
+        spc install-pkg upx
+        spc build "$SPC_EXTENSIONS" --build-micro --with-upx-pack
         cat buildroot/bin/micro.sfx /work/dist/dbdiff.phar > /work/packages/@dbdiff/cli-linux-arm64/dbdiff
         chmod +x /work/packages/@dbdiff/cli-linux-arm64/dbdiff
     '

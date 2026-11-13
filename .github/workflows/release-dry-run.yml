@@ -23,7 +23,7 @@ on:
         default: '0.0.0-dry-run'
 
 env:
-  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+  SPC_EXTENSIONS: "phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
   SPC_LIBS: "libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
   SPC_WINDOWS_LIBS: "zlib,libiconv-win,libxml2,postgresql-win,sqlite"
   SPC_PHP_VERSION: "8.3"
@@ -130,6 +130,7 @@ jobs:
       # ── SPC build cache (per-platform) ──────────────────────────────────
       - name: Cache SPC build artifacts
         if: runner.os != 'Windows'
+        id: spc-cache
         uses: actions/cache@v4
         with:
           path: spc-cache
@@ -169,6 +170,9 @@ jobs:
       - name: Build static PHP binary (Unix)
         if: runner.os != 'Windows'
         env:
+          # Only an exact hit is reused; a fallback key's older build would
+          # leave a change to the extensions or flags unbuilt.
+          EXACT_HIT: ${{ steps.spc-cache.outputs.cache-hit }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Restore cache if available
@@ -181,7 +185,7 @@ jobs:
             cp -a spc-cache/downloads downloads
           fi
 
-          if [ -f buildroot/bin/micro.sfx ]; then
+          if [ "$EXACT_HIT" = "true" ] && [ -f buildroot/bin/micro.sfx ]; then
             # No compile on a cache hit, so no musl toolchain is needed and
             # musl.libc.org is never contacted.
             echo "Cache hit — reusing micro.sfx, skipping SPC doctor"
@@ -197,7 +201,11 @@ jobs:
             ./spc download \
               "php-src,micro,${{ env.SPC_EXTENSIONS }},${{ env.SPC_LIBS }}" \
               --with-php="${{ env.SPC_PHP_RELEASE }}"
-            ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro
+            # UPX packs the PHP runtime on Linux. Not on macOS, which UPX does not
+            # support, nor on Windows, where antivirus tools flag packed executables.
+            upx=()
+            if [ "$(uname -s)" = Linux ]; then ./spc install-pkg upx; upx=(--with-upx-pack); fi
+            ./spc build "${{ env.SPC_EXTENSIONS }}" --build-micro "${upx[@]}"
           fi
 
           # Save to cache

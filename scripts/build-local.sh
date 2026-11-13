@@ -64,7 +64,7 @@ echo "Container runtime: $CT"
 
 # ── SPC configuration (must match CI release workflow) ───────────────────────
 SPC_PHP_VERSION="8.3"
-SPC_EXTENSIONS="phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,dom,libxml,tokenizer,ctype,json,iconv"
+SPC_EXTENSIONS="phar,filter,pdo_mysql,pdo_pgsql,pdo_sqlite,openssl,zlib,mbstring,tokenizer,ctype,json,iconv"
 SPC_LIBS="libiconv,libxml2,ncurses,libedit,postgresql,sqlite"
 
 # Named volume — caches ~200 MB of PHP source downloads so subsequent builds
@@ -182,7 +182,8 @@ $CT run --rm \
             echo "PHP sources already in cache — skipping download."
         fi
 
-        spc build "$SPC_EXTENSIONS" --build-micro
+        spc install-pkg upx
+        spc build "$SPC_EXTENSIONS" --build-micro --with-upx-pack
 
         # Concatenate micro SAPI + PHAR → self-contained binary
         cat buildroot/bin/micro.sfx /work/dist/dbdiff.phar \
