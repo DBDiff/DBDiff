@@ -356,11 +356,12 @@ class BulkSchemaPostgresTest extends TestCase
         // The number grows only when a new fixed query is added: 8 when the
         // attribute fetch arrived (information_schema cannot express storage,
         // compression or an explicit collation), 9 when durability and storage
-        // parameters joined it so they could be compared at all (issue #229).
+        // parameters joined it so they could be compared at all (issue #229),
+        // 10 when partitions' attached indexes did, for their names and options.
         // The property under test is that the count does not grow with the
         // *number of tables*, which the next assertion checks — this first one
         // only pins the budget so an accidental per-table query is noticed.
-        $this->assertSame(9, $oneTable, 'Expected a fixed 9-query budget per side');
+        $this->assertSame(10, $oneTable, 'Expected a fixed 10-query budget per side');
         $this->assertSame($oneTable, $allTables, 'Query count grew with the number of tables');
     }
 
