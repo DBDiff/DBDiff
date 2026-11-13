@@ -398,4 +398,38 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
              ALTER DOMAIN dd ADD CONSTRAINT dd_len CHECK (length(VALUE) < 5) NOT VALID;',
             '', fn(string $db) => $this->catalog($db));
     }
+
+    /**
+     * AdventureWorks onto Supabase: uuid-ossp in public on one side and in
+     * Supabase's `extensions` on the other. The extension is moved, not
+     * created and dropped, and the defaults calling it are unchanged.
+     */
+    public function testAnExtensionInAnotherSchemaIsMoved(): void
+    {
+        $up = $this->assertRoundTrip('ext_moved',
+            'CREATE EXTENSION "uuid-ossp";
+             CREATE TABLE person (id uuid DEFAULT uuid_generate_v1() PRIMARY KEY, rowguid uuid DEFAULT public.uuid_generate_v4() NOT NULL);',
+            'CREATE SCHEMA extensions; CREATE EXTENSION "uuid-ossp" SCHEMA extensions;
+             CREATE TABLE person (id uuid DEFAULT extensions.uuid_generate_v1() PRIMARY KEY, rowguid uuid DEFAULT extensions.uuid_generate_v4() NOT NULL);',
+            fn(string $db) => $this->connect($db)->query(
+                "SELECT e.extname, n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'uuid-ossp'"
+            )->fetchAll(PDO::FETCH_NUM));
+        $this->assertStringContainsString('ALTER EXTENSION "uuid-ossp" SET SCHEMA "public"', $up);
+        $this->assertStringNotContainsString('DROP EXTENSION', $up);
+        $this->assertStringNotContainsString('SET DEFAULT', $up);
+    }
+
+    /** A function of the extension's name that is not the extension's is a different default. */
+    public function testAFunctionNamedLikeAnExtensionsIsNotIt(): void
+    {
+        $source = $this->db('ext_lookalike_s',
+            'CREATE EXTENSION "uuid-ossp"; CREATE TABLE person (id uuid DEFAULT uuid_generate_v4() PRIMARY KEY);');
+        $target = $this->db('ext_lookalike_t',
+            'CREATE EXTENSION "uuid-ossp"; CREATE SCHEMA extensions;
+             CREATE FUNCTION extensions.uuid_generate_v4() RETURNS uuid LANGUAGE sql AS $$SELECT gen_random_uuid()$$;
+             CREATE TABLE person (id uuid DEFAULT extensions.uuid_generate_v4() PRIMARY KEY);');
+        $migration = $this->diff($source, $target);
+        $this->assertNotNull($migration);
+        $this->assertStringContainsString('SET DEFAULT', $migration[0]);
+    }
 }
