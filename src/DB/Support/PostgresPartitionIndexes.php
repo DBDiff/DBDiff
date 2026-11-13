@@ -147,21 +147,7 @@ final class PostgresPartitionIndexes {
      * @param list<string> $columns
      */
     public static function generatedName(string $table, array $columns, string $label): string {
-        $name2 = null;
-        if ($label !== 'pkey') {
-            // ChooseIndexNameAddition(): the names joined with _, stopping
-            // once NAMEDATALEN is reached.
-            $name2 = '';
-            foreach ($columns as $column) {
-                if ($name2 !== '') {
-                    $name2 .= '_';
-                }
-                $name2 .= substr($column, 0, self::NAMEDATALEN);
-                if (strlen($name2) >= self::NAMEDATALEN) {
-                    break;
-                }
-            }
-        }
+        $name2 = $label !== 'pkey' ? self::nameAddition($columns) : null;
         $overhead = ($name2 !== null ? 1 : 0) + strlen($label) + 1;
         $avail = self::NAMEDATALEN - 1 - $overhead;
         $n1 = strlen($table);
@@ -178,6 +164,26 @@ final class PostgresPartitionIndexes {
             $result .= '_' . mb_strcut($name2, 0, $n2, 'UTF-8');
         }
         return $result . '_' . $label;
+    }
+
+    /**
+     * ChooseIndexNameAddition(): the column names joined with _, stopping
+     * once NAMEDATALEN is reached.
+     *
+     * @param list<string> $columns
+     */
+    private static function nameAddition(array $columns): string {
+        $name = '';
+        foreach ($columns as $column) {
+            if ($name !== '') {
+                $name .= '_';
+            }
+            $name .= substr($column, 0, self::NAMEDATALEN);
+            if (strlen($name) >= self::NAMEDATALEN) {
+                break;
+            }
+        }
+        return $name;
     }
 
     /** @param array<string, mixed> $row */

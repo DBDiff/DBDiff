@@ -232,14 +232,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             $ddl .= ";\nALTER TABLE " . SchemaScope::name($connection, $table) . " ADD $constraintDef";
         }
 
-        // An invalid ON ONLY index of a parent with partitions comes after the
-        // last of them (PostgresPartitionIndexes::deferredParentIndexes).
-        $defer = $partition['partition_by'] !== null
-            && PostgresPartitionIndexes::hasPartitions($connection, $table);
-        foreach ($keys as $idxDef) {
-            if ($defer && str_contains($idxDef, ' ON ONLY ')) {
-                continue;
-            }
+        foreach (self::indexesToCreate($connection, $table, $partition, $keys) as $idxDef) {
             $ddl .= ";\n$idxDef";
         }
 
@@ -462,18 +455,27 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
     }
 
     /**
-     * What reads one column, so a type change can drop it and put it back.
-     * See PostgresColumnDependants (issue #226).
+     * The table's indexes to create with it. An invalid ON ONLY index of a
+     * parent with partitions is left out: it comes after the last of them
+     * (PostgresPartitionIndexes::deferredParentIndexes).
+     *
+     * @param  array<string, mixed> $partition
+     * @param  string[] $keys
+     * @return string[]
      */
-    public function getColumnDependants(Connection $connection, string $table, string $column, bool $regenerate = false): array {
-        return PostgresColumnDependants::find($connection, $table, $column, $regenerate);
+    private static function indexesToCreate(Connection $connection, string $table, array $partition, array $keys): array {
+        if ($partition['partition_by'] === null || !PostgresPartitionIndexes::hasPartitions($connection, $table)) {
+            return $keys;
+        }
+        return array_filter($keys, fn($idxDef) => !str_contains($idxDef, ' ON ONLY '));
     }
 
-    public function getSchemaHashMap(Connection $connection, array $tables = []): array
-    {
-        $rows = $connection->select(
-            "WITH col_data AS (
-                 SELECT table_name,
+    /**
+     * The col_data CTE body of getSchemaHashMap(): each table's columns as
+     * one string.
+     */
+    private static function columnSignatureSql(Connection $connection): string {
+        return "SELECT table_name,
                         string_agg(
                             column_name         || '|' || data_type              || '|' ||
                             COALESCE(udt_name,'')                                || '|' ||
@@ -527,7 +529,22 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                   AND a.attnum > 0 AND NOT a.attisdropped
                  LEFT JOIN pg_collation co ON co.oid = a.attcollation
                  WHERE isc.table_schema = " . SchemaScope::literal($connection) . "
-                 GROUP BY table_name
+                 GROUP BY table_name";
+    }
+
+    /**
+     * What reads one column, so a type change can drop it and put it back.
+     * See PostgresColumnDependants (issue #226).
+     */
+    public function getColumnDependants(Connection $connection, string $table, string $column, bool $regenerate = false): array {
+        return PostgresColumnDependants::find($connection, $table, $column, $regenerate);
+    }
+
+    public function getSchemaHashMap(Connection $connection, array $tables = []): array
+    {
+        $rows = $connection->select(
+            "WITH col_data AS (
+                 " . self::columnSignatureSql($connection) . "
              ),
              idx_data AS (
                  SELECT tablename AS table_name,
