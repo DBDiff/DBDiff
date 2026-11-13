@@ -27,7 +27,11 @@ final class PostgresTableParts
             . ($named !== [] ? ' (' . implode(', ', $named) . ')' : '')
             . " {$partition['bound']}"
             . ($partition['partition_by'] !== null ? ' PARTITION BY ' . $partition['partition_by'] : '');
-        foreach (self::partitionOwnDDL($connection, $table) as $statement) {
+        $statements = array_merge(
+            self::partitionOwnDDL($connection, $table),
+            PostgresPartitionIndexes::newPartitionStatements($connection, $table)
+        );
+        foreach ($statements as $statement) {
             $ddl .= ";\n$statement";
         }
         return $ddl;
