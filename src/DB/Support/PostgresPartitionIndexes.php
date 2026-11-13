@@ -107,6 +107,22 @@ final class PostgresPartitionIndexes {
     }
 
     /**
+     * The table's indexes to create with it. An invalid ON ONLY index of a
+     * parent with partitions is left out: it comes after the last of them
+     * (deferredParentIndexes()).
+     *
+     * @param  array<string, mixed> $partition
+     * @param  string[] $keys
+     * @return string[]
+     */
+    public static function toCreateWithTable(Connection $connection, string $table, array $partition, array $keys): array {
+        if ($partition['partition_by'] === null || !self::hasPartitions($connection, $table)) {
+            return $keys;
+        }
+        return array_filter($keys, fn($idxDef) => !str_contains($idxDef, ' ON ONLY '));
+    }
+
+    /**
      * The parent's invalid indexes, for its last partition to create.
      *
      * An index created ON ONLY a partitioned table stays invalid until every
