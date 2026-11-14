@@ -310,17 +310,18 @@ final class PgDumpRenderer
 
         return array_values(array_filter(
             self::listingFor($connection),
-            fn(string $line) => self::belongsToTable($line, $schema, $names, $standalone)
+            fn(string $line) => self::belongsToTable($line, $schema, $table, $names, $standalone)
         ));
     }
 
     /**
      * Whether one listing line is an entry of the table's DDL.
      *
+     * @param string              $table      the table
      * @param array<string, true> $names      objects whose DDL belongs with the table
      * @param array<string, true> $standalone sequences it owns that are not its serial's
      */
-    private static function belongsToTable(string $line, string $schema, array $names, array $standalone): bool
+    private static function belongsToTable(string $line, string $schema, string $table, array $names, array $standalone): bool
     {
         if (!preg_match('/^\s*\d+;\s+\d+\s+\d+\s+(.*)$/', $line, $m)) {
             return false;
@@ -345,12 +346,21 @@ final class PgDumpRenderer
         // schema, and the other tables were created twice.
         // A constraint or a default is listed under its table and then its own
         // name; everything else under its own name alone. The owner follows.
-        $nameFields = in_array($type, ['CONSTRAINT', 'CHECK CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT'], true) ? 2 : 1;
-        $own = array_slice($fields, (int) $schemaIndex + 1, $nameFields);
+        //
+        // An entry listed under its table belongs to that table alone.
+        // Constraint names are unique per table, not per schema: matching the
+        // name as well put another table's same-named constraint in this
+        // table's DDL (GitLab's application_settings and namespace_settings
+        // each have a default_branch_protection_defaults_size_constraint), and
+        // creating the table failed because the other did not exist yet.
+        if (in_array($type, ['CONSTRAINT', 'CHECK CONSTRAINT', 'FK CONSTRAINT', 'DEFAULT'], true)) {
+            return self::wantsType($type) && ($fields[(int) $schemaIndex + 1] ?? null) === $table;
+        }
+        $own = $fields[(int) $schemaIndex + 1] ?? '';
 
         return self::wantsType($type)
             && !$standaloneSequence
-            && array_intersect_key($names, array_flip($own)) !== [];
+            && isset($names[$own]);
     }
 
     /**
