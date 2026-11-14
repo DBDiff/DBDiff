@@ -1,5 +1,7 @@
 <?php namespace DBDiff\DB\Support;
 
+use Illuminate\Database\Connection;
+
 /**
  * `information_schema.columns`, without the privilege filter.
  *
@@ -129,4 +131,66 @@ final class PostgresCatalogColumns
           WHERE NOT pg_is_other_temp_schema(nc.oid) AND a.attnum > 0 AND NOT a.attisdropped AND (c.relkind = ANY (ARRAY['r'::"char", 'v'::"char", 'f'::"char", 'p'::"char"]))
     )
     SQL;
+
+    /**
+     * The pre-scan's column signature (PostgresAdapter::getSchemaHashMap()):
+     * each table's columns as one string, from this subquery and the catalogs.
+     */
+    public static function signatureSql(Connection $connection): string {
+        return "SELECT table_name,
+                        string_agg(
+                            column_name         || '|' || data_type              || '|' ||
+                            COALESCE(udt_name,'')                                || '|' ||
+                            COALESCE(character_maximum_length::text,'')          || '|' ||
+                            COALESCE(numeric_precision::text,'')                 || '|' ||
+                            COALESCE(numeric_scale::text,'')                     || '|' ||
+                            COALESCE(datetime_precision::text,'')                || '|' ||
+                            COALESCE(column_default, '')                         || '|' ||
+                            is_nullable                                          || '|' ||
+                            COALESCE(is_identity,'NO')                           || '|' ||
+                            COALESCE(identity_generation,'')                     || '|' ||
+                            COALESCE(identity_start,'')                          || '|' ||
+                            COALESCE(identity_increment,'')                      || '|' ||
+                            COALESCE(identity_maximum,'')                        || '|' ||
+                            COALESCE(identity_minimum,'')                        || '|' ||
+                            COALESCE(identity_cycle,'')                          || '|' ||
+                            COALESCE(is_generated,'NEVER')                       || '|' ||
+                            COALESCE(generation_expression,'')                   || '|' ||
+                            COALESCE(domain_name,'')                             || '|' ||
+                            -- Three things information_schema cannot express, each
+                            -- of which the full comparison does read, so a table
+                            -- the pre-scan skipped could differ in them silently
+                            -- (issue #189):
+                            --
+                            --   format_type  the declared type modifier.
+                            --                datetime_precision is 6 for both a
+                            --                bare timestamptz and a
+                            --                timestamptz(6), which the comparison
+                            --                now distinguishes (issue #215).
+                            --   collation    a column's explicit COLLATE.
+                            --
+                            -- Storage and compression are compared for a table
+                            -- that exists on both sides (issue #225), so they are
+                            -- hashed: without them a table differing only there
+                            -- was skipped by the pre-scan and never compared.
+                            format_type(a.atttypid, a.atttypmod)                 || '|' ||
+                            a.attgenerated::text                                 || '|' ||
+                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
+                            a.attstorage::text                                   || '|' ||
+                            COALESCE(NULLIF(a.attcompression::text, ''), '')     || '|' ||
+                            COALESCE(a.attstattarget, -1)::text,
+                            ';' ORDER BY ordinal_position
+                        ) AS col_str
+                 FROM " . self::SQL . " isc
+                 JOIN pg_class cls
+                   ON cls.relname = isc.table_name
+                  AND cls.relnamespace = " . SchemaScope::oid($connection) . "
+                 JOIN pg_attribute a
+                   ON a.attrelid = cls.oid
+                  AND a.attname = isc.column_name
+                  AND a.attnum > 0 AND NOT a.attisdropped
+                 LEFT JOIN pg_collation co ON co.oid = a.attcollation
+                 WHERE isc.table_schema = " . SchemaScope::literal($connection) . "
+                 GROUP BY table_name";
+    }
 }

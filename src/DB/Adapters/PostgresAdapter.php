@@ -16,6 +16,7 @@ use DBDiff\DB\Support\PostgresColumnDependants;
 use DBDiff\DB\Support\SchemaScope;
 use DBDiff\DB\Support\PostgresPartman;
 use DBDiff\DB\Support\PostgresCatalogColumns;
+use DBDiff\DB\Support\PostgresPartitionIndexes;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
@@ -24,8 +25,23 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
      * makes an index that stays invalid and never reaches a partition. Without
      * ONLY, PostgreSQL builds or attaches one on every partition, existing or
      * created later.
+     *
+     * Except where the source's is itself invalid: created ON ONLY and not yet
+     * attached to every partition, as a schema mid-way through building an
+     * index partition by partition has it (GitLab's index_bcae2cf631 stands in
+     * for one). Without ONLY the copy came out valid, with an index on every
+     * partition the source does not have. Kept ON ONLY it matches the source
+     * when created after the partitions, as a consumer grouping statements by
+     * kind creates it; created before them, PostgreSQL gives each new
+     * partition an index anyway, as it did before.
      */
-    private const INDEX_DEF = "regexp_replace(indexdef, ' ON ONLY ', ' ON ')";
+    private const INDEX_DEF = "CASE WHEN EXISTS (
+            SELECT 1 FROM pg_index ix
+              JOIN pg_class ixc ON ixc.oid = ix.indexrelid
+              JOIN pg_namespace ixn ON ixn.oid = ixc.relnamespace
+             WHERE ixn.nspname = pg_indexes.schemaname AND ixc.relname = pg_indexes.indexname
+               AND NOT ix.indisvalid AND ixc.relkind = 'I')
+        THEN indexdef ELSE regexp_replace(indexdef, ' ON ONLY ', ' ON ') END";
 
     /**
      * Not a partition's copy of its parent's index — PostgreSQL makes and drops
@@ -216,7 +232,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             $ddl .= ";\nALTER TABLE " . SchemaScope::name($connection, $table) . " ADD $constraintDef";
         }
 
-        foreach ($keys as $idxDef) {
+        foreach (PostgresPartitionIndexes::toCreateWithTable($connection, $table, $partition, $keys) as $idxDef) {
             $ddl .= ";\n$idxDef";
         }
 
@@ -438,6 +454,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         return $enums;
     }
 
+
     /**
      * What reads one column, so a type change can drop it and put it back.
      * See PostgresColumnDependants (issue #226).
@@ -450,61 +467,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
     {
         $rows = $connection->select(
             "WITH col_data AS (
-                 SELECT table_name,
-                        string_agg(
-                            column_name         || '|' || data_type              || '|' ||
-                            COALESCE(udt_name,'')                                || '|' ||
-                            COALESCE(character_maximum_length::text,'')          || '|' ||
-                            COALESCE(numeric_precision::text,'')                 || '|' ||
-                            COALESCE(numeric_scale::text,'')                     || '|' ||
-                            COALESCE(datetime_precision::text,'')                || '|' ||
-                            COALESCE(column_default, '')                         || '|' ||
-                            is_nullable                                          || '|' ||
-                            COALESCE(is_identity,'NO')                           || '|' ||
-                            COALESCE(identity_generation,'')                     || '|' ||
-                            COALESCE(identity_start,'')                          || '|' ||
-                            COALESCE(identity_increment,'')                      || '|' ||
-                            COALESCE(identity_maximum,'')                        || '|' ||
-                            COALESCE(identity_minimum,'')                        || '|' ||
-                            COALESCE(identity_cycle,'')                          || '|' ||
-                            COALESCE(is_generated,'NEVER')                       || '|' ||
-                            COALESCE(generation_expression,'')                   || '|' ||
-                            COALESCE(domain_name,'')                             || '|' ||
-                            -- Three things information_schema cannot express, each
-                            -- of which the full comparison does read, so a table
-                            -- the pre-scan skipped could differ in them silently
-                            -- (issue #189):
-                            --
-                            --   format_type  the declared type modifier.
-                            --                datetime_precision is 6 for both a
-                            --                bare timestamptz and a
-                            --                timestamptz(6), which the comparison
-                            --                now distinguishes (issue #215).
-                            --   collation    a column's explicit COLLATE.
-                            --
-                            -- Storage and compression are compared for a table
-                            -- that exists on both sides (issue #225), so they are
-                            -- hashed: without them a table differing only there
-                            -- was skipped by the pre-scan and never compared.
-                            format_type(a.atttypid, a.atttypmod)                 || '|' ||
-                            a.attgenerated::text                                 || '|' ||
-                            COALESCE(NULLIF(co.collname, 'default'), '')         || '|' ||
-                            a.attstorage::text                                   || '|' ||
-                            COALESCE(NULLIF(a.attcompression::text, ''), '')     || '|' ||
-                            COALESCE(a.attstattarget, -1)::text,
-                            ';' ORDER BY ordinal_position
-                        ) AS col_str
-                 FROM " . PostgresCatalogColumns::SQL . " isc
-                 JOIN pg_class cls
-                   ON cls.relname = isc.table_name
-                  AND cls.relnamespace = " . SchemaScope::oid($connection) . "
-                 JOIN pg_attribute a
-                   ON a.attrelid = cls.oid
-                  AND a.attname = isc.column_name
-                  AND a.attnum > 0 AND NOT a.attisdropped
-                 LEFT JOIN pg_collation co ON co.oid = a.attcollation
-                 WHERE isc.table_schema = " . SchemaScope::literal($connection) . "
-                 GROUP BY table_name
+                 " . PostgresCatalogColumns::signatureSql($connection) . "
              ),
              idx_data AS (
                  SELECT tablename AS table_name,
@@ -561,6 +524,11 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                         string_agg(ext_sig, ';' ORDER BY ext_sig) AS ext_str
                  FROM pg_ext_data GROUP BY table_name
              ),
+             -- A partition's indexes attached to its parent's: their names
+             -- and options are compared, so they are part of the signature.
+             pidx_data AS (
+                 " . PostgresPartitionIndexes::signatureSql($connection) . "
+             ),
              -- Durability and storage parameters. Now compared for a table
              -- that exists on both sides, so the pre-scan must not skip a
              -- table whose only difference is one of them (issue #229).
@@ -578,13 +546,15 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                         COALESCE(i.idx_str, '') || '###' ||
                         COALESCE(co.con_str,'') || '###' ||
                         COALESCE(e.ext_str, '') || '###' ||
-                        COALESCE(r.rel_sig, '')
+                        COALESCE(r.rel_sig, '') || '###' ||
+                        COALESCE(pi.pidx_str, '')
                     ) AS schema_hash
              FROM col_data c
              LEFT JOIN idx_data i  ON i.table_name  = c.table_name
              LEFT JOIN con_data co ON co.table_name = c.table_name
              LEFT JOIN ext_data e  ON e.table_name  = c.table_name
-             LEFT JOIN rel_data r  ON r.table_name  = c.table_name"
+             LEFT JOIN rel_data r  ON r.table_name  = c.table_name
+             LEFT JOIN pidx_data pi ON pi.table_name = c.table_name"
         );
 
         $hashMap = [];
@@ -733,6 +703,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
 
         // Durability and storage parameters, per table (issue #229).
         $relMeta = PostgresSchemaHelper::relationMeta($connection, $tables);
+        $partitionIndexes = PostgresPartitionIndexes::forTables($connection, $tables);
 
         $result = [];
         foreach ($tables as $t) {
@@ -747,6 +718,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
                 'unlogged'    => $relMeta[$t]['unlogged']   ?? false,
                 'reloptions'  => $relMeta[$t]['reloptions'] ?? null,
                 'replicaIdentity' => $relMeta[$t]['replicaIdentity'] ?? 'DEFAULT',
+                'partitionIndexes' => $partitionIndexes[$t] ?? [],
                 'statistics'  => PostgresTableSettings::columnStatistics($attrByCol[$t] ?? []),
                 'columns'     => $columns[$t]     ?? [],
                 'keys'        => $keys[$t]        ?? [],

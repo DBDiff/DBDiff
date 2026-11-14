@@ -432,4 +432,104 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
         $this->assertNotNull($migration);
         $this->assertStringContainsString('SET DEFAULT', $migration[0]);
     }
+
+    /** GitLab's partitioned tables: their partitions' indexes, as the source names and configures them. */
+    private const PARTITION_INDEXES = "CREATE SCHEMA parts;
+        CREATE TABLE isd (project_id bigint NOT NULL, issue_id bigint NOT NULL, search_vector tsvector, namespace_id bigint,
+                          PRIMARY KEY (project_id, issue_id)) PARTITION BY HASH (project_id);
+        CREATE TABLE parts.isd_00 (project_id bigint NOT NULL, issue_id bigint NOT NULL, search_vector tsvector, namespace_id bigint);
+        CREATE TABLE parts.isd_01 (project_id bigint NOT NULL, issue_id bigint NOT NULL, search_vector tsvector, namespace_id bigint);
+        ALTER TABLE ONLY isd ATTACH PARTITION parts.isd_00 FOR VALUES WITH (modulus 3, remainder 0);
+        ALTER TABLE ONLY isd ATTACH PARTITION parts.isd_01 FOR VALUES WITH (modulus 3, remainder 1);
+        CREATE INDEX index_isd_on_issue_id ON ONLY isd USING btree (issue_id);
+        CREATE INDEX isd_00_issue_id_idx ON parts.isd_00 USING btree (issue_id);
+        CREATE INDEX custom_name_for_01 ON parts.isd_01 USING btree (issue_id);
+        ALTER INDEX index_isd_on_issue_id ATTACH PARTITION parts.isd_00_issue_id_idx;
+        ALTER INDEX index_isd_on_issue_id ATTACH PARTITION parts.custom_name_for_01;
+        CREATE INDEX index_isd_on_search_vector ON ONLY isd USING gin (search_vector);
+        CREATE INDEX isd_00_search_vector_idx ON parts.isd_00 USING gin (search_vector) WITH (fastupdate='false');
+        CREATE INDEX isd_01_search_vector_idx ON parts.isd_01 USING gin (search_vector) WITH (fastupdate='false');
+        ALTER INDEX index_isd_on_search_vector ATTACH PARTITION parts.isd_00_search_vector_idx;
+        ALTER INDEX index_isd_on_search_vector ATTACH PARTITION parts.isd_01_search_vector_idx;
+        -- A partition named at the limit, whose indexes take PostgreSQL's own shortened names.
+        CREATE TABLE parts.isd_02_with_a_name_long_enough_to_be_cut_short_by_postgresql_x
+            PARTITION OF isd FOR VALUES WITH (modulus 3, remainder 2);
+        -- An index being built partition by partition: invalid on the parent, one partition done on its own.
+        CREATE INDEX index_isd_on_namespace_id ON ONLY isd USING btree (namespace_id);
+        CREATE INDEX index_bcae2cf631 ON parts.isd_00 USING btree (namespace_id);";
+
+    /** Each index of the two schemas: its table, whether valid, the index it is attached to, its options. */
+    private function partitionIndexState(string $db): array
+    {
+        return $this->connect($db)->query(
+            "SELECT n.nspname || '.' || c.relname, t.relname, i.indisvalid::text, coalesce(p.relname, '-'),
+                    coalesce(array_to_string(c.reloptions, ','), '-')
+               FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+               JOIN pg_class t ON t.oid = i.indrelid
+               LEFT JOIN pg_inherits h ON h.inhrelid = c.oid LEFT JOIN pg_class p ON p.oid = h.inhparent
+              WHERE n.nspname IN ('public', 'parts') ORDER BY 1"
+        )->fetchAll(PDO::FETCH_NUM);
+    }
+
+    /**
+     * GitLab: partition indexes keep their own names and options, and an
+     * index still being built stays invalid with no partitions attached.
+     * Only the indexes PostgreSQL would not name or configure that way get a
+     * statement of their own.
+     */
+    /** @dataProvider renderers */
+    public function testPartitionIndexesKeepTheirNamesAndOptions(string $mode): void
+    {
+        $this->renderer($mode);
+        $up = $this->assertRoundTrip("part_idx_$mode", self::PARTITION_INDEXES, 'CREATE SCHEMA parts;',
+            fn(string $db) => $this->partitionIndexState($db));
+        // custom_name_for_01, and the two with fastupdate: nothing else.
+        $this->assertSame(3, substr_count($up, 'DO $dbdiff$'), $up);
+    }
+
+    /** On a database that has the partitions already, their indexes are renamed and set in place. */
+    public function testAttachedPartitionIndexesAreRenamedInPlace(): void
+    {
+        $up = $this->assertRoundTrip('part_idx_rename', self::PARTITION_INDEXES,
+            "CREATE SCHEMA parts;
+             CREATE TABLE isd (project_id bigint NOT NULL, issue_id bigint NOT NULL, search_vector tsvector, namespace_id bigint,
+                               PRIMARY KEY (project_id, issue_id)) PARTITION BY HASH (project_id);
+             CREATE TABLE parts.isd_00 PARTITION OF isd FOR VALUES WITH (modulus 3, remainder 0);
+             CREATE TABLE parts.isd_01 PARTITION OF isd FOR VALUES WITH (modulus 3, remainder 1);
+             CREATE TABLE parts.isd_02_with_a_name_long_enough_to_be_cut_short_by_postgresql_x
+                 PARTITION OF isd FOR VALUES WITH (modulus 3, remainder 2);
+             CREATE INDEX index_isd_on_issue_id ON isd USING btree (issue_id);
+             CREATE INDEX index_isd_on_search_vector ON isd USING gin (search_vector);
+             CREATE INDEX index_isd_on_namespace_id ON ONLY isd USING btree (namespace_id);
+             CREATE INDEX index_bcae2cf631 ON parts.isd_00 USING btree (namespace_id);",
+            fn(string $db) => $this->partitionIndexState($db));
+        $this->assertStringContainsString('RENAME TO "custom_name_for_01"', $up);
+        $this->assertStringContainsString('SET (fastupdate=false)', $up);
+        $this->assertStringNotContainsString('DROP INDEX', $up);
+    }
+
+    /** PostgreSQL's own name for an index it makes on a partition, shortened as it shortens it. */
+    public function testThePredictedNameIsTheOnePostgresqlGives(): void
+    {
+        $pdo = $this->connect($this->db('part_idx_names',
+            "CREATE TABLE p (id int, a_rather_long_column_name_that_goes_on_and_on_and_on int, b int, PRIMARY KEY (id))
+               PARTITION BY HASH (id);
+             CREATE INDEX ON p (a_rather_long_column_name_that_goes_on_and_on_and_on, b);
+             CREATE INDEX ON p ((b + 1));
+             CREATE TABLE a_partition_with_a_name_long_enough_to_be_cut_short_by_postgres
+               PARTITION OF p FOR VALUES WITH (modulus 1, remainder 0);"));
+        $rows = $pdo->query(
+            "SELECT c.relname, t.relname,
+                    array(SELECT CASE WHEN k = 0 THEN 'expr' ELSE (SELECT attname FROM pg_attribute WHERE attrelid = t.oid AND attnum = k) END
+                            FROM unnest(x.indkey::int2[]) AS k)::text[],
+                    CASE WHEN x.indisprimary THEN 'pkey' ELSE 'idx' END
+               FROM pg_index x JOIN pg_class c ON c.oid = x.indexrelid JOIN pg_class t ON t.oid = x.indrelid
+              WHERE t.relname LIKE 'a\_partition%'"
+        )->fetchAll(PDO::FETCH_NUM);
+        $this->assertCount(3, $rows);
+        foreach ($rows as [$name, $table, $columns, $label]) {
+            $columns = str_getcsv(trim($columns, '{}'), ',', '"', '\\');
+            $this->assertSame($name, \DBDiff\DB\Support\PostgresPartitionIndexes::generatedName($table, $columns, $label));
+        }
+    }
 }
