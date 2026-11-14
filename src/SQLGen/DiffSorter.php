@@ -119,6 +119,8 @@ class DiffSorter {
         "AlterTableChangeConstraint",
         // USING INDEX names an index or key the lines above may create.
         "AlterTableReplicaIdentity",
+        // Once the parent's index, which it is attached to, exists.
+        "AlterPartitionIndex",
 
         "InsertData",
         "UpdateData",
@@ -277,6 +279,7 @@ class DiffSorter {
         "AlterTableAddKeyLate",
         // Once the index it may name is back.
         "AlterTableReplicaIdentity",
+        "AlterPartitionIndex",
 
         "AlterTableDropConstraint",
 

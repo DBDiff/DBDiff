@@ -10,6 +10,7 @@ use DBDiff\Diff\AlterTableEngine;
 use DBDiff\Diff\AlterTablePersistence;
 use DBDiff\Diff\AlterTableOptions;
 use DBDiff\Diff\AlterTableReplicaIdentity;
+use DBDiff\Diff\AlterPartitionIndex;
 use DBDiff\Diff\AlterTableColumnStatistics;
 use DBDiff\Diff\AlterTableColumnStorage;
 use DBDiff\Diff\AlterTableCollation;
@@ -596,6 +597,17 @@ class TableSchema {
         $targetIdentity = $targetSchema['replicaIdentity'] ?? 'DEFAULT';
         if ($sourceIdentity !== $targetIdentity) {
             $diffs[] = new AlterTableReplicaIdentity($table, $sourceIdentity, $targetIdentity);
+        }
+
+        // A partition's indexes attached to its parent's: named and optioned
+        // as on the source. One attached to a parent index only one side has
+        // comes and goes with that index.
+        $sourcePartIdx = $sourceSchema['partitionIndexes'] ?? [];
+        $targetPartIdx = $targetSchema['partitionIndexes'] ?? [];
+        foreach (array_intersect_key($sourcePartIdx, $targetPartIdx) as $parentIndex => $sourceIndex) {
+            if ($sourceIndex !== $targetPartIdx[$parentIndex]) {
+                $diffs[] = new AlterPartitionIndex($table, $parentIndex, $sourceIndex, $targetPartIdx[$parentIndex]);
+            }
         }
 
         // Statistics targets, for the columns on the source.
