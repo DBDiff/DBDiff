@@ -27,6 +27,7 @@ class DiffSorter {
         "CreateDefaultPrivileges",
         // Before anything that may use one: a type, an operator class.
         "CreateExtension",
+        "AlterExtensionSchema",
         // A wrapper comes with its extension.
         "CreateForeignServer",
         "AlterForeignServer",
@@ -336,6 +337,7 @@ class DiffSorter {
         "AlterForeignServer",
         "CreateForeignServer",
         "CreateExtension",
+        "AlterExtensionSchema",
         "CreateSchema",
         // Last: after everything DOWN puts back.
         "AlterComment",

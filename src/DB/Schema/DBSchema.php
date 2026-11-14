@@ -94,6 +94,7 @@ use DBDiff\Diff\AlterPolicy;
 use DBDiff\Diff\AlterRowSecurity;
 use DBDiff\Diff\CreateExtension;
 use DBDiff\Diff\DropExtension;
+use DBDiff\Diff\AlterExtensionSchema;
 use DBDiff\DB\Adapters\BulkSchemaAdapterInterface;
 use DBDiff\DB\Support\PostgresObjectKinds;
 use DBDiff\DB\Support\PostgresComments;
@@ -291,12 +292,21 @@ class DBSchema {
         $target = $this->manager->getDB('target');
 
         $extensionsAt = [PostgresObjectKinds::extensions($source), PostgresObjectKinds::extensions($target)];
+        // An extension both sides have, in different schemas, is moved, not
+        // created here and dropped there: the drop would take every default
+        // and index that uses it. The move belongs to the pass over the
+        // source's schema; the pass over the target's leaves it alone.
+        $everywhere = [PostgresObjectKinds::extensionSchemas($source), PostgresObjectKinds::extensionSchemas($target)];
         $extensions = [];
         foreach (array_diff_key($extensionsAt[0], $extensionsAt[1]) as $name => $definition) {
-            $extensions[] = new CreateExtension($name, $definition);
+            $extensions[] = isset($everywhere[1][$name])
+                ? new AlterExtensionSchema($name, SchemaScope::of($source), $everywhere[1][$name])
+                : new CreateExtension($name, $definition);
         }
         foreach (array_diff_key($extensionsAt[1], $extensionsAt[0]) as $name => $definition) {
-            $extensions[] = new DropExtension($name, $definition);
+            if (!isset($everywhere[0][$name])) {
+                $extensions[] = new DropExtension($name, $definition);
+            }
         }
 
         return array_merge(
