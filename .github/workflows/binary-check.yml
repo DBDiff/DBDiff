@@ -210,8 +210,12 @@ jobs:
           # Persist back to spc-cache/ so actions/cache saves it at job end.
           mkdir -p spc-cache
           # Ensure existing cache dirs are writable before overwriting.
+          # Replace, never copy into: `cp -a buildroot spc-cache/buildroot` onto
+          # an existing directory nests the new build inside the restored one,
+          # and the cache keeps the old runtime at its top level.
           [ -d spc-cache/buildroot ] && chmod -R u+w spc-cache/buildroot
           [ -d spc-cache/downloads ] && chmod -R u+w spc-cache/downloads
+          rm -rf spc-cache/buildroot spc-cache/downloads
           cp -a buildroot spc-cache/buildroot
           if [ -d downloads ]; then
             cp -a downloads spc-cache/downloads
