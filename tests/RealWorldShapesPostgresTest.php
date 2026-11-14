@@ -400,6 +400,24 @@ class RealWorldShapesPostgresTest extends PostgresRoundTripTestCase
     }
 
     /**
+     * GitLab: two tables with a constraint of the same name, a NOT VALID
+     * check and a key. Each table is created with its own constraints only.
+     */
+    /** @dataProvider renderers */
+    public function testTwoTablesWithSameNamedConstraints(string $mode): void
+    {
+        $this->roundTrip('same_con', $mode,
+            "CREATE TABLE application_settings (id int PRIMARY KEY, d jsonb);
+             CREATE TABLE namespace_settings (id int PRIMARY KEY, d jsonb,
+                 app_id int CONSTRAINT settings_app_fk REFERENCES application_settings (id));
+             CREATE TABLE project_settings (id int PRIMARY KEY,
+                 app_id int CONSTRAINT settings_app_fk REFERENCES application_settings (id));
+             ALTER TABLE application_settings ADD CONSTRAINT d_size CHECK (octet_length(d::text) <= 1024) NOT VALID;
+             ALTER TABLE namespace_settings ADD CONSTRAINT d_size CHECK (octet_length(d::text) <= 1024) NOT VALID;",
+            '');
+    }
+
+    /**
      * AdventureWorks onto Supabase: uuid-ossp in public on one side and in
      * Supabase's `extensions` on the other. The extension is moved, not
      * created and dropped, and the defaults calling it are unchanged.
