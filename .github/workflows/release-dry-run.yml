@@ -210,8 +210,12 @@ jobs:
 
           # Save to cache
           mkdir -p spc-cache
+          # Replace, never copy into: `cp -a buildroot spc-cache/buildroot` onto
+          # an existing directory nests the new build inside the restored one,
+          # and the cache keeps the old runtime at its top level.
           [ -d spc-cache/buildroot ] && chmod -R u+w spc-cache/buildroot
           [ -d spc-cache/downloads ] && chmod -R u+w spc-cache/downloads
+          rm -rf spc-cache/buildroot spc-cache/downloads
           cp -a buildroot spc-cache/buildroot
           [ -d downloads ] && cp -a downloads spc-cache/downloads
 
