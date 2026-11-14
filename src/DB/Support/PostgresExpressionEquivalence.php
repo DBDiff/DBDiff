@@ -52,6 +52,7 @@ final class PostgresExpressionEquivalence {
     public static function dropEquivalent(array $diffs, Connection $source, Connection $target): array {
         self::$rendered = [];
         PostgresRenderers::reset();
+        PostgresExtensionFunctions::reset();
         self::renderViewsAhead($diffs, $source, $target);
         try {
             return array_values(array_filter($diffs, fn($diff) => self::isRealChange($diff, $source, $target)));
@@ -170,6 +171,13 @@ final class PostgresExpressionEquivalence {
 
     /** False when the two definitions are the same one rendered differently. */
     private static function isRealChange(object $diff, Connection $source, Connection $target): bool {
+        // A default calling an extension's function, where the extension is
+        // in another schema on the other side (PostgresExtensionFunctions).
+        if ($diff instanceof AlterTableChangeColumn && $diff->diff !== null
+            && PostgresExtensionFunctions::sameApartFromSchema($source, $target,
+                (string) $diff->diff->getNewValue(), (string) $diff->diff->getOldValue())) {
+            return false;
+        }
         $pair = self::definitions($diff);
         if ($pair === null) {
             return true;

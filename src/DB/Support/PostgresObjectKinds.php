@@ -128,6 +128,23 @@ final class PostgresObjectKinds {
      *
      * @return array<string, string>
      */
+    /**
+     * Every extension of the database and the schema it is in.
+     *
+     * @return array<string, string>
+     */
+    public static function extensionSchemas(Connection $connection): array {
+        $out = [];
+        foreach ($connection->select(
+            "SELECT e.extname AS name, n.nspname AS schema FROM pg_extension e
+               JOIN pg_namespace n ON n.oid = e.extnamespace ORDER BY 1"
+        ) as $row) {
+            $row = (array) $row;
+            $out[$row['name']] = $row['schema'];
+        }
+        return $out;
+    }
+
     public static function extensions(Connection $connection): array {
         $out = [];
         foreach ($connection->select(
