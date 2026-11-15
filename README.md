@@ -414,8 +414,8 @@ _Flags always override settings in `.dbdiff`._
 |---|---|
 | `--server1=user:pass@host:port` | Source connection. Omit if using only one server. |
 | `--server2=user:pass@host:port` | Target connection (if different from server1). |
-| `--server1-url=<dsn>` | Full DSN URL for source (e.g. `postgres://user:pass@host:5432/db`). |
-| `--server2-url=<dsn>` | Full DSN URL for target. Supported schemes: `mysql://`, `pgsql://`, `postgres://`, `postgresql://`, `sqlite://`. |
+| `--server1-url=<dsn>` | Full DSN URL for source (e.g. `postgres://user:pass@host:5432/db`). Or set `DBDIFF_SERVER1_URL`. |
+| `--server2-url=<dsn>` | Full DSN URL for target. Supported schemes: `mysql://`, `pgsql://`, `postgres://`, `postgresql://`, `sqlite://`. Or set `DBDIFF_SERVER2_URL`. |
 | `--driver=mysql\|pgsql\|sqlite` | Database driver. Defaults to `mysql`. |
 | `--supabase` | Shorthand for `--driver=pgsql` + SSL. |
 | `--format=native\|flyway\|liquibase-xml\|liquibase-yaml\|laravel` | Output format. Defaults to `native`. |
@@ -565,6 +565,14 @@ Pass `--format=native` to `migration:new` to override the auto-detected format.
 ```
 
 Each URL's own `sslmode` and `options` apply to that server's connection, as they do for psql and pg_dump — `?sslmode=require&options=-c%20default_transaction_read_only%3Don` keeps a session on the source read-only, for example.
+
+Or put the URLs in `DBDIFF_SERVER1_URL` and `DBDIFF_SERVER2_URL`. Any user on the machine can read a command's arguments while it runs, but only you can read its environment, so this keeps the passwords out of the process list. A `--server1-url` or `--server1` on the command line takes precedence over `DBDIFF_SERVER1_URL`, and likewise for server 2:
+
+```bash
+export DBDIFF_SERVER1_URL='postgres://user:pass@db.xxxx.supabase.co:5432/postgres'
+export DBDIFF_SERVER2_URL='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
+./dbdiff diff --type=all
+```
 
 ### Unix sockets
 

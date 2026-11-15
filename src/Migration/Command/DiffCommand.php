@@ -59,9 +59,10 @@ class DiffCommand extends Command
             // ── URL-style connection options (Supabase-friendly) ─────────────
             ->addOption('server1-url', null, InputOption::VALUE_REQUIRED,
                 'Full DSN URL for the source DB. e.g. postgres://user:pass@db.abc.supabase.co:5432/postgres. '
-                . 'When provided, --server1 / --driver / --supabase are not needed.')
+                . 'When provided, --server1 / --driver / --supabase are not needed. '
+                . 'Or set DBDIFF_SERVER1_URL, which keeps the password out of the process list.')
             ->addOption('server2-url', null, InputOption::VALUE_REQUIRED,
-                'Full DSN URL for the target DB. Same format as --server1-url.')
+                'Full DSN URL for the target DB. Same format as --server1-url. Or set DBDIFF_SERVER2_URL.')
             // ── Output options ────────────────────────────────────────────────
             ->addOption('format',      null, InputOption::VALUE_REQUIRED, "Output format [{$formatList}]", 'native')
             ->addOption('description', null, InputOption::VALUE_REQUIRED, 'Human-readable description for generated file names', '')
@@ -218,6 +219,13 @@ class DiffCommand extends Command
         return $token;
     }
 
+    /** A connection URL from the environment, or null when unset or empty. */
+    private static function envUrl(string $name): ?string
+    {
+        $value = getenv($name);
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
     /**
      * Populate $params with connection details from either URL-style or legacy
      * CLI options.  Throws \InvalidArgumentException on invalid/missing input.
@@ -227,8 +235,14 @@ class DiffCommand extends Command
      */
     private function resolveConnections(InputInterface $input, DefaultParams $params): void
     {
-        $s1url = $input->getOption('server1-url');
-        $s2url = $input->getOption('server2-url');
+        // From the environment when not on the command line: a process's
+        // arguments can be read by every user on the machine, its
+        // environment only by its own user. A --server1/--server2 given
+        // for a side means that side is not read from a URL at all.
+        $s1url = $input->getOption('server1-url')
+            ?? ($input->getOption('server1') ? null : self::envUrl('DBDIFF_SERVER1_URL'));
+        $s2url = $input->getOption('server2-url')
+            ?? ($input->getOption('server2') ? null : self::envUrl('DBDIFF_SERVER2_URL'));
 
         // Phase 4: auto-fill --server1-url from the local Supabase stack when
         // the user is inside a Supabase project but hasn't supplied server1-url.

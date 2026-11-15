@@ -272,4 +272,39 @@ class DiffCommandTest extends TestCase
         \DBDiff\Params\ParamsFactory::reset();
         \DBDiff\SQLGen\Dialect\DialectRegistry::setForDriver('mysql');
     }
+
+    /**
+     * Connection URLs read from DBDIFF_SERVER1_URL and DBDIFF_SERVER2_URL, so
+     * a password need not be on the command line, where every user on the
+     * machine can read it. A URL on the command line still wins.
+     */
+    public function testServerUrlsAreReadFromTheEnvironment(): void
+    {
+        $dir = sys_get_temp_dir() . '/dbdiff-env-url-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        (new \PDO("sqlite:$dir/a.db"))->exec('CREATE TABLE from_env (id INTEGER PRIMARY KEY)');
+        (new \PDO("sqlite:$dir/c.db"))->exec('CREATE TABLE from_flag (id INTEGER PRIMARY KEY)');
+        new \PDO("sqlite:$dir/b.db");
+        putenv("DBDIFF_SERVER1_URL=sqlite://$dir/a.db");
+        putenv("DBDIFF_SERVER2_URL=sqlite://$dir/b.db");
+        try {
+            $this->assertSame(0, $this->tester->execute(['--output' => "$dir/env.sql"]), $this->tester->getDisplay());
+            $this->assertMatchesRegularExpression('/CREATE TABLE "?from_env/', (string) file_get_contents("$dir/env.sql"));
+
+            $this->assertSame(0, $this->tester->execute([
+                '--server1-url' => "sqlite://$dir/c.db",
+                '--output'      => "$dir/flag.sql",
+            ]), $this->tester->getDisplay());
+            $flag = (string) file_get_contents("$dir/flag.sql");
+            $this->assertMatchesRegularExpression('/CREATE TABLE "?from_flag/', $flag);
+            $this->assertStringNotContainsString('from_env', $flag);
+        } finally {
+            putenv('DBDIFF_SERVER1_URL');
+            putenv('DBDIFF_SERVER2_URL');
+            array_map('unlink', glob("$dir/*") ?: []);
+            rmdir($dir);
+            \DBDiff\Params\ParamsFactory::reset();
+            \DBDiff\SQLGen\Dialect\DialectRegistry::setForDriver('mysql');
+        }
+    }
 }
