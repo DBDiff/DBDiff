@@ -66,7 +66,7 @@ final class ComputedColumns
     private static function mysqlGenerated(Connection $connection, string $table): array
     {
         $generated = [];
-        foreach ($connection->select("SHOW COLUMNS FROM `$table`") as $row) {
+        foreach ($connection->select('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`') as $row) {
             $row = (array) $row;
             if (preg_match('/\b(?:VIRTUAL|STORED) GENERATED\b/i', (string) ($row['Extra'] ?? ''))) {
                 $generated[] = $row['Field'];
@@ -83,7 +83,7 @@ final class ComputedColumns
     private static function sqliteGenerated(Connection $connection, string $table): array
     {
         $generated = [];
-        foreach ($connection->select("PRAGMA table_xinfo(\"$table\")") as $row) {
+        foreach ($connection->select('PRAGMA table_xinfo("' . str_replace('"', '""', $table) . '")') as $row) {
             $row = (array) $row;
             if (in_array((int) $row['hidden'], [2, 3], true)) {
                 $generated[] = $row['name'];

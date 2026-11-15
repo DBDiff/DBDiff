@@ -30,18 +30,18 @@ class MySQLAdapter implements DBAdapterInterface {
     public function getTables(Connection $connection): array {
         $db = $connection->getDatabaseName();
         $result = $connection->select(
-            "SHOW FULL TABLES FROM `$db` WHERE Table_type = 'BASE TABLE'"
+            "SHOW FULL TABLES FROM " . self::ident($db) . " WHERE Table_type = 'BASE TABLE'"
         );
         return array_map(fn($row) => array_values((array) $row)[0], $result);
     }
 
     public function getColumns(Connection $connection, string $table): array {
-        $result = $connection->select("show columns from `$table`");
+        $result = $connection->select("show columns from " . self::ident($table));
         return Arr::pluck($result, 'Field');
     }
 
     public function getPrimaryKey(Connection $connection, string $table): array {
-        $keys = $connection->select("show indexes from `$table`");
+        $keys = $connection->select("show indexes from " . self::ident($table));
         $pkey = [];
         foreach ($keys as $key) {
             if ($key['Key_name'] === 'PRIMARY') {
@@ -53,12 +53,15 @@ class MySQLAdapter implements DBAdapterInterface {
 
     public function getTableSchema(Connection $connection, string $table): array {
         // Engine & collation
-        $status    = $connection->select("show table status like '$table'");
+        // A LIKE pattern: its own quote, backslash, `_` and `%` escaped, or
+        // `a_b` reads the status of `axb` too.
+        $like      = strtr($table, ['\\' => '\\\\', "'" => "''", '_' => '\\_', '%' => '\\%']);
+        $status    = $connection->select("show table status like '$like'");
         $engine    = $status[0]['Engine'];
         $collation = $status[0]['Collation'];
 
         // Parse SHOW CREATE TABLE
-        $schema = $connection->select("SHOW CREATE TABLE `$table`")[0]['Create Table'];
+        $schema = $connection->select("SHOW CREATE TABLE " . self::ident($table))[0]['Create Table'];
         $lines  = array_map(fn($l) => trim($l), explode("\n", $schema));
         $lines  = array_slice($lines, 1, -1); // remove CREATE TABLE ... ( and closing ) ENGINE=...
 
@@ -67,8 +70,9 @@ class MySQLAdapter implements DBAdapterInterface {
         $constraints = [];
 
         foreach ($lines as $line) {
-            preg_match("/`([^`]+)`/", $line, $matches);
-            $name = $matches[1];
+            // A backtick inside a name is doubled.
+            preg_match('/`((?:[^`]|``)+)`/', $line, $matches);
+            $name = str_replace('``', '`', $matches[1]);
             $line = trim($line, ',');
             if (Str::startsWith($line, '`')) {
                 $columns[$name] = $this->normalizeColumnDef($line);
@@ -91,7 +95,7 @@ class MySQLAdapter implements DBAdapterInterface {
     }
 
     public function getCreateStatement(Connection $connection, string $table, array $withoutConstraints = []): string {
-        $res = $connection->select("SHOW CREATE TABLE `$table`");
+        $res = $connection->select("SHOW CREATE TABLE " . self::ident($table));
         return $res[0]['Create Table'];
     }
 
@@ -101,7 +105,7 @@ class MySQLAdapter implements DBAdapterInterface {
     }
 
     public function getBinaryColumns(Connection $connection, string $table): array {
-        $result = $connection->select("SHOW COLUMNS FROM `$table`");
+        $result = $connection->select("SHOW COLUMNS FROM " . self::ident($table));
         $binary = [];
         foreach ($result as $row) {
             $type = strtolower($row['Type']);
@@ -132,12 +136,12 @@ class MySQLAdapter implements DBAdapterInterface {
     public function getViews(Connection $connection): array {
         $db = $connection->getDatabaseName();
         $result = $connection->select(
-            "SHOW FULL TABLES FROM `$db` WHERE Table_type = 'VIEW'"
+            "SHOW FULL TABLES FROM " . self::ident($db) . " WHERE Table_type = 'VIEW'"
         );
         $views = [];
         foreach ($result as $row) {
             $name = array_values((array) $row)[0];
-            $stmt = $connection->select("SHOW CREATE VIEW `$name`");
+            $stmt = $connection->select("SHOW CREATE VIEW " . self::ident($name));
             $views[$name] = $this->normalizeCreateStatement($stmt[0]['Create View']);
         }
         return $views;
@@ -145,12 +149,12 @@ class MySQLAdapter implements DBAdapterInterface {
 
     public function getTriggers(Connection $connection): array {
         $db = $connection->getDatabaseName();
-        $result = $connection->select("SHOW TRIGGERS FROM `$db`");
+        $result = $connection->select("SHOW TRIGGERS FROM " . self::ident($db));
         $triggers = [];
         foreach ($result as $row) {
             $name  = $row['Trigger'];
             $table = $row['Table'];
-            $stmt  = $connection->select("SHOW CREATE TRIGGER `$name`");
+            $stmt  = $connection->select("SHOW CREATE TRIGGER " . self::ident($name));
             $triggers[$name] = [
                 'definition' => $this->normalizeCreateStatement($stmt[0]['SQL Original Statement']),
                 'table'      => $table,
@@ -171,7 +175,7 @@ class MySQLAdapter implements DBAdapterInterface {
         foreach ($result as $row) {
             $name = $row['ROUTINE_NAME'];
             $type = $row['ROUTINE_TYPE']; // PROCEDURE or FUNCTION
-            $stmt = $connection->select("SHOW CREATE $type `$name`");
+            $stmt = $connection->select("SHOW CREATE $type " . self::ident($name));
             $key  = $type === 'PROCEDURE' ? 'Create Procedure' : 'Create Function';
             $definition = $stmt[0][$key] ?? null;
             // MySQL lists a routine to anyone with privileges on its schema,
@@ -355,5 +359,11 @@ class MySQLAdapter implements DBAdapterInterface {
      */
     private function normalizeKeyDef(string $def): string {
         return preg_replace('/\s+USING BTREE$/i', '', $def);
+    }
+
+    /** An identifier, quoted for MySQL: a backtick in the name is doubled. */
+    private static function ident(string $name): string
+    {
+        return '`' . str_replace('`', '``', $name) . '`';
     }
 }

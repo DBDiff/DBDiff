@@ -133,6 +133,8 @@ class KeyOrder
 
     private function quote(string $name): string
     {
-        return $this->driver === 'mysql' ? "`$name`" : "\"$name\"";
+        return $this->driver === 'mysql'
+            ? '`' . str_replace('`', '``', $name) . '`'
+            : '"' . str_replace('"', '""', $name) . '"';
     }
 }

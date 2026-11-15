@@ -76,6 +76,31 @@ class RoundTripMySQLTest extends TestCase
         $this->assertSame([null, null], $this->migration($untouched, $target), 'the target differs from its old self after the DOWN');
     }
 
+    /**
+     * Names holding a backtick: the data diff wrapped each in backticks
+     * without doubling the ones inside it, which broke its query.
+     */
+    public function testNamesHoldingBackticksRoundTrip(): void
+    {
+        $table = "CREATE TABLE `we``ird` (`i``d` int PRIMARY KEY, `x``y` varchar(20), `a;b` int);";
+        $source = $this->db('qn_source', $table . "
+            ALTER TABLE `we``ird` ADD COLUMN `n``ew` varchar(20) NULL;
+            CREATE TABLE `only``here` (`k``ey` varchar(20) PRIMARY KEY);
+            INSERT INTO `only``here` VALUES ('a`b');
+            INSERT INTO `we``ird` VALUES (1, 'one', 1, NULL), (2, 'two`', 2, NULL), (4, 'four', NULL, NULL);");
+        $target = $this->db('qn_target', $table . "
+            INSERT INTO `we``ird` VALUES (1, 'changed', 1), (3, 'gone', 3), (4, 'four', NULL);");
+        $untouched = $this->db('qn_untouched', $table . "
+            INSERT INTO `we``ird` VALUES (1, 'changed', 1), (3, 'gone', 3), (4, 'four', NULL);");
+
+        [$up, $down] = $this->migration($source, $target);
+        $this->apply($target, $up);
+        $this->assertSame([null, null], $this->migration($source, $target), "the target still differs after the UP:\n$up");
+
+        $this->apply($target, $down);
+        $this->assertSame([null, null], $this->migration($untouched, $target), "the target differs from its old self after the DOWN:\n$down");
+    }
+
     private function db(string $name, string $sql): string
     {
         $db = "dbdiff_$name";

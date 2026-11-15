@@ -307,9 +307,9 @@ class StreamingMergeDiff
         }
 
         return match ($this->driver) {
-            'mysql'  => 'SHA2(CONCAT(' . implode(", CHAR(31), ", array_map(fn($c) => "IF(`$c` IS NULL, 'N', CONCAT('V', CAST(`$c` AS CHAR CHARACTER SET utf8mb4)))", $columns)) . '), 256)',
-            'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "CASE WHEN \"$c\" IS NULL THEN 'N' ELSE 'V' || \"$c\"::text END", $columns)) . ")",
-            'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "CASE WHEN \"$c\" IS NULL THEN 'N' ELSE 'V' || CAST(\"$c\" AS TEXT) END", $columns)) . ")",
+            'mysql'  => 'SHA2(CONCAT(' . implode(", CHAR(31), ", array_map(fn($c) => "IF({$this->quoteIdentifier($c)} IS NULL, 'N', CONCAT('V', CAST({$this->quoteIdentifier($c)} AS CHAR CHARACTER SET utf8mb4)))", $columns)) . '), 256)',
+            'pgsql'  => "md5(" . implode(" || E'\\x1f' || ", array_map(fn($c) => "CASE WHEN {$this->quoteIdentifier($c)} IS NULL THEN 'N' ELSE 'V' || {$this->quoteIdentifier($c)}::text END", $columns)) . ")",
+            'sqlite' => "hex(" . implode(" || X'1f' || ", array_map(fn($c) => "CASE WHEN {$this->quoteIdentifier($c)} IS NULL THEN 'N' ELSE 'V' || CAST({$this->quoteIdentifier($c)} AS TEXT) END", $columns)) . ")",
             default  => throw new DataException("Unsupported driver: {$this->driver}"),
         };
     }
@@ -407,8 +407,8 @@ class StreamingMergeDiff
     public function quoteIdentifier(string $name): string
     {
         return match ($this->driver) {
-            'mysql' => "`$name`",
-            default => "\"$name\"",
+            'mysql' => '`' . str_replace('`', '``', $name) . '`',
+            default => '"' . str_replace('"', '""', $name) . '"',
         };
     }
 

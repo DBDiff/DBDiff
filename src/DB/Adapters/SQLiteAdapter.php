@@ -22,12 +22,12 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     public function getColumns(Connection $connection, string $table): array {
-        $rows = $connection->select("PRAGMA table_info(\"$table\")");
+        $rows = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
         return Arr::pluck($rows, 'name');
     }
 
     public function getPrimaryKey(Connection $connection, string $table): array {
-        $rows = $connection->select("PRAGMA table_info(\"$table\")");
+        $rows = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
         $pk   = [];
         foreach ($rows as $row) {
             if ($row['pk'] > 0) {
@@ -87,7 +87,7 @@ class SQLiteAdapter implements DBAdapterInterface {
         $tables = $this->getTables($connection);
         $map = [];
         foreach ($tables as $table) {
-            $fks = $connection->select("PRAGMA foreign_key_list(\"$table\")");
+            $fks = $connection->select("PRAGMA foreign_key_list(" . self::ident($table) . ")");
             foreach ($fks as $fk) {
                 $map[$table][] = $fk['table'];
             }
@@ -142,7 +142,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     // -------------------------------------------------------------------------
 
     private function fetchColumns(Connection $connection, string $table): array {
-        $rows    = $connection->select("PRAGMA table_info(\"$table\")");
+        $rows    = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
         $columns = [];
 
         foreach ($rows as $row) {
@@ -159,7 +159,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     private function fetchIndexes(Connection $connection, string $table): array {
-        $indexList = $connection->select("PRAGMA index_list(\"$table\")");
+        $indexList = $connection->select("PRAGMA index_list(" . self::ident($table) . ")");
         $keys      = [];
 
         foreach ($indexList as $idx) {
@@ -169,12 +169,12 @@ class SQLiteAdapter implements DBAdapterInterface {
             }
 
             $idxName   = $idx['name'];
-            $indexInfo = $connection->select("PRAGMA index_info(\"$idxName\")");
+            $indexInfo = $connection->select("PRAGMA index_info(" . self::ident($idxName) . ")");
             $cols      = array_map(fn($i) => '"' . str_replace('"', '""', $i['name']) . '"', $indexInfo);
             $unique    = $idx['unique'] ? 'UNIQUE ' : '';
 
             $keys[$idxName] =
-                "CREATE {$unique}INDEX \"$idxName\" ON \"$table\" (" .
+                "CREATE {$unique}INDEX " . self::ident($idxName) . " ON " . self::ident($table) . " (" .
                 implode(', ', $cols) . ')';
         }
 
@@ -182,7 +182,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     private function fetchForeignKeys(Connection $connection, string $table): array {
-        $rows        = $connection->select("PRAGMA foreign_key_list(\"$table\")");
+        $rows        = $connection->select("PRAGMA foreign_key_list(" . self::ident($table) . ")");
         $constraints = [];
 
         // FK rows may be multi-column (same id, different seq); group by id
@@ -204,14 +204,20 @@ class SQLiteAdapter implements DBAdapterInterface {
 
         foreach ($groups as $id => $fk) {
             $name    = 'fk_' . $table . '_' . $id;
-            $fromCols = implode('", "', $fk['from']);
-            $toCols   = implode('", "', $fk['to']);
+            $fromCols = implode(', ', array_map(self::ident(...), $fk['from']));
+            $toCols   = implode(', ', array_map(self::ident(...), $fk['to']));
             $constraints[$name] =
-                "CONSTRAINT \"$name\" FOREIGN KEY (\"$fromCols\")" .
-                " REFERENCES \"{$fk['table']}\" (\"$toCols\")" .
+                "CONSTRAINT " . self::ident($name) . " FOREIGN KEY ($fromCols)" .
+                " REFERENCES " . self::ident($fk['table']) . " ($toCols)" .
                 " ON DELETE {$fk['on_delete']} ON UPDATE {$fk['on_update']}";
         }
 
         return $constraints;
+    }
+
+    /** An identifier, quoted for SQLite: a `"` in the name is doubled. */
+    private static function ident(string $name): string
+    {
+        return '"' . str_replace('"', '""', $name) . '"';
     }
 }
