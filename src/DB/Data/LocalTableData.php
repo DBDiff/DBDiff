@@ -128,21 +128,43 @@ class LocalTableData {
         $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . self::q($el) . " IS NULL", $key));
         $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . self::q($el) . " IS NULL", $key));
 
+        // A BLOB column is read as hex, so a value is written back as X'…'
+        // whether or not its bytes happen to be UTF-8 text.
+        $blob = array_values(array_unique(array_merge(
+            $this->manager->getBinaryColumns('source', $table),
+            $this->manager->getBinaryColumns('target', $table),
+        )));
+        $col = fn(string $side, string $el, string $as) => in_array($el, $blob, true)
+            ? "CASE WHEN \"$side\"." . self::q($el) . " IS NULL THEN NULL ELSE hex(\"$side\"." . self::q($el) . ") END AS " . self::q($as)
+            : "\"$side\"." . self::q($el) . " AS " . self::q($as);
+        $unhex = fn(array $rows, string $prefix = '') => array_map(function ($row) use ($blob, $prefix) {
+            foreach ($blob as $el) {
+                foreach ($prefix === '' ? [$el] : ["s_$el", "t_$el"] as $k) {
+                    if (isset($row[$k])) {
+                        $row[$k] = new BinaryValue((string) $row[$k]);
+                    }
+                }
+            }
+            return $row;
+        }, $rows);
+
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
-        $colsA   = implode(',', array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q($el), $columns1));
+        $colsA   = implode(',', array_map(fn($el) => $col('a', $el, $el), $columns1));
         $result1 = $this->source->select(
             "SELECT $colsA FROM \"main\"." . self::q($table) . " AS a
              LEFT JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
              WHERE $keyNullsTgt"
         );
+        $result1 = $unhex($result1);
 
         // ── Rows only in target (→ DELETE in UP) ─────────────────────────
-        $colsB   = implode(',', array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q($el), $columns2));
+        $colsB   = implode(',', array_map(fn($el) => $col('b', $el, $el), $columns2));
         $result2 = $this->source->select(
             "SELECT $colsB FROM \"$alias\"." . self::q($table) . " AS b
              LEFT JOIN \"main\"." . self::q($table) . " AS a ON $keyCols
              WHERE $keyNullsSrc"
         );
+        $result2 = $unhex($result2);
 
         // ── Changed rows (→ UPDATE in UP) ─────────────────────────────────
         $params     = ParamsFactory::get();
@@ -161,14 +183,15 @@ class LocalTableData {
         if (!empty($commonCols) || !empty($sourceOnly)) {
             $where = $sourceOnly === [] ? 'WHERE ' . $this->buildSQLiteChangeConds($commonCols) : '';
             $allCols = implode(',', array_merge(
-                array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q("s_$el"), array_merge($commonCols, $sourceOnly)),
-                array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q("t_$el"), $commonCols)
+                array_map(fn($el) => $col('a', $el, "s_$el"), array_merge($commonCols, $sourceOnly)),
+                array_map(fn($el) => $col('b', $el, "t_$el"), $commonCols)
             ));
             $result3 = $this->source->select(
                 "SELECT $allCols FROM \"main\"." . self::q($table) . " AS a
                  INNER JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
                  $where"
             );
+            $result3 = $unhex($result3, 's_');
         }
 
         return $this->buildDiffSequence($table, $result1, $result2, $result3, $key, $sourceOnly);

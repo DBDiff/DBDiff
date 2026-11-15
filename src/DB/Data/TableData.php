@@ -34,7 +34,8 @@ class TableData {
     public function getIterator($connection, $table) {
         $columns = $this->manager->getDataColumns($connection, $table);
         $order = $this->manager->getKey($connection, $table) ?: $columns;
-        return new TableIterator($this->{$connection}, $table, $order, $columns);
+        $hex = in_array($this->manager->getDriver(), ['mysql', 'sqlite'], true) ? $this->manager->getBinaryColumns($connection, $table) : [];
+        return new TableIterator($this->{$connection}, $table, $order, $columns, $hex);
     }
 
     public function getNewData($table) {
