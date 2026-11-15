@@ -14,7 +14,7 @@ class DBData {
     protected $manager;
 
     /** @param array<string, string[]> $renamed the columns the schema diff renames, by table */
-    function __construct($manager, private array $renamed = []) {
+    public function __construct($manager, private array $renamed = []) {
         $this->manager = $manager;
     }
     
