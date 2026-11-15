@@ -22,7 +22,8 @@ class TableData {
     protected DistTableData $distTableData;
     protected LocalTableData $localTableData;
 
-    function __construct($manager) {
+    /** @param array<string, string[]> $renamed the columns the schema diff renames, by table */
+    function __construct($manager, private array $renamed = []) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
@@ -117,9 +118,10 @@ class TableData {
         }
         $this->checkKeys($table, $sourceKey, $targetKey);
 
+        $renamed = $this->renamed[$table] ?? [];
         $diffs = $server1 == $server2
-            ? $this->localTableData->getDiff($table, $sourceKey)
-            : $this->distTableData->getDiff($table, $sourceKey);
+            ? $this->localTableData->getDiff($table, $sourceKey, $renamed)
+            : $this->distTableData->getDiff($table, $sourceKey, $renamed);
         return $this->withOverriding($diffs, 'target', $table);
     }
 
