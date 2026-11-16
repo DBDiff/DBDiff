@@ -289,7 +289,7 @@ class PostgresSchemaHelper {
         $out = [];
         foreach (self::columnStorage($attrByCol) as $column => $storage) {
             if ($storage['actual'] !== $storage['default']) {
-                $out[] = "ALTER TABLE $table ALTER COLUMN \"$column\" SET STORAGE {$storage['actual']}";
+                $out[] = "ALTER TABLE $table ALTER COLUMN \"" . str_replace('"', '""', $column) . "\" SET STORAGE {$storage['actual']}";
             }
         }
         return $out;

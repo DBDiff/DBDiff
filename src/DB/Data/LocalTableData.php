@@ -71,7 +71,7 @@ class LocalTableData {
         $db2 = $this->target->getDatabaseName();
         try {
             $result = $this->source->select(
-                "CHECKSUM TABLE `$db1`.`$table`, `$db2`.`$table`"
+                "CHECKSUM TABLE " . self::backtick($db1) . "." . self::backtick($table) . ", " . self::backtick($db2) . "." . self::backtick($table)
             );
             if (count($result) === 2) {
                 $cs1 = $result[0]['Checksum'] ?? null;
@@ -102,7 +102,7 @@ class LocalTableData {
 
         // Attach target file to source connection under a unique alias.
         $alias = '_dbdiff_target';
-        $this->source->unprepared("ATTACH DATABASE '$db2' AS \"$alias\"");
+        $this->source->unprepared("ATTACH DATABASE '" . str_replace("'", "''", $db2) . "' AS \"$alias\"");
 
         try {
             return $this->runSQLiteDiff($table, $key, $alias);
@@ -121,25 +121,25 @@ class LocalTableData {
         $columns2 = $this->manager->getDataColumns('target', $table);
 
         $keyCols  = implode(self::SQL_AND, array_map(
-            fn($el) => "\"a\".\"$el\" = \"b\".\"$el\"",
+            fn($el) => "\"a\"." . self::q($el) . " = \"b\"." . self::q($el),
             $key
         ));
-        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\".\"$el\" IS NULL", $key));
-        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\".\"$el\" IS NULL", $key));
+        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . self::q($el) . " IS NULL", $key));
+        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . self::q($el) . " IS NULL", $key));
 
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
-        $colsA   = implode(',', array_map(fn($el) => "\"a\".\"$el\" AS \"$el\"", $columns1));
+        $colsA   = implode(',', array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q($el), $columns1));
         $result1 = $this->source->select(
-            "SELECT $colsA FROM \"main\".\"$table\" AS a
-             LEFT JOIN \"$alias\".\"$table\" AS b ON $keyCols
+            "SELECT $colsA FROM \"main\"." . self::q($table) . " AS a
+             LEFT JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
              WHERE $keyNullsTgt"
         );
 
         // ── Rows only in target (→ DELETE in UP) ─────────────────────────
-        $colsB   = implode(',', array_map(fn($el) => "\"b\".\"$el\" AS \"$el\"", $columns2));
+        $colsB   = implode(',', array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q($el), $columns2));
         $result2 = $this->source->select(
-            "SELECT $colsB FROM \"$alias\".\"$table\" AS b
-             LEFT JOIN \"main\".\"$table\" AS a ON $keyCols
+            "SELECT $colsB FROM \"$alias\"." . self::q($table) . " AS b
+             LEFT JOIN \"main\"." . self::q($table) . " AS a ON $keyCols
              WHERE $keyNullsSrc"
         );
 
@@ -155,12 +155,12 @@ class LocalTableData {
         if (!empty($commonCols)) {
             $changeConds = $this->buildSQLiteChangeConds($commonCols);
             $allCols = implode(',', array_merge(
-                array_map(fn($el) => "\"a\".\"$el\" AS \"s_$el\"", $commonCols),
-                array_map(fn($el) => "\"b\".\"$el\" AS \"t_$el\"", $commonCols)
+                array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q("s_$el"), $commonCols),
+                array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q("t_$el"), $commonCols)
             ));
             $result3 = $this->source->select(
-                "SELECT $allCols FROM \"main\".\"$table\" AS a
-                 INNER JOIN \"$alias\".\"$table\" AS b ON $keyCols
+                "SELECT $allCols FROM \"main\"." . self::q($table) . " AS a
+                 INNER JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
                  WHERE $changeConds"
             );
         }
@@ -186,7 +186,7 @@ class LocalTableData {
         // Fallback: NULL-safe inequality per column
         return implode(
             ' OR ',
-            array_map(fn($el) => "CAST(\"a\".\"$el\" AS TEXT) IS NOT CAST(\"b\".\"$el\" AS TEXT)", $commonCols)
+            array_map(fn($el) => "CAST(\"a\"." . self::q($el) . " AS TEXT) IS NOT CAST(\"b\"." . self::q($el) . " AS TEXT)", $commonCols)
         );
     }
 
@@ -199,7 +199,7 @@ class LocalTableData {
         $parts = array_map(
             // N for NULL, V and the text otherwise: COALESCE to '' made NULL
             // and an empty string hash alike — see StreamingMergeDiff.
-            fn($c) => "CASE WHEN \"$alias\".\"$c\" IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\".\"$c\" AS TEXT) END",
+            fn($c) => "CASE WHEN \"$alias\"." . self::q($c) . " IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\"." . self::q($c) . " AS TEXT) END",
             $columns
         );
         return "sha3(" . implode(" || X'1f' || ", $parts) . ", 256)";
@@ -324,9 +324,9 @@ class LocalTableData {
         $wrapConvert = function($arr, $p) use ($binaryCols) {
             return array_map(function($el) use ($p, $binaryCols) {
                 if (in_array($el, $binaryCols)) {
-                    return "HEX(`{$p}`.`{$el}`) as `{$el}`";
+                    return "HEX({$this->bt($p)}.{$this->bt($el)}) as {$this->bt($el)}";
                 }
-                return "CONVERT(`{$p}`.`{$el}` USING utf8mb4) as `{$el}`";
+                return "CONVERT({$this->bt($p)}.{$this->bt($el)} USING utf8mb4) as {$this->bt($el)}";
             }, $arr);
         };
 
@@ -334,12 +334,12 @@ class LocalTableData {
         $columnsBUtf = implode(',', $wrapConvert($columns2, 'b'));
 
         $keyCols = implode(self::SQL_AND, array_map(function($el) {
-            return "`a`.`{$el}` = `b`.`{$el}`";
+            return "`a`.{$this->bt($el)} = `b`.{$this->bt($el)}";
         }, $key));
 
         $keyNull = function($arr, $p) {
             return array_map(function($el) use ($p) {
-                return "`{$p}`.`{$el}` IS NULL";
+                return "{$this->bt($p)}.{$this->bt($el)} IS NULL";
             }, $arr);
         };
         $keyNulls1 = implode(self::SQL_AND, $keyNull($key, 'a'));
@@ -347,12 +347,12 @@ class LocalTableData {
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
         $result1 = $this->source->select(
-           "SELECT $columnsAUtf FROM `{$db1}`.`{$table}` as a
-            LEFT JOIN `{$db2}`.`{$table}` as b ON $keyCols WHERE $keyNulls2
+           "SELECT $columnsAUtf FROM {$this->bt($db1)}.{$this->bt($table)} as a
+            LEFT JOIN {$this->bt($db2)}.{$this->bt($table)} as b ON $keyCols WHERE $keyNulls2
         ");
         $result2 = $this->source->select(
-           "SELECT $columnsBUtf FROM `{$db2}`.`{$table}` as b
-            LEFT JOIN `{$db1}`.`{$table}` as a ON $keyCols WHERE $keyNulls1
+           "SELECT $columnsBUtf FROM {$this->bt($db2)}.{$this->bt($table)} as b
+            LEFT JOIN {$this->bt($db1)}.{$this->bt($table)} as a ON $keyCols WHERE $keyNulls1
         ");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
 
@@ -405,25 +405,25 @@ class LocalTableData {
         $wrapAs = function($arr, $p1, $p2) use ($binaryCols) {
             return array_map(function($el) use ($p1, $p2, $binaryCols) {
                 if (in_array($el, $binaryCols)) {
-                    return "HEX(`{$p1}`.`{$el}`) as `{$p2}{$el}`";
+                    return "HEX({$this->bt($p1)}.{$this->bt($el)}) as {$this->bt($p2 . $el)}";
                 }
-                return "`{$p1}`.`{$el}` as `{$p2}{$el}`";
+                return "{$this->bt($p1)}.{$this->bt($el)} as {$this->bt($p2 . $el)}";
             }, $arr);
         };
 
         $wrapCast = function($arr, $p) use ($binaryCols) {
             return array_map(function($el) use ($p, $binaryCols) {
                 if (in_array($el, $binaryCols)) {
-                    return "HEX(IFNULL(`{$p}`.`{$el}`, ''))";
+                    return "HEX(IFNULL({$this->bt($p)}.{$this->bt($el)}, ''))";
                 }
-                return "CAST(IFNULL(`{$p}`.`{$el}`, '\\0') AS CHAR CHARACTER SET utf8mb4)";
+                return "CAST(IFNULL({$this->bt($p)}.{$this->bt($el)}, '\\0') AS CHAR CHARACTER SET utf8mb4)";
             }, $arr);
         };
 
         // NULL-presence bitmap: distinguishes NULL from empty string
         $wrapNullCheck = function($arr, $p) {
             return array_map(function($el) use ($p) {
-                return "IF(`{$p}`.`{$el}` IS NULL, '1', '0')";
+                return "IF({$this->bt($p)}.{$this->bt($el)} IS NULL, '1', '0')";
             }, $arr);
         };
 
@@ -435,7 +435,7 @@ class LocalTableData {
         $columnsB0  = implode(',', $wrapNullCheck($columns2, 'b'));
         
         $keyCols = implode(self::SQL_AND, array_map(function($el) {
-            return "`a`.`{$el}` = `b`.`{$el}`";
+            return "`a`.{$this->bt($el)} = `b`.{$this->bt($el)}";
         }, $key));
 
         $this->setFetchMode(\PDO::FETCH_NAMED);
@@ -444,8 +444,8 @@ class LocalTableData {
                 SELECT $columnsAas, $columnsBas, SHA2(concat($columnsA), 256) AS hash1,
                 SHA2(concat($columnsB), 256) AS hash2,
                 CONCAT($columnsA0) AS nullmap1, CONCAT($columnsB0) AS nullmap2
-                FROM `{$db1}`.`{$table}` as a
-                INNER JOIN `{$db2}`.`{$table}` as b
+                FROM {$this->bt($db1)}.{$this->bt($table)} as a
+                INNER JOIN {$this->bt($db2)}.{$this->bt($table)} as b
                 ON $keyCols
             ) t WHERE hash1 <> hash2 OR nullmap1 <> nullmap2");
         $this->setFetchMode(\PDO::FETCH_ASSOC);
@@ -529,4 +529,22 @@ class LocalTableData {
         $this->source->setEventDispatcher($dispatcher);
     }
 
+
+    /** An identifier, quoted for SQLite: a `"` in the name is doubled. */
+    private static function q(string $name): string
+    {
+        return '"' . str_replace('"', '""', $name) . '"';
+    }
+
+    /** An identifier, quoted for MySQL: a backtick in the name is doubled. */
+    private static function backtick(string $name): string
+    {
+        return '`' . str_replace('`', '``', $name) . '`';
+    }
+
+    /** backtick(), callable inside a string. */
+    private function bt(string $name): string
+    {
+        return self::backtick($name);
+    }
 }
