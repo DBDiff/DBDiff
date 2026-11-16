@@ -3,7 +3,7 @@ CREATE TABLE cc (
     id INTEGER NOT NULL,
     PRIMARY KEY (id)
 );
-DELETE FROM "zz" WHERE "id" = '1' AND "name" = 'name';
+DELETE FROM "zz" WHERE "id" = 1 AND "name" = 'name';
 DROP TABLE "zz";
 DROP INDEX "sqlite_autoindex_aa_2";
 DROP INDEX "sqlite_autoindex_aa_3";
@@ -21,10 +21,10 @@ ALTER TABLE "bb" DROP COLUMN "id";
 ALTER TABLE "bb" ADD COLUMN "id" integer PRIMARY KEY NOT NULL;
 ALTER TABLE "aa" DROP COLUMN "zx";
 CREATE UNIQUE INDEX "sqlite_autoindex_aa_1" ON "aa" ("name");
-INSERT INTO "cc" ("id") VALUES('11');
+INSERT INTO "cc" ("id") VALUES(11);
 """
 SQL_DOWN = u"""
-DELETE FROM "cc" WHERE "id" = '11';
+DELETE FROM "cc" WHERE "id" = 11;
 DROP TABLE "cc";
 CREATE TABLE zz (
     id INTEGER NOT NULL,
@@ -49,5 +49,5 @@ ALTER TABLE "bb" ADD COLUMN "id" integer NOT NULL;
 ALTER TABLE "aa" ADD COLUMN "zx" integer NOT NULL;
 CREATE UNIQUE INDEX "sqlite_autoindex_aa_2" ON "aa" ("pass");
 CREATE UNIQUE INDEX "sqlite_autoindex_aa_3" ON "aa" ("name", "pass", "zx");
-INSERT INTO "zz" ("id","name","bool") VALUES('1','name','1');
+INSERT INTO "zz" ("id","name","bool") VALUES(1,'name',1);
 """

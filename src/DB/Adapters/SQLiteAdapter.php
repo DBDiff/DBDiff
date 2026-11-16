@@ -77,9 +77,19 @@ class SQLiteAdapter implements DBAdapterInterface {
         return null;
     }
 
+    /**
+     * Columns declared BLOB (BLOB affinity by name, and a STRICT table's
+     * BLOB): their values are written back as X'…'. A column with no declared
+     * type holds any storage class, and is left to the value itself.
+     */
     public function getBinaryColumns(Connection $connection, string $table): array {
-        // SQLite stores all data as text; no binary-encoding issue.
-        return [];
+        $binary = [];
+        foreach (self::tableInfo($connection, $table) as $row) {
+            if (stripos((string) $row['type'], 'blob') !== false) {
+                $binary[] = $row['name'];
+            }
+        }
+        return $binary;
     }
 
 
