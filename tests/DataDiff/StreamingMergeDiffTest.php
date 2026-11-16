@@ -329,7 +329,7 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
             "INSERT INTO t VALUES (1, 'same', 'tgt_only')",
         ]);
 
-        // Common columns: id, name (old_col and new_col are not common)
+        // Common columns: id, name. old_col only the source has, new_col only the target.
         $merge = new StreamingMergeDiff($src, $tgt, 'sqlite');
         $diffs = $merge->getDiff(
             't', ['id'],
@@ -337,8 +337,14 @@ class StreamingMergeDiffTest extends PHPUnit\Framework\TestCase
             ['id', 'name', 'new_col']
         );
 
-        // Only common columns (id, name) are compared; both are same → no diff
-        $this->assertEmpty($diffs, 'Only common columns compared; name is same → no diff');
+        // old_col is the schema diff's to add to the target, so the row is set
+        // to the source's value for it, set by the UP alone; new_col is the
+        // schema diff's to drop, and not set at all.
+        $this->assertCount(1, $diffs);
+        $this->assertInstanceOf(UpdateData::class, $diffs[0]);
+        $this->assertSame(['old_col'], array_keys($diffs[0]->diff['diff']));
+        $this->assertInstanceOf(\Diff\DiffOp\DiffOpAdd::class, $diffs[0]->diff['diff']['old_col']);
+        $this->assertSame('src_only', $diffs[0]->diff['diff']['old_col']->getNewValue());
     }
 
     // ── Test: NULL values handled correctly ────────────────────────────────

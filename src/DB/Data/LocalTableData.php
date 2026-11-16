@@ -33,7 +33,8 @@ class LocalTableData {
         $this->driver  = $this->manager->getDriver();
     }
 
-    public function getDiff($table, $key) {
+    /** @param string[] $renamed source columns the schema diff renames (PostgreSQL only renames) */
+    public function getDiff($table, $key, array $renamed = []) {
         Logger::info("Now calculating data diff for table `$table`");
 
         if ($this->driver === 'sqlite') {
@@ -41,7 +42,7 @@ class LocalTableData {
         }
 
         if ($this->driver === 'pgsql') {
-            return $this->getDiffPgsql($table, $key);
+            return $this->getDiffPgsql($table, $key, $renamed);
         }
 
         return $this->getDiffMySQL($table, $key);
@@ -151,21 +152,26 @@ class LocalTableData {
             $commonCols = array_values(array_diff($commonCols, $ignoredFields));
         }
 
+        // A column only the source has is added by the schema diff, so every
+        // row both sides have is set to the source's value — see
+        // StreamingMergeDiff::getDiff.
+        $sourceOnly = array_values(array_diff($columns1, $columns2, $ignoredFields));
+
         $result3 = [];
-        if (!empty($commonCols)) {
-            $changeConds = $this->buildSQLiteChangeConds($commonCols);
+        if (!empty($commonCols) || !empty($sourceOnly)) {
+            $where = $sourceOnly === [] ? 'WHERE ' . $this->buildSQLiteChangeConds($commonCols) : '';
             $allCols = implode(',', array_merge(
-                array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q("s_$el"), $commonCols),
+                array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q("s_$el"), array_merge($commonCols, $sourceOnly)),
                 array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q("t_$el"), $commonCols)
             ));
             $result3 = $this->source->select(
                 "SELECT $allCols FROM \"main\"." . self::q($table) . " AS a
                  INNER JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
-                 WHERE $changeConds"
+                 $where"
             );
         }
 
-        return $this->buildDiffSequence($table, $result1, $result2, $result3, $key);
+        return $this->buildDiffSequence($table, $result1, $result2, $result3, $key, $sourceOnly);
     }
 
     /**
@@ -225,7 +231,7 @@ class LocalTableData {
     }
 
     /** Turn the three raw result sets into Diff objects. */
-    private function buildDiffSequence(string $table, array $result1, array $result2, array $result3, array $key): array
+    private function buildDiffSequence(string $table, array $result1, array $result2, array $result3, array $key, array $sourceOnly = []): array
     {
         // Apply rowsToIgnore filtering
         $params = ParamsFactory::get();
@@ -250,7 +256,7 @@ class LocalTableData {
             ]);
         }
         foreach ($result3 as $row) {
-            $update = $this->buildUpdateFromRow($table, $row, $key);
+            $update = $this->buildUpdateFromRow($table, $row, $key, $sourceOnly);
             if ($update !== null) {
                 $diffSequence[] = $update;
             }
@@ -259,7 +265,7 @@ class LocalTableData {
         return $diffSequence;
     }
 
-    private function buildUpdateFromRow(string $table, array $row, array $key): ?UpdateData
+    private function buildUpdateFromRow(string $table, array $row, array $key, array $sourceOnly = []): ?UpdateData
     {
         $diff = [];
         $keys = [];
@@ -272,6 +278,11 @@ class LocalTableData {
             $sourceValue = $value;
             if (in_array($theKey, $key)) {
                 $keys[$theKey] = $value;
+            }
+            // Set by the UP; the DOWN drops the column, so does not set it.
+            if (in_array($theKey, $sourceOnly, true)) {
+                $diff[$theKey] = new \Diff\DiffOp\DiffOpAdd($sourceValue);
+                continue;
             }
             $targetValue = $row[$targetKey] ?? null;
             if ((string) $sourceValue !== (string) $targetValue) {
@@ -296,7 +307,7 @@ class LocalTableData {
     // This scales to millions of rows and transfers only O(pk + 32 byte hash)
     // per row in Phase 1.
 
-    private function getDiffPgsql(string $table, array $key): array
+    private function getDiffPgsql(string $table, array $key, array $renamed = []): array
     {
         $params   = ParamsFactory::get();
         $columns1 = $this->manager->getDataColumns('source', $table);
@@ -305,7 +316,7 @@ class LocalTableData {
         $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
         $merge = new StreamingMergeDiff($this->source, $this->target, 'pgsql');
-        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);
+        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore, $renamed);
     }
 
     // ── MySQL / PostgreSQL path ───────────────────────────────────────────
