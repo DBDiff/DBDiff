@@ -134,19 +134,8 @@ class LocalTableData {
             $this->manager->getBinaryColumns('source', $table),
             $this->manager->getBinaryColumns('target', $table),
         )));
-        $col = fn(string $side, string $el, string $as) => in_array($el, $blob, true)
-            ? "CASE WHEN \"$side\"." . self::q($el) . " IS NULL THEN NULL ELSE hex(\"$side\"." . self::q($el) . ") END AS " . self::q($as)
-            : "\"$side\"." . self::q($el) . " AS " . self::q($as);
-        $unhex = fn(array $rows, string $prefix = '') => array_map(function ($row) use ($blob, $prefix) {
-            foreach ($blob as $el) {
-                foreach ($prefix === '' ? [$el] : ["s_$el", "t_$el"] as $k) {
-                    if (isset($row[$k])) {
-                        $row[$k] = new BinaryValue((string) $row[$k]);
-                    }
-                }
-            }
-            return $row;
-        }, $rows);
+        $col = fn(string $side, string $el, string $as) => self::sqliteColumn($side, $el, $as, $blob);
+        $unhex = fn(array $rows, string $prefix = '') => self::unhexRows($rows, $blob, $prefix !== '');
 
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
         $colsA   = implode(',', array_map(fn($el) => $col('a', $el, $el), $columns1));
@@ -204,6 +193,31 @@ class LocalTableData {
      * single hash comparison — one condition per row rather than N per column.
      * Otherwise, fall back to the NULL-safe field-by-field IS NOT comparison.
      */
+    /** A column read for the SQLite diff: a BLOB column as hex, so its bytes survive whatever they hold. */
+    private static function sqliteColumn(string $side, string $el, string $as, array $blob): string
+    {
+        $ref = "\"$side\"." . self::q($el);
+        return in_array($el, $blob, true)
+            ? "CASE WHEN $ref IS NULL THEN NULL ELSE hex($ref) END AS " . self::q($as)
+            : "$ref AS " . self::q($as);
+    }
+
+    /** Wraps the hex read for each BLOB column back up as a BinaryValue; $paired rows carry s_ and t_ copies. */
+    private static function unhexRows(array $rows, array $blob, bool $paired): array
+    {
+        foreach ($rows as &$row) {
+            foreach ($blob as $el) {
+                foreach ($paired ? ["s_$el", "t_$el"] : [$el] as $k) {
+                    if (isset($row[$k])) {
+                        $row[$k] = new BinaryValue((string) $row[$k]);
+                    }
+                }
+            }
+        }
+        unset($row);
+        return $rows;
+    }
+
     private function buildSQLiteChangeConds(array $commonCols): string
     {
         if ($this->sqliteSha3Available()) {

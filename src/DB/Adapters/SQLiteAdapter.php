@@ -84,7 +84,7 @@ class SQLiteAdapter implements DBAdapterInterface {
      */
     public function getBinaryColumns(Connection $connection, string $table): array {
         $binary = [];
-        foreach ($connection->select("PRAGMA table_info(" . self::ident($table) . ")") as $row) {
+        foreach (self::tableInfo($connection, $table) as $row) {
             if (stripos((string) $row['type'], 'blob') !== false) {
                 $binary[] = $row['name'];
             }
