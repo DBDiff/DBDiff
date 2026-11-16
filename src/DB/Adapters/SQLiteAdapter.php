@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
+use DBDiff\DB\Support\QueryHelper;
 
 
 class SQLiteAdapter implements DBAdapterInterface {
@@ -22,12 +23,12 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     public function getColumns(Connection $connection, string $table): array {
-        $rows = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
+        $rows = self::tableInfo($connection, $table);
         return Arr::pluck($rows, 'name');
     }
 
     public function getPrimaryKey(Connection $connection, string $table): array {
-        $rows = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
+        $rows = self::tableInfo($connection, $table);
         $pk   = [];
         foreach ($rows as $row) {
             if ($row['pk'] > 0) {
@@ -97,7 +98,7 @@ class SQLiteAdapter implements DBAdapterInterface {
         $tables = $this->getTables($connection);
         $map = [];
         foreach ($tables as $table) {
-            $fks = $connection->select("PRAGMA foreign_key_list(" . self::ident($table) . ")");
+            $fks = $connection->select("PRAGMA foreign_key_list(" . QueryHelper::doubleQuote($table) . ")");
             foreach ($fks as $fk) {
                 $map[$table][] = $fk['table'];
             }
@@ -152,7 +153,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     // -------------------------------------------------------------------------
 
     private function fetchColumns(Connection $connection, string $table): array {
-        $rows    = $connection->select("PRAGMA table_info(" . self::ident($table) . ")");
+        $rows    = self::tableInfo($connection, $table);
         $columns = [];
 
         foreach ($rows as $row) {
@@ -169,7 +170,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     private function fetchIndexes(Connection $connection, string $table): array {
-        $indexList = $connection->select("PRAGMA index_list(" . self::ident($table) . ")");
+        $indexList = $connection->select("PRAGMA index_list(" . QueryHelper::doubleQuote($table) . ")");
         $keys      = [];
 
         foreach ($indexList as $idx) {
@@ -179,12 +180,12 @@ class SQLiteAdapter implements DBAdapterInterface {
             }
 
             $idxName   = $idx['name'];
-            $indexInfo = $connection->select("PRAGMA index_info(" . self::ident($idxName) . ")");
+            $indexInfo = $connection->select("PRAGMA index_info(" . QueryHelper::doubleQuote($idxName) . ")");
             $cols      = array_map(fn($i) => '"' . str_replace('"', '""', $i['name']) . '"', $indexInfo);
             $unique    = $idx['unique'] ? 'UNIQUE ' : '';
 
             $keys[$idxName] =
-                "CREATE {$unique}INDEX " . self::ident($idxName) . " ON " . self::ident($table) . " (" .
+                "CREATE {$unique}INDEX " . QueryHelper::doubleQuote($idxName) . " ON " . QueryHelper::doubleQuote($table) . " (" .
                 implode(', ', $cols) . ')';
         }
 
@@ -192,7 +193,7 @@ class SQLiteAdapter implements DBAdapterInterface {
     }
 
     private function fetchForeignKeys(Connection $connection, string $table): array {
-        $rows        = $connection->select("PRAGMA foreign_key_list(" . self::ident($table) . ")");
+        $rows        = $connection->select("PRAGMA foreign_key_list(" . QueryHelper::doubleQuote($table) . ")");
         $constraints = [];
 
         // FK rows may be multi-column (same id, different seq); group by id
@@ -214,20 +215,20 @@ class SQLiteAdapter implements DBAdapterInterface {
 
         foreach ($groups as $id => $fk) {
             $name    = 'fk_' . $table . '_' . $id;
-            $fromCols = implode(', ', array_map(self::ident(...), $fk['from']));
-            $toCols   = implode(', ', array_map(self::ident(...), $fk['to']));
+            $fromCols = implode(', ', array_map(QueryHelper::doubleQuote(...), $fk['from']));
+            $toCols   = implode(', ', array_map(QueryHelper::doubleQuote(...), $fk['to']));
             $constraints[$name] =
-                "CONSTRAINT " . self::ident($name) . " FOREIGN KEY ($fromCols)" .
-                " REFERENCES " . self::ident($fk['table']) . " ($toCols)" .
+                "CONSTRAINT " . QueryHelper::doubleQuote($name) . " FOREIGN KEY ($fromCols)" .
+                " REFERENCES " . QueryHelper::doubleQuote($fk['table']) . " ($toCols)" .
                 " ON DELETE {$fk['on_delete']} ON UPDATE {$fk['on_update']}";
         }
 
         return $constraints;
     }
 
-    /** An identifier, quoted for SQLite: a `"` in the name is doubled. */
-    private static function ident(string $name): string
+    /** PRAGMA table_info: one row per column, in order. */
+    private static function tableInfo(Connection $connection, string $table): array
     {
-        return '"' . str_replace('"', '""', $name) . '"';
+        return $connection->select("PRAGMA table_info(" . QueryHelper::doubleQuote($table) . ")");
     }
 }

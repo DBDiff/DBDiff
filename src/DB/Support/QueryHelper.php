@@ -37,4 +37,16 @@ class QueryHelper {
         }
         return array_intersect_key($map, array_flip($tables));
     }
+
+    /** A MySQL identifier, quoted: a backtick in the name is doubled. */
+    public static function backtick(string $name): string
+    {
+        return '`' . str_replace('`', '``', $name) . '`';
+    }
+
+    /** An ANSI identifier (SQLite, Postgres), quoted: a `"` in the name is doubled. */
+    public static function doubleQuote(string $name): string
+    {
+        return '"' . str_replace('"', '""', $name) . '"';
+    }
 }
