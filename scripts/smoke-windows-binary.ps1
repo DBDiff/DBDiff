@@ -67,8 +67,8 @@ foreach ($n in 1, 2) {
 
 $expected = @(
     'ALTER TABLE "users" DROP COLUMN "phone";',
-    'UPDATE "posts" SET "published" = ''0'' WHERE "id" = ''2'';',
-    'INSERT INTO "users" ("id","name","email","status","created_at") VALUES(''3'',''Bob Wilson'',''bob@example.com'',''inactive'',''2024-01-01 00:00:00'');'
+    'UPDATE "posts" SET "published" = 0 WHERE "id" = 2;',
+    'INSERT INTO "users" ("id","name","email","status","created_at") VALUES(3,''Bob Wilson'',''bob@example.com'',''inactive'',''2024-01-01 00:00:00'');'
 )
 
 function Invoke-Diff([string]$label, [string]$url1, [string]$url2) {
