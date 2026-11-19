@@ -1,4 +1,6 @@
 SQL_UP = u"""
+SET @DBDIFF_TIME_ZONE = @@SESSION.time_zone;
+SET time_zone = '+00:00';
 CREATE TABLE `cc` (
   `id` int NOT NULL,
   PRIMARY KEY (`id`)
@@ -33,8 +35,11 @@ INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('3','x','y');
 INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('4','v','w');
 INSERT INTO `cc` (`id`) VALUES('11');
 UPDATE `asas` SET `lastname` = 'bb' WHERE `id` = '1' AND `firstname` = 'a';
+SET time_zone = @DBDIFF_TIME_ZONE;
 """
 SQL_DOWN = u"""
+SET @DBDIFF_TIME_ZONE = @@SESSION.time_zone;
+SET time_zone = '+00:00';
 ALTER TABLE `aa` DROP FOREIGN KEY `as`;
 DELETE FROM `asas` WHERE `id` = '2' AND `firstname` = 'c';
 DELETE FROM `asas` WHERE `id` = '3' AND `firstname` = 'x';
@@ -74,4 +79,5 @@ INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('6','t','y');
 INSERT INTO `asas` (`id`,`firstname`,`lastname`) VALUES('7','e','r');
 INSERT INTO `zz` (`id`,`name`,`time`,`bool`) VALUES('1','name','2015-05-10 17:54:05','1');
 UPDATE `asas` SET `lastname` = 'b' WHERE `id` = '1' AND `firstname` = 'a';
+SET time_zone = @DBDIFF_TIME_ZONE;
 """
