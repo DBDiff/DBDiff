@@ -60,6 +60,7 @@ class StreamingMergeDiff
      * @param string[] $sourceColumns  All column names on source
      * @param string[] $targetColumns  All column names on target
      * @param string[] $fieldsToIgnore Column names to exclude from hash comparison
+     * @param string[] $renamed        Source columns the schema diff renames from a target one
      * @return array Diff objects (InsertData, DeleteData, UpdateData)
      */
     public function getDiff(
@@ -67,14 +68,21 @@ class StreamingMergeDiff
         array  $key,
         array  $sourceColumns,
         array  $targetColumns,
-        array  $fieldsToIgnore = []
+        array  $fieldsToIgnore = [],
+        array  $renamed = []
     ): array {
         $commonCols = array_values(array_intersect($sourceColumns, $targetColumns));
         $hashCols   = array_values(array_diff($commonCols, $fieldsToIgnore));
+        // A column only the source has is added by the schema diff, with its
+        // default or NULL in every row the target keeps: each such row is set
+        // to the source's value, as the same-server MySQL diff does. Left out,
+        // a column added and filled in on the source arrived empty. A renamed
+        // column keeps its data, and is not one of these.
+        $sourceOnly = array_values(array_diff($sourceColumns, $targetColumns, $fieldsToIgnore, $renamed));
 
         // Phase 1: Stream PK + hash, identify differing PKs
         Logger::info("Streaming hash comparison for table `$table`");
-        [$insertPKs, $deletePKs, $updatePKs] = $this->streamAndMerge($table, $key, $hashCols);
+        [$insertPKs, $deletePKs, $updatePKs] = $this->streamAndMerge($table, $key, $hashCols, $sourceOnly !== []);
 
         if (empty($insertPKs) && empty($deletePKs) && empty($updatePKs)) {
             return [];
@@ -89,7 +97,7 @@ class StreamingMergeDiff
         return array_merge(
             $this->collectInserts($table, $key, $sourceColumns, $insertPKs),
             $this->collectDeletes($table, $key, $targetColumns, $deletePKs),
-            $this->collectUpdates($table, $key, $commonCols, $hashCols, $updatePKs)
+            $this->collectUpdates($table, $key, $commonCols, $hashCols, $updatePKs, $sourceOnly)
         );
     }
 
@@ -131,21 +139,21 @@ class StreamingMergeDiff
         return $result;
     }
 
-    private function collectUpdates(string $table, array $key, array $commonCols, array $hashCols, array $updatePKs): array
+    private function collectUpdates(string $table, array $key, array $commonCols, array $hashCols, array $updatePKs, array $sourceOnly = []): array
     {
-        if (empty($updatePKs) || empty($hashCols)) {
+        if (empty($updatePKs) || (empty($hashCols) && empty($sourceOnly))) {
             return [];
         }
         $result = [];
         foreach (array_chunk($updatePKs, self::BATCH_SIZE) as $batch) {
-            $srcRows  = $this->fetchRowsByPK($this->source, $table, $key, $commonCols, $batch);
+            $srcRows  = $this->fetchRowsByPK($this->source, $table, $key, array_merge($commonCols, $sourceOnly), $batch);
             $tgtRows  = $this->fetchRowsByPK($this->target, $table, $key, $commonCols, $batch);
             $tgtIndex = [];
             foreach ($tgtRows as $row) {
                 $tgtIndex[$this->buildPKString($row, $key)] = $row;
             }
             foreach ($srcRows as $srcRow) {
-                $update = $this->buildSingleUpdate($table, $key, $hashCols, $srcRow, $tgtIndex);
+                $update = $this->buildSingleUpdate($table, $key, $hashCols, $srcRow, $tgtIndex, $sourceOnly);
                 if ($update !== null) {
                     $result[] = $update;
                 }
@@ -154,7 +162,7 @@ class StreamingMergeDiff
         return $result;
     }
 
-    private function buildSingleUpdate(string $table, array $key, array $hashCols, array $srcRow, array $tgtIndex): ?UpdateData
+    private function buildSingleUpdate(string $table, array $key, array $hashCols, array $srcRow, array $tgtIndex, array $sourceOnly = []): ?UpdateData
     {
         $tgtRow = $tgtIndex[$this->buildPKString($srcRow, $key)] ?? null;
         if ($tgtRow === null) {
@@ -162,6 +170,10 @@ class StreamingMergeDiff
         }
         $diff = [];
         $keys = [];
+        // Set by the UP; the DOWN drops the column, so does not set it (UpdateDataSQL).
+        foreach ($sourceOnly as $col) {
+            $diff[$col] = new \Diff\DiffOp\DiffOpAdd($srcRow[$col] ?? null);
+        }
         foreach ($hashCols as $col) {
             if (in_array($col, $key)) {
                 $keys[$col] = $srcRow[$col];
@@ -196,7 +208,7 @@ class StreamingMergeDiff
      *
      * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
      */
-    private function streamAndMerge(string $table, array $key, array $hashCols): array
+    private function streamAndMerge(string $table, array $key, array $hashCols, bool $everyMatch = false): array
     {
         $hashExpr = $this->buildHashExpression($hashCols);
         $pkCols   = $this->quoteCols($key);
@@ -206,7 +218,7 @@ class StreamingMergeDiff
 
         [$src, $tgt] = $this->openStreams("SELECT {$pkSelect}, {$hashExpr} AS _hash FROM {$q} ORDER BY {$orderBy}", $q, 'stream');
         try {
-            return $this->mergeByKey($src, $tgt, $key, $numeric);
+            return $this->mergeByKey($src, $tgt, $key, $numeric, $everyMatch);
         } finally {
             // Reverse order: on a shared connection the source owns the transaction.
             $tgt->close();
@@ -242,11 +254,12 @@ class StreamingMergeDiff
 
     /**
      * Walk two key-ordered `key…, _hash` streams together. `$numeric`:
-     * the key columns compared as numbers, see KeyOrder.
+     * the key columns compared as numbers, see KeyOrder. `$everyMatch`:
+     * every key both sides have is an update, whatever its hash.
      *
      * @return array{0: array[], 1: array[], 2: array[]} [insertPKs, deletePKs, updatePKs]
      */
-    private function mergeByKey(RowStream $src, RowStream $tgt, array $key, array $numeric): array
+    private function mergeByKey(RowStream $src, RowStream $tgt, array $key, array $numeric, bool $everyMatch = false): array
     {
         $insertPKs = [];
         $deletePKs = [];
@@ -266,7 +279,7 @@ class StreamingMergeDiff
                 $tgtRow = $tgt->fetch();
             } else {
                 // Both have it — compare hashes
-                if ($srcRow['_hash'] !== $tgtRow['_hash']) {
+                if ($everyMatch || $srcRow['_hash'] !== $tgtRow['_hash']) {
                     $updatePKs[] = Arr::only($srcRow, $key);
                 }
                 $srcRow = $src->fetch();

@@ -13,7 +13,8 @@ class DBData {
     /** @var \DBDiff\DB\DBManager */
     protected $manager;
 
-    function __construct($manager) {
+    /** @param array<string, string[]> $renamed the columns the schema diff renames, by table */
+    public function __construct($manager, private array $renamed = []) {
         $this->manager = $manager;
     }
     
@@ -23,7 +24,7 @@ class DBData {
         $diffSequence = [];
 
         // Tables
-        $tableData = new TableData($this->manager);
+        $tableData = new TableData($this->manager, $this->renamed);
 
         $sourceTables = $this->manager->getTables('source');
         $targetTables = $this->manager->getTables('target');

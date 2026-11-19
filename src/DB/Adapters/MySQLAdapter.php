@@ -109,7 +109,9 @@ class MySQLAdapter implements DBAdapterInterface {
         $binary = [];
         foreach ($result as $row) {
             $type = strtolower($row['Type']);
-            if (preg_match('/^(binary|varbinary|tinyblob|blob|mediumblob|longblob)/', $type)) {
+            // BIT too: read as its integer it was written '5', which MySQL
+            // takes for the text's bytes. As hex it is written UNHEX('5').
+            if (preg_match('/^(binary|varbinary|tinyblob|blob|mediumblob|longblob|bit)\b/', $type)) {
                 $binary[] = $row['Field'];
             }
         }

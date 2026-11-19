@@ -103,6 +103,31 @@ class RoundTripMySQLTest extends TestCase
     }
 
     /**
+     * BIT values: they were written as quoted decimals, '5', which MySQL
+     * reads as the bytes of the text — "Data too long" in strict mode, a
+     * different value otherwise.
+     */
+    public function testBitValuesRoundTrip(): void
+    {
+        $this->skipOnDolt();
+        $table = 'CREATE TABLE flags (id int PRIMARY KEY, b3 bit(3), b64 bit(64));';
+        $rows = "INSERT INTO flags VALUES (1, 0, 0), (2, b'1', NULL), (3, b'11', 1);";
+        $source = $this->db('bit_source', $table . "
+            INSERT INTO flags VALUES (1, b'101', 18446744073709551615), (2, b'0', b'1010'), (4, b'111', 9223372036854775808);
+            CREATE TABLE more_flags (id int PRIMARY KEY, b bit(8));
+            INSERT INTO more_flags VALUES (1, b'10000001');");
+        $target = $this->db('bit_target', $table . $rows);
+        $untouched = $this->db('bit_untouched', $table . $rows);
+
+        [$up, $down] = $this->migration($source, $target);
+        $this->apply($target, $up);
+        $this->assertSame([null, null], $this->migration($source, $target), "the target still differs after the UP:\n$up");
+
+        $this->apply($target, $down);
+        $this->assertSame([null, null], $this->migration($untouched, $target), "the target differs from its old self after the DOWN:\n$down");
+    }
+
+    /**
      * Dolt reads CONVERT(<integer column> USING utf8mb4) as 0, so a row only
      * one side has, read that way, gets the wrong key. DBDiffComprehensiveTest
      * skips its data diffs on Dolt too.

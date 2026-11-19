@@ -22,7 +22,8 @@ class TableData {
     protected DistTableData $distTableData;
     protected LocalTableData $localTableData;
 
-    function __construct($manager) {
+    /** @param array<string, string[]> $renamed the columns the schema diff renames, by table */
+    public function __construct($manager, private array $renamed = []) {
         $this->manager = $manager;
         $this->source = $this->manager->getDB('source');
         $this->target = $this->manager->getDB('target');
@@ -33,7 +34,8 @@ class TableData {
     public function getIterator($connection, $table) {
         $columns = $this->manager->getDataColumns($connection, $table);
         $order = $this->manager->getKey($connection, $table) ?: $columns;
-        return new TableIterator($this->{$connection}, $table, $order, $columns);
+        $hex = in_array($this->manager->getDriver(), ['mysql', 'sqlite'], true) ? $this->manager->getBinaryColumns($connection, $table) : [];
+        return new TableIterator($this->{$connection}, $table, $order, $columns, $hex);
     }
 
     public function getNewData($table) {
@@ -117,9 +119,10 @@ class TableData {
         }
         $this->checkKeys($table, $sourceKey, $targetKey);
 
+        $renamed = $this->renamed[$table] ?? [];
         $diffs = $server1 == $server2
-            ? $this->localTableData->getDiff($table, $sourceKey)
-            : $this->distTableData->getDiff($table, $sourceKey);
+            ? $this->localTableData->getDiff($table, $sourceKey, $renamed)
+            : $this->distTableData->getDiff($table, $sourceKey, $renamed);
         return $this->withOverriding($diffs, 'target', $table);
     }
 
