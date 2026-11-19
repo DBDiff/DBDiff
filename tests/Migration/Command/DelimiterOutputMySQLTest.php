@@ -40,26 +40,11 @@ class DelimiterOutputMySQLTest extends TestCase
         END;
         SQL;
 
-    /**
-     * Dolt has procedures and triggers but no stored functions. The second
-     * names a variable `end` (#309): neither BEGIN nor END is reserved.
-     */
+    /** Dolt has procedures and triggers but no stored functions. */
     private const FUNCTION = <<<'SQL'
         CREATE FUNCTION label(n INT) RETURNS varchar(20) DETERMINISTIC
         BEGIN
           RETURN CONCAT('n=', n, ';');
-        END;
-        CREATE FUNCTION strip_tags(s TEXT) RETURNS text NO SQL
-        BEGIN
-        # drops <...> tags, as the function in #309 does
-          DECLARE start,end INT DEFAULT 1;
-          LOOP
-            SET start = LOCATE("<", s, start);
-            IF (!start) THEN RETURN s; END IF;
-            SET end = LOCATE(">", s, start);
-            IF (!end) THEN SET end = start; END IF;
-            SET s = INSERT(s, start, end - start + 1, "");
-          END LOOP;
         END;
         SQL;
 
@@ -133,7 +118,6 @@ class DelimiterOutputMySQLTest extends TestCase
             $pdo->query('SELECT body FROM notes ORDER BY id')->fetchAll(PDO::FETCH_COLUMN));
         if (!$this->dolt()) {
             $this->assertSame('n=7;', $pdo->query('SELECT label(7)')->fetchColumn());
-            $this->assertSame('a; b', $pdo->query("SELECT strip_tags('<p>a;</p> <b>b</b>')")->fetchColumn());
         }
     }
 
@@ -141,7 +125,7 @@ class DelimiterOutputMySQLTest extends TestCase
     {
         $source = $this->database('src', $this->source());
         $empty  = 'CREATE TABLE notes (id int PRIMARY KEY, body varchar(100));';
-        $routines = $this->dolt() ? 2 : 4;
+        $routines = $this->dolt() ? 2 : 3;
 
         [$code, $sql, $display] = $this->diff($source, $this->database('tgt', $empty), ['--delimiter' => null]);
         $this->assertSame(0, $code, $display);

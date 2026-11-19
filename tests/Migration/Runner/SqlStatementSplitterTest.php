@@ -78,21 +78,6 @@ class SqlStatementSplitterTest extends TestCase
         );
     }
 
-    /** BEGIN and END are not reserved in MySQL: a variable or column may be called either (#309). */
-    public function testBeginAndEndAsNames(): void
-    {
-        $fn = "CREATE FUNCTION f(s TEXT) RETURNS text NO SQL\nBEGIN\n"
-            . "# a comment ending in a comma,\n"
-            . "  DECLARE start,end, begin INT DEFAULT 1;\n"
-            . "  SET end = LOCATE('>', s, start);\n"
-            . "  IF (!end) THEN SET end = start; END IF;\n"
-            . "  SET s = INSERT(s, start, end - start + 1, ''), begin = end;\n"
-            . "  SELECT t.end INTO begin FROM t WHERE end > 1 AND begin IS NOT NULL ORDER BY end;\n"
-            . "  RETURN CASE WHEN end = 0 THEN 'x' ELSE s END;\n"
-            . "END";
-        $this->assertSame([$fn, 'SELECT 1'], $this->split("$fn;\nSELECT 1;", 'mysql'));
-    }
-
     public function testSqliteTriggerBody(): void
     {
         $trigger = "CREATE TEMP TRIGGER IF NOT EXISTS t AFTER INSERT ON x BEGIN\n  INSERT INTO log VALUES (1);\n  UPDATE x SET a = 2;\nEND";

@@ -17,10 +17,7 @@
  *
  * A body's END is told from the END IF / END LOOP / END WHILE / END REPEAT of
  * a statement inside it by the word that follows; a CASE, which ends in a bare
- * END or END CASE, opens a level of its own so its END closes it. BEGIN and END
- * are not reserved in MySQL, so a variable or column may be called either: one
- * that follows an operator, a comma or a word such as SET is that name, since
- * a block's BEGIN or END never can.
+ * END or END CASE, opens a level of its own so its END closes it.
  *
  * A line `DELIMITER <token>`, as the mysql client reads it, changes what ends
  * a statement until the next DELIMITER line; the line itself is never sent.
@@ -34,10 +31,6 @@ final class SqlStatementSplitter
     /** A compound statement's own END word: END IF, END LOOP, … — not a body's END. */
     private const INNER_END = ['IF', 'LOOP', 'WHILE', 'REPEAT'];
 
-    /** What only a name can follow: a block's BEGIN or END never comes after these. */
-    private const BEFORE_A_NAME = [',', '(', '!', '=', '<', '>', '+', '-', '*', '/', '%', '&', '|', '^', '~', '.',
-        'SET', 'DECLARE', 'INTO', 'RETURN', 'SELECT', 'WHERE', 'AND', 'OR', 'NOT', 'WHEN', 'IN', 'IS', 'LIKE', 'BY'];
-
     /** @return string[] statements, trimmed, without their delimiter */
     public static function split(string $sql, string $driver = 'mysql'): array
     {
@@ -49,7 +42,6 @@ final class SqlStatementSplitter
         $delimiter = ';';
         $depth = 0;
         $routine = null; // whether the statement being read creates a routine; decided on first need
-        $last = '';      // the last word or symbol read, comments aside; a literal reads as '0'
         $i = 0;
 
         $finish = function () use (&$statements, &$buffer, &$depth, &$routine): void {
@@ -80,7 +72,6 @@ final class SqlStatementSplitter
                 $end = self::quoteEnd($sql, $i, $c, $escapes);
                 $buffer .= substr($sql, $i, $end - $i);
                 $i = $end;
-                $last = '0';
                 continue;
             }
             if ($c === '-' && ($sql[$i + 1] ?? '') === '-' || $c === '#' && $mysql) {
@@ -102,7 +93,6 @@ final class SqlStatementSplitter
                 $end = $close === false ? $len : $close + strlen($m[0]);
                 $buffer .= substr($sql, $i, $end - $i);
                 $i = $end;
-                $last = '0';
                 continue;
             }
 
@@ -122,12 +112,11 @@ final class SqlStatementSplitter
                 $buffer .= $word;
                 $i += strlen($word);
                 $upper = strtoupper($word);
-                [$before, $last] = [$last, $upper];
                 if ($upper !== 'BEGIN' && $upper !== 'CASE' && $upper !== 'END') {
                     continue;
                 }
                 $routine ??= self::isRoutine($buffer);
-                if (!$routine || $upper !== 'CASE' && self::isName($before)) {
+                if (!$routine) {
                     continue;
                 }
                 if ($upper === 'END') {
@@ -151,9 +140,6 @@ final class SqlStatementSplitter
                 $i++;
                 continue;
             }
-            if (!ctype_space($c)) {
-                $last = $c;
-            }
             $buffer .= $c;
             $i++;
         }
@@ -165,16 +151,6 @@ final class SqlStatementSplitter
     public static function isRoutine(string $statement): bool
     {
         return (bool) preg_match(self::ROUTINE, self::withoutComments($statement));
-    }
-
-    /**
-     * Whether a BEGIN or END read after $before (the last word or symbol) is a
-     * name rather than a block: `DECLARE start, end INT`, `SET end = 1`,
-     * `IF (!end)`, `end - start`.
-     */
-    private static function isName(string $before): bool
-    {
-        return in_array($before, self::BEFORE_A_NAME, true);
     }
 
     private static function quoteEnd(string $sql, int $start, string $quote, bool $escapes): int
