@@ -1,0 +1,49 @@
+SQL_UP = u"""
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_pass_zx_key";
+ALTER TABLE "aa" DROP CONSTRAINT "aa_pass_key";
+CREATE TABLE "cc" (
+  "id" integer NOT NULL,
+  CONSTRAINT "cc_pkey" PRIMARY KEY ("id")
+);
+DELETE FROM "zz" WHERE "id" = '1' AND "name" = 'name';
+DROP TABLE "zz";
+ALTER TABLE "aa" ADD COLUMN "as" integer NOT NULL;
+ALTER TABLE "aa" ADD COLUMN "qw" integer NOT NULL;
+ALTER TABLE "bb" ADD COLUMN "jj" integer NOT NULL;
+ALTER TABLE "aa" ALTER COLUMN "name" DROP DEFAULT;
+ALTER TABLE "aa" ALTER COLUMN "pass" DROP NOT NULL;
+ALTER TABLE "aa" ALTER COLUMN "pass" SET DEFAULT NULL::character varying;
+ALTER TABLE "aa" DROP COLUMN "zx" CASCADE;
+ALTER TABLE "aa" ADD CONSTRAINT "aa_name_key" UNIQUE ("name");
+ALTER TABLE "aa" ADD CONSTRAINT "fk_aa_bb" FOREIGN KEY ("as") REFERENCES "bb" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE "bb" ADD CONSTRAINT "bb_pkey" PRIMARY KEY ("id");
+ALTER TABLE "aa" DROP CONSTRAINT "aa_pkey";
+ALTER TABLE "aa" ADD CONSTRAINT "aa_pkey" PRIMARY KEY ("id");
+INSERT INTO "cc" ("id") VALUES('11');
+"""
+SQL_DOWN = u"""
+ALTER TABLE "aa" DROP CONSTRAINT "aa_name_key";
+ALTER TABLE "aa" DROP CONSTRAINT "fk_aa_bb";
+ALTER TABLE "bb" DROP CONSTRAINT "bb_pkey";
+ALTER TABLE "aa" DROP CONSTRAINT "aa_pkey";
+ALTER TABLE "aa" ADD CONSTRAINT "aa_pkey" PRIMARY KEY ("id", "name");
+DELETE FROM "cc" WHERE "id" = '11';
+DROP TABLE "cc";
+CREATE TABLE "zz" (
+  "id" integer NOT NULL,
+  "name" varchar(13) NOT NULL DEFAULT 'lol'::character varying,
+  "bool" boolean NOT NULL,
+  CONSTRAINT "zz_name_key" UNIQUE ("name"),
+  CONSTRAINT "zz_pkey" PRIMARY KEY ("id", "name")
+);
+ALTER TABLE "aa" DROP COLUMN "as" CASCADE;
+ALTER TABLE "aa" DROP COLUMN "qw" CASCADE;
+ALTER TABLE "bb" DROP COLUMN "jj" CASCADE;
+ALTER TABLE "aa" ALTER COLUMN "name" SET DEFAULT 'aa'::character varying;
+ALTER TABLE "aa" ALTER COLUMN "pass" SET NOT NULL;
+ALTER TABLE "aa" ALTER COLUMN "pass" DROP DEFAULT;
+ALTER TABLE "aa" ADD COLUMN "zx" integer NOT NULL;
+ALTER TABLE "aa" ADD CONSTRAINT "aa_name_pass_zx_key" UNIQUE ("name", "pass", "zx");
+ALTER TABLE "aa" ADD CONSTRAINT "aa_pass_key" UNIQUE ("pass");
+INSERT INTO "zz" ("id","name","bool") VALUES('1','name',true);
+"""
