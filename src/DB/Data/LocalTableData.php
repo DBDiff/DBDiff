@@ -6,6 +6,7 @@ use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
 use DBDiff\DB\Data\BinaryValue;
+use DBDiff\DB\Support\QueryHelper;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use Illuminate\Database\Events\StatementPrepared;
@@ -33,7 +34,8 @@ class LocalTableData {
         $this->driver  = $this->manager->getDriver();
     }
 
-    public function getDiff($table, $key) {
+    /** @param string[] $renamed source columns the schema diff renames (PostgreSQL only renames) */
+    public function getDiff($table, $key, array $renamed = []) {
         Logger::info("Now calculating data diff for table `$table`");
 
         if ($this->driver === 'sqlite') {
@@ -41,7 +43,7 @@ class LocalTableData {
         }
 
         if ($this->driver === 'pgsql') {
-            return $this->getDiffPgsql($table, $key);
+            return $this->getDiffPgsql($table, $key, $renamed);
         }
 
         return $this->getDiffMySQL($table, $key);
@@ -71,7 +73,7 @@ class LocalTableData {
         $db2 = $this->target->getDatabaseName();
         try {
             $result = $this->source->select(
-                "CHECKSUM TABLE " . self::backtick($db1) . "." . self::backtick($table) . ", " . self::backtick($db2) . "." . self::backtick($table)
+                "CHECKSUM TABLE " . QueryHelper::backtick($db1) . "." . QueryHelper::backtick($table) . ", " . QueryHelper::backtick($db2) . "." . QueryHelper::backtick($table)
             );
             if (count($result) === 2) {
                 $cs1 = $result[0]['Checksum'] ?? null;
@@ -121,27 +123,38 @@ class LocalTableData {
         $columns2 = $this->manager->getDataColumns('target', $table);
 
         $keyCols  = implode(self::SQL_AND, array_map(
-            fn($el) => "\"a\"." . self::q($el) . " = \"b\"." . self::q($el),
+            fn($el) => "\"a\"." . QueryHelper::doubleQuote($el) . " = \"b\"." . QueryHelper::doubleQuote($el),
             $key
         ));
-        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . self::q($el) . " IS NULL", $key));
-        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . self::q($el) . " IS NULL", $key));
+        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . QueryHelper::doubleQuote($el) . " IS NULL", $key));
+        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . QueryHelper::doubleQuote($el) . " IS NULL", $key));
+
+        // A BLOB column is read as hex, so a value is written back as X'…'
+        // whether or not its bytes happen to be UTF-8 text.
+        $blob = array_values(array_unique(array_merge(
+            $this->manager->getBinaryColumns('source', $table),
+            $this->manager->getBinaryColumns('target', $table),
+        )));
+        $col = fn(string $side, string $el, string $as) => self::sqliteColumn($side, $el, $as, $blob);
+        $unhex = fn(array $rows, string $prefix = '') => self::unhexRows($rows, $blob, $prefix !== '');
 
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
-        $colsA   = implode(',', array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q($el), $columns1));
+        $colsA   = implode(',', array_map(fn($el) => $col('a', $el, $el), $columns1));
         $result1 = $this->source->select(
-            "SELECT $colsA FROM \"main\"." . self::q($table) . " AS a
-             LEFT JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
+            "SELECT $colsA FROM \"main\"." . QueryHelper::doubleQuote($table) . " AS a
+             LEFT JOIN \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b ON $keyCols
              WHERE $keyNullsTgt"
         );
+        $result1 = $unhex($result1);
 
         // ── Rows only in target (→ DELETE in UP) ─────────────────────────
-        $colsB   = implode(',', array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q($el), $columns2));
+        $colsB   = implode(',', array_map(fn($el) => $col('b', $el, $el), $columns2));
         $result2 = $this->source->select(
-            "SELECT $colsB FROM \"$alias\"." . self::q($table) . " AS b
-             LEFT JOIN \"main\"." . self::q($table) . " AS a ON $keyCols
+            "SELECT $colsB FROM \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b
+             LEFT JOIN \"main\"." . QueryHelper::doubleQuote($table) . " AS a ON $keyCols
              WHERE $keyNullsSrc"
         );
+        $result2 = $unhex($result2);
 
         // ── Changed rows (→ UPDATE in UP) ─────────────────────────────────
         $params     = ParamsFactory::get();
@@ -151,21 +164,27 @@ class LocalTableData {
             $commonCols = array_values(array_diff($commonCols, $ignoredFields));
         }
 
+        // A column only the source has is added by the schema diff, so every
+        // row both sides have is set to the source's value — see
+        // StreamingMergeDiff::getDiff.
+        $sourceOnly = array_values(array_diff($columns1, $columns2, $ignoredFields));
+
         $result3 = [];
-        if (!empty($commonCols)) {
-            $changeConds = $this->buildSQLiteChangeConds($commonCols);
+        if (!empty($commonCols) || !empty($sourceOnly)) {
+            $where = $sourceOnly === [] ? 'WHERE ' . $this->buildSQLiteChangeConds($commonCols) : '';
             $allCols = implode(',', array_merge(
-                array_map(fn($el) => "\"a\"." . self::q($el) . " AS " . self::q("s_$el"), $commonCols),
-                array_map(fn($el) => "\"b\"." . self::q($el) . " AS " . self::q("t_$el"), $commonCols)
+                array_map(fn($el) => $col('a', $el, "s_$el"), array_merge($commonCols, $sourceOnly)),
+                array_map(fn($el) => $col('b', $el, "t_$el"), $commonCols)
             ));
             $result3 = $this->source->select(
-                "SELECT $allCols FROM \"main\"." . self::q($table) . " AS a
-                 INNER JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
-                 WHERE $changeConds"
+                "SELECT $allCols FROM \"main\"." . QueryHelper::doubleQuote($table) . " AS a
+                 INNER JOIN \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b ON $keyCols
+                 $where"
             );
+            $result3 = $unhex($result3, 's_');
         }
 
-        return $this->buildDiffSequence($table, $result1, $result2, $result3, $key);
+        return $this->buildDiffSequence($table, $result1, $result2, $result3, $key, $sourceOnly);
     }
 
     /**
@@ -175,6 +194,31 @@ class LocalTableData {
      * single hash comparison — one condition per row rather than N per column.
      * Otherwise, fall back to the NULL-safe field-by-field IS NOT comparison.
      */
+    /** A column read for the SQLite diff: a BLOB column as hex, so its bytes survive whatever they hold. */
+    private static function sqliteColumn(string $side, string $el, string $as, array $blob): string
+    {
+        $ref = "\"$side\"." . QueryHelper::doubleQuote($el);
+        return in_array($el, $blob, true)
+            ? "CASE WHEN $ref IS NULL THEN NULL ELSE hex($ref) END AS " . QueryHelper::doubleQuote($as)
+            : "$ref AS " . QueryHelper::doubleQuote($as);
+    }
+
+    /** Wraps the hex read for each BLOB column back up as a BinaryValue; $paired rows carry s_ and t_ copies. */
+    private static function unhexRows(array $rows, array $blob, bool $paired): array
+    {
+        foreach ($rows as &$row) {
+            foreach ($blob as $el) {
+                foreach ($paired ? ["s_$el", "t_$el"] : [$el] as $k) {
+                    if (isset($row[$k])) {
+                        $row[$k] = new BinaryValue((string) $row[$k]);
+                    }
+                }
+            }
+        }
+        unset($row);
+        return $rows;
+    }
+
     private function buildSQLiteChangeConds(array $commonCols): string
     {
         if ($this->sqliteSha3Available()) {
@@ -186,7 +230,7 @@ class LocalTableData {
         // Fallback: NULL-safe inequality per column
         return implode(
             ' OR ',
-            array_map(fn($el) => "CAST(\"a\"." . self::q($el) . " AS TEXT) IS NOT CAST(\"b\"." . self::q($el) . " AS TEXT)", $commonCols)
+            array_map(fn($el) => "CAST(\"a\"." . QueryHelper::doubleQuote($el) . " AS TEXT) IS NOT CAST(\"b\"." . QueryHelper::doubleQuote($el) . " AS TEXT)", $commonCols)
         );
     }
 
@@ -199,7 +243,7 @@ class LocalTableData {
         $parts = array_map(
             // N for NULL, V and the text otherwise: COALESCE to '' made NULL
             // and an empty string hash alike — see StreamingMergeDiff.
-            fn($c) => "CASE WHEN \"$alias\"." . self::q($c) . " IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\"." . self::q($c) . " AS TEXT) END",
+            fn($c) => "CASE WHEN \"$alias\"." . QueryHelper::doubleQuote($c) . " IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\"." . QueryHelper::doubleQuote($c) . " AS TEXT) END",
             $columns
         );
         return "sha3(" . implode(" || X'1f' || ", $parts) . ", 256)";
@@ -225,7 +269,7 @@ class LocalTableData {
     }
 
     /** Turn the three raw result sets into Diff objects. */
-    private function buildDiffSequence(string $table, array $result1, array $result2, array $result3, array $key): array
+    private function buildDiffSequence(string $table, array $result1, array $result2, array $result3, array $key, array $sourceOnly = []): array
     {
         // Apply rowsToIgnore filtering
         $params = ParamsFactory::get();
@@ -250,7 +294,7 @@ class LocalTableData {
             ]);
         }
         foreach ($result3 as $row) {
-            $update = $this->buildUpdateFromRow($table, $row, $key);
+            $update = $this->buildUpdateFromRow($table, $row, $key, $sourceOnly);
             if ($update !== null) {
                 $diffSequence[] = $update;
             }
@@ -259,7 +303,7 @@ class LocalTableData {
         return $diffSequence;
     }
 
-    private function buildUpdateFromRow(string $table, array $row, array $key): ?UpdateData
+    private function buildUpdateFromRow(string $table, array $row, array $key, array $sourceOnly = []): ?UpdateData
     {
         $diff = [];
         $keys = [];
@@ -272,6 +316,11 @@ class LocalTableData {
             $sourceValue = $value;
             if (in_array($theKey, $key)) {
                 $keys[$theKey] = $value;
+            }
+            // Set by the UP; the DOWN drops the column, so does not set it.
+            if (in_array($theKey, $sourceOnly, true)) {
+                $diff[$theKey] = new \Diff\DiffOp\DiffOpAdd($sourceValue);
+                continue;
             }
             $targetValue = $row[$targetKey] ?? null;
             if ((string) $sourceValue !== (string) $targetValue) {
@@ -296,7 +345,7 @@ class LocalTableData {
     // This scales to millions of rows and transfers only O(pk + 32 byte hash)
     // per row in Phase 1.
 
-    private function getDiffPgsql(string $table, array $key): array
+    private function getDiffPgsql(string $table, array $key, array $renamed = []): array
     {
         $params   = ParamsFactory::get();
         $columns1 = $this->manager->getDataColumns('source', $table);
@@ -305,7 +354,7 @@ class LocalTableData {
         $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
         $merge = new StreamingMergeDiff($this->source, $this->target, 'pgsql');
-        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);
+        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore, $renamed);
     }
 
     // ── MySQL / PostgreSQL path ───────────────────────────────────────────
@@ -530,21 +579,10 @@ class LocalTableData {
     }
 
 
-    /** An identifier, quoted for SQLite: a `"` in the name is doubled. */
-    private static function q(string $name): string
-    {
-        return '"' . str_replace('"', '""', $name) . '"';
-    }
-
-    /** An identifier, quoted for MySQL: a backtick in the name is doubled. */
-    private static function backtick(string $name): string
-    {
-        return '`' . str_replace('`', '``', $name) . '`';
-    }
-
-    /** backtick(), callable inside a string. */
+    
+    /** QueryHelper::backtick(), callable inside a string. */
     private function bt(string $name): string
     {
-        return self::backtick($name);
+        return QueryHelper::backtick($name);
     }
 }

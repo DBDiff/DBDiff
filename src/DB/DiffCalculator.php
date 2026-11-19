@@ -6,6 +6,7 @@ use DBDiff\DB\Schema\MultiSchemaDiff;
 use DBDiff\DB\Support\SchemaSelection;
 use DBDiff\DB\Data\DBData;
 use DBDiff\DB\Data\TableData;
+use DBDiff\Diff\AlterTableRenameColumn;
 use DBDiff\SQLGen\Dialect\DialectRegistry;
 
 
@@ -60,15 +61,32 @@ class DiffCalculator {
         // Data diff
         $dataDiff = [];
         if ($params->type !== 'schema') {
+            $renamed = self::renamedColumns($schemaDiff);
             if ($params->input['kind'] === 'db') {
-                $dbData = new DBData($this->manager);
+                $dbData = new DBData($this->manager, $renamed);
                 $dataDiff = $dbData->getDiff();
             } else {
-                $tableData = new TableData($this->manager);
+                $tableData = new TableData($this->manager, $renamed);
                 $dataDiff = $tableData->getDiff($params->input['source']['table']);
             }
         }
 
         return [$schemaDiff, $dataDiff];
+    }
+
+    /**
+     * The columns the schema diff renames, by table: they keep their data,
+     * so the data diff does not take them for new, empty columns.
+     *
+     * @return array<string, string[]>
+     */
+    private static function renamedColumns(array $schemaDiff): array {
+        $renamed = [];
+        foreach ($schemaDiff as $diff) {
+            if ($diff instanceof AlterTableRenameColumn) {
+                $renamed[$diff->table][] = $diff->column;
+            }
+        }
+        return $renamed;
     }
 }

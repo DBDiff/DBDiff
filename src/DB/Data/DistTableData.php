@@ -24,7 +24,8 @@ class DistTableData {
         $this->target = $this->manager->getDB('target');
     }
 
-    public function getDiff($table, $key) {
+    /** @param string[] $renamed source columns the schema diff renames */
+    public function getDiff($table, $key, array $renamed = []) {
         Logger::info("Now calculating data diff for table `$table` (cross-server)");
 
         $params   = ParamsFactory::get();
@@ -35,7 +36,7 @@ class DistTableData {
         $fieldsToIgnore = TableFilter::getFieldsToIgnore($table, $params);
 
         $merge = new StreamingMergeDiff($this->source, $this->target, $driver);
-        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore);
+        return $merge->getDiff($table, $key, $columns1, $columns2, $fieldsToIgnore, $renamed);
     }
 
 }

@@ -11,6 +11,8 @@ class TableIterator {
     private array $order;
     /** @var string[] */
     private array $columns;
+    /** @var string[] */
+    private array $hex;
     private int $offset;
     private int $size;
 
@@ -19,12 +21,17 @@ class TableIterator {
      *                          column of a table without one.
      * @param string[] $columns Columns to read; all of them when empty. The
      *                          data diff leaves out generated columns.
+     * @param string[] $hex     Columns read as HEX() into a BinaryValue: MySQL's
+     *                          binary strings and BIT, whose value read as is
+     *                          was written back as quoted text, and SQLite's
+     *                          BLOB columns.
      */
-    public function __construct($connection, $table, array $order = [], array $columns = []) {
+    public function __construct($connection, $table, array $order = [], array $columns = [], array $hex = []) {
         $this->connection = $connection;
         $this->table = $table;
         $this->order = $order;
         $this->columns = $columns;
+        $this->hex = $columns ? array_values(array_intersect($hex, $columns)) : [];
         $this->offset = 0;
         $this->size = $this->query()->count();
     }
@@ -47,7 +54,17 @@ class TableIterator {
         // repeat some rows and miss others once a table outgrew one page.
         $query = $this->query();
         if ($this->columns) {
-            $query->select($this->columns);
+            $query->select(array_map(function ($column) {
+                if (!in_array($column, $this->hex, true)) {
+                    return $column;
+                }
+                $q = '"' . str_replace('"', '""', $column) . '"';
+                if ($this->connection->getDriverName() === 'mysql') {
+                    $q = '`' . str_replace('`', '``', $column) . '`';
+                }
+                // HEX(NULL) is NULL in MySQL but '' in SQLite.
+                return $this->connection->raw("CASE WHEN $q IS NULL THEN NULL ELSE HEX($q) END AS $q");
+            }, $this->columns));
         }
         foreach ($this->order as $column) {
             $query->orderBy($column);
@@ -55,7 +72,15 @@ class TableIterator {
         $data = $query->skip($this->offset)->take($size)->get()->toArray();
         $this->offset += $size;
         // Normalise stdClass rows to associative arrays, and binary streams to values.
-        return array_map(fn($row) => BinaryValue::fromStreams(is_array($row) ? $row : (array) $row), $data);
+        return array_map(function ($row) {
+            $row = BinaryValue::fromStreams(is_array($row) ? $row : (array) $row);
+            foreach ($this->hex as $column) {
+                if (isset($row[$column])) {
+                    $row[$column] = new BinaryValue((string) $row[$column]);
+                }
+            }
+            return $row;
+        }, $data);
     }
 
 }
