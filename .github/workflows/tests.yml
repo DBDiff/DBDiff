@@ -185,6 +185,9 @@ jobs:
       matrix:
         php-version: ['8.1', '8.2', '8.3', '8.4', '8.5']
         postgres-version: ['14', '15', '16', '17', '18']
+        # PostgreSQL 19 from its release candidate until postgres:19 is published.
+        include:
+          - { php-version: '8.4', postgres-version: '19', postgres-tag: '19rc2' }
 
     env:
       DB_HOST_POSTGRES: 127.0.0.1
@@ -195,7 +198,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:${{ matrix.postgres-version }}
+        image: postgres:${{ matrix.postgres-tag || matrix.postgres-version }}
         env:
           POSTGRES_PASSWORD: rootpass
           POSTGRES_USER: dbdiff
@@ -541,7 +544,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres-version: ['16', '17', '18']
+        postgres-version: ['16', '17', '18', '19']
+        # PostgreSQL 19 from its release candidate until postgres:19 is published.
+        include:
+          - { postgres-version: '19', postgres-tag: '19rc2' }
 
     env:
       DB_HOST_POSTGRES: 127.0.0.1
@@ -550,7 +556,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:${{ matrix.postgres-version }}
+        image: postgres:${{ matrix.postgres-tag || matrix.postgres-version }}
         env:
           POSTGRES_PASSWORD: rootpass
           POSTGRES_USER: dbdiff
@@ -644,7 +650,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres-version: ['14', '15', '16', '17', '18']
+        postgres-version: ['14', '15', '16', '17', '18', '19']
+        # PostgreSQL 19 from its release candidate until postgres:19 is published.
+        include:
+          - { postgres-version: '19', postgres-tag: '19rc2' }
 
     env:
       DB_HOST_POSTGRES: 127.0.0.1
@@ -652,7 +661,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:${{ matrix.postgres-version }}
+        image: postgres:${{ matrix.postgres-tag || matrix.postgres-version }}
         env:
           POSTGRES_PASSWORD: rootpass
           POSTGRES_USER: dbdiff
