@@ -6,6 +6,7 @@ use DBDiff\Diff\InsertData;
 use DBDiff\Diff\UpdateData;
 use DBDiff\Diff\DeleteData;
 use DBDiff\DB\Data\BinaryValue;
+use DBDiff\DB\Support\QueryHelper;
 use DBDiff\Exceptions\DataException;
 use DBDiff\Logger;
 use Illuminate\Database\Events\StatementPrepared;
@@ -72,7 +73,7 @@ class LocalTableData {
         $db2 = $this->target->getDatabaseName();
         try {
             $result = $this->source->select(
-                "CHECKSUM TABLE " . self::backtick($db1) . "." . self::backtick($table) . ", " . self::backtick($db2) . "." . self::backtick($table)
+                "CHECKSUM TABLE " . QueryHelper::backtick($db1) . "." . QueryHelper::backtick($table) . ", " . QueryHelper::backtick($db2) . "." . QueryHelper::backtick($table)
             );
             if (count($result) === 2) {
                 $cs1 = $result[0]['Checksum'] ?? null;
@@ -122,11 +123,11 @@ class LocalTableData {
         $columns2 = $this->manager->getDataColumns('target', $table);
 
         $keyCols  = implode(self::SQL_AND, array_map(
-            fn($el) => "\"a\"." . self::q($el) . " = \"b\"." . self::q($el),
+            fn($el) => "\"a\"." . QueryHelper::doubleQuote($el) . " = \"b\"." . QueryHelper::doubleQuote($el),
             $key
         ));
-        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . self::q($el) . " IS NULL", $key));
-        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . self::q($el) . " IS NULL", $key));
+        $keyNullsSrc = implode(self::SQL_AND, array_map(fn($el) => "\"a\"." . QueryHelper::doubleQuote($el) . " IS NULL", $key));
+        $keyNullsTgt = implode(self::SQL_AND, array_map(fn($el) => "\"b\"." . QueryHelper::doubleQuote($el) . " IS NULL", $key));
 
         // A BLOB column is read as hex, so a value is written back as X'…'
         // whether or not its bytes happen to be UTF-8 text.
@@ -140,8 +141,8 @@ class LocalTableData {
         // ── Rows only in source (→ INSERT in UP) ─────────────────────────
         $colsA   = implode(',', array_map(fn($el) => $col('a', $el, $el), $columns1));
         $result1 = $this->source->select(
-            "SELECT $colsA FROM \"main\"." . self::q($table) . " AS a
-             LEFT JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
+            "SELECT $colsA FROM \"main\"." . QueryHelper::doubleQuote($table) . " AS a
+             LEFT JOIN \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b ON $keyCols
              WHERE $keyNullsTgt"
         );
         $result1 = $unhex($result1);
@@ -149,8 +150,8 @@ class LocalTableData {
         // ── Rows only in target (→ DELETE in UP) ─────────────────────────
         $colsB   = implode(',', array_map(fn($el) => $col('b', $el, $el), $columns2));
         $result2 = $this->source->select(
-            "SELECT $colsB FROM \"$alias\"." . self::q($table) . " AS b
-             LEFT JOIN \"main\"." . self::q($table) . " AS a ON $keyCols
+            "SELECT $colsB FROM \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b
+             LEFT JOIN \"main\"." . QueryHelper::doubleQuote($table) . " AS a ON $keyCols
              WHERE $keyNullsSrc"
         );
         $result2 = $unhex($result2);
@@ -176,8 +177,8 @@ class LocalTableData {
                 array_map(fn($el) => $col('b', $el, "t_$el"), $commonCols)
             ));
             $result3 = $this->source->select(
-                "SELECT $allCols FROM \"main\"." . self::q($table) . " AS a
-                 INNER JOIN \"$alias\"." . self::q($table) . " AS b ON $keyCols
+                "SELECT $allCols FROM \"main\"." . QueryHelper::doubleQuote($table) . " AS a
+                 INNER JOIN \"$alias\"." . QueryHelper::doubleQuote($table) . " AS b ON $keyCols
                  $where"
             );
             $result3 = $unhex($result3, 's_');
@@ -196,10 +197,10 @@ class LocalTableData {
     /** A column read for the SQLite diff: a BLOB column as hex, so its bytes survive whatever they hold. */
     private static function sqliteColumn(string $side, string $el, string $as, array $blob): string
     {
-        $ref = "\"$side\"." . self::q($el);
+        $ref = "\"$side\"." . QueryHelper::doubleQuote($el);
         return in_array($el, $blob, true)
-            ? "CASE WHEN $ref IS NULL THEN NULL ELSE hex($ref) END AS " . self::q($as)
-            : "$ref AS " . self::q($as);
+            ? "CASE WHEN $ref IS NULL THEN NULL ELSE hex($ref) END AS " . QueryHelper::doubleQuote($as)
+            : "$ref AS " . QueryHelper::doubleQuote($as);
     }
 
     /** Wraps the hex read for each BLOB column back up as a BinaryValue; $paired rows carry s_ and t_ copies. */
@@ -229,7 +230,7 @@ class LocalTableData {
         // Fallback: NULL-safe inequality per column
         return implode(
             ' OR ',
-            array_map(fn($el) => "CAST(\"a\"." . self::q($el) . " AS TEXT) IS NOT CAST(\"b\"." . self::q($el) . " AS TEXT)", $commonCols)
+            array_map(fn($el) => "CAST(\"a\"." . QueryHelper::doubleQuote($el) . " AS TEXT) IS NOT CAST(\"b\"." . QueryHelper::doubleQuote($el) . " AS TEXT)", $commonCols)
         );
     }
 
@@ -242,7 +243,7 @@ class LocalTableData {
         $parts = array_map(
             // N for NULL, V and the text otherwise: COALESCE to '' made NULL
             // and an empty string hash alike — see StreamingMergeDiff.
-            fn($c) => "CASE WHEN \"$alias\"." . self::q($c) . " IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\"." . self::q($c) . " AS TEXT) END",
+            fn($c) => "CASE WHEN \"$alias\"." . QueryHelper::doubleQuote($c) . " IS NULL THEN 'N' ELSE 'V' || CAST(\"$alias\"." . QueryHelper::doubleQuote($c) . " AS TEXT) END",
             $columns
         );
         return "sha3(" . implode(" || X'1f' || ", $parts) . ", 256)";
@@ -578,21 +579,10 @@ class LocalTableData {
     }
 
 
-    /** An identifier, quoted for SQLite: a `"` in the name is doubled. */
-    private static function q(string $name): string
-    {
-        return '"' . str_replace('"', '""', $name) . '"';
-    }
-
-    /** An identifier, quoted for MySQL: a backtick in the name is doubled. */
-    private static function backtick(string $name): string
-    {
-        return '`' . str_replace('`', '``', $name) . '`';
-    }
-
-    /** backtick(), callable inside a string. */
+    
+    /** QueryHelper::backtick(), callable inside a string. */
     private function bt(string $name): string
     {
-        return self::backtick($name);
+        return QueryHelper::backtick($name);
     }
 }
