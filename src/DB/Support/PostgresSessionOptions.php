@@ -67,18 +67,17 @@ final class PostgresSessionOptions
         return [str_replace('-', '_', substr($assignment, 0, $eq)), substr($assignment, $eq + 1)];
     }
 
-    /** Apply a PostgreSQL connection's `session_options` to its session. */
+    /** Apply a PostgreSQL connection's `session_options` to its session, then pin its output formats. */
     public static function apply(Connection $connection): void
     {
         if ($connection->getDriverName() !== 'pgsql') {
             return;
         }
         $options = $connection->getConfig('session_options');
-        if (!is_string($options) || $options === '') {
-            return;
-        }
-        foreach (self::parse($options) as [$name, $value]) {
+        foreach (is_string($options) ? self::parse($options) : [] as [$name, $value]) {
             $connection->select('SELECT set_config(?, ?, false)', [$name, $value]);
         }
+        // After the URL's options, so these formats win over them.
+        SessionFormats::apply($connection);
     }
 }
