@@ -4,6 +4,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use DBDiff\DB\Support\QueryHelper;
+use DBDiff\DB\Support\MySqlTimestamps;
 use DBDiff\DB\Support\SocketConfig;
 use DBDiff\Exceptions\DBException;
 
@@ -24,6 +25,8 @@ class MySQLAdapter implements DBAdapterInterface {
             // read as '?', so a change between two of them went unseen.
             'charset'   => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
+            // TIMESTAMP values read as instants, not in the server's zone.
+            'timezone'  => MySqlTimestamps::UTC,
         ], 'mysql', $server['socket'] ?? null);
     }
 
