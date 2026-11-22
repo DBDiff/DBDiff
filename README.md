@@ -184,7 +184,8 @@ Row level security is diffed as a first-class object — policies and each table
 Supabase enforces per-row access. A policy dropped or changed between two
 environments shows up in the migration instead of passing silently.
 
-DBDiff reads the `public` schema unless told otherwise, so policies and objects
+DBDiff reads the `public` schema unless told otherwise (`--schemas`,
+`--ignore-schemas`, or a `--tables` pattern naming a schema), so policies and objects
 Supabase keeps in `auth`, `storage` and its other managed schemas are outside
 the diff. Those are managed by Supabase itself rather than by your migrations.
 Schemas of your own are compared with `--schemas`, or every schema but the
@@ -429,9 +430,9 @@ _Flags always override settings in `.dbdiff`._
 | `--config=<file>` | Config file path. Defaults to `.dbdiff`. |
 | `--output=<path>` | Where to write. A **file path** for `native`, `liquibase-xml` and `liquibase-yaml`; a **directory** for `flyway` and `laravel`, which name their own files. Defaults to `migration.sql` in the current directory. |
 | `--memory-limit=<value>` | PHP memory limit for this run (e.g. `512M`, `1G`, `2G`, `-1` for unlimited). Overrides the 1G default and any `memory_limit` setting in your config file. |
-| `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*`. PostgreSQL with `--schemas`: a pattern with a schema (`app.*`, `public.orders`) matches in that schema only; one without matches the table in every schema. |
+| `--tables=<list>` | Comma-separated table include list (supports globs: `*`, `?`). Only these tables are diffed. Example: `--tables=users,orders,wp_*`. PostgreSQL: a pattern with a schema (`app.*`, `public.orders`) matches in that schema only, and without `--schemas` or `--ignore-schemas` that schema is compared beside `public`; one without a schema matches the table in every schema compared. |
 | `--ignore-tables=<list>` | Comma-separated table exclude list (supports globs: `*`, `?`). Example: `--ignore-tables=cache_*,temp_*` |
-| `--schemas=<list>` | PostgreSQL: the schemas to compare (supports globs). Defaults to `public`. `--schemas='*'` compares every schema but the system's own; `--schemas=public,app` compares two. Objects outside `public` are named in full in the migration, and a schema only one side has is created or dropped. |
+| `--schemas=<list>` | PostgreSQL: the schemas to compare (supports globs). Defaults to `public`, and any schema a `--tables` pattern names. `--schemas='*'` compares every schema but the system's own; `--schemas=public,app` compares two. Objects outside `public` are named in full in the migration, and a schema only one side has is created or dropped. |
 | `--ignore-schemas=<list>` | PostgreSQL: schemas to skip (supports globs). On its own, compares every other schema. Example: `--ignore-schemas=auth,storage,extensions` |
 | `--allow-destructive` | Generate the migration even when it contains data-losing changes. See [Destructive Change Protection](#destructive-change-protection). |
 | `--renames=auto\|off` | PostgreSQL: `auto` (the default) renames a column, table or sequence whose only difference is its name, keeping its data, where exactly one such pair exists. `off` drops and adds instead. |
