@@ -204,4 +204,36 @@ class MultiSchemaSQLTest extends TestCase
         $named = (object) ['schemas' => ['app', 'reports'], 'schemasToIgnore' => null];
         $this->assertSame(['app', 'reports'], SchemaSelection::resolve($named, $connection, $connection));
     }
+
+    // `--tables=app.plans` on its own read `public` alone, matched nothing,
+    // and reported the table identical whatever its rows held.
+    public function testATablePatternThatNamesASchemaBringsItIn(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('select')->willReturn([['name' => 'app'], ['name' => 'audit'], ['name' => 'public']]);
+
+        $qualified = (object) ['schemas' => null, 'schemasToIgnore' => null, 'tables' => 'app.plans, orders, a*.log'];
+        $this->assertSame(['public', 'app', 'audit'], SchemaSelection::resolve($qualified, $connection, $connection));
+
+        $array = (object) ['schemas' => null, 'schemasToIgnore' => null, 'tables' => ['reports.daily']];
+        $this->assertSame(['public', 'reports'], SchemaSelection::resolve($array, $connection, $connection));
+    }
+
+    public function testTablePatternsInPublicOrWithoutASchemaLeaveTheDefault(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->never())->method('select');
+        foreach (['public.orders, users', 'users,wp_*', null] as $tables) {
+            $params = (object) ['schemas' => null, 'schemasToIgnore' => null, 'tables' => $tables];
+            $this->assertSame(['public'], SchemaSelection::resolve($params, $connection, $connection));
+        }
+    }
+
+    public function testExplicitSchemasStillDecide(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('select')->willReturn([['name' => 'app'], ['name' => 'public']]);
+        $params = (object) ['schemas' => ['public'], 'schemasToIgnore' => null, 'tables' => 'app.plans'];
+        $this->assertSame(['public'], SchemaSelection::resolve($params, $connection, $connection));
+    }
 }

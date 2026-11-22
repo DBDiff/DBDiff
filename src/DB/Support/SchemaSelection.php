@@ -7,8 +7,11 @@ use Illuminate\Database\Connection;
  * Which PostgreSQL schemas a diff compares.
  *
  * `public` alone unless the params say otherwise: `schemas` names the ones to
- * compare, and `schemasToIgnore` alone compares every schema but those. The
- * system's own schemas are never compared.
+ * compare, and `schemasToIgnore` alone compares every schema but those. With
+ * neither, a `tables` pattern that names a schema (`app.plans`, `app.*`)
+ * brings that schema in beside `public`: it read nothing before, and the diff
+ * reported tables it never looked at as identical. The system's own schemas
+ * are never compared.
  */
 final class SchemaSelection
 {
@@ -28,7 +31,11 @@ final class SchemaSelection
         $ignore  = self::patterns($params->schemasToIgnore ?? null);
 
         if ($include === [] && $ignore === []) {
-            return self::DEFAULT;
+            $named = self::schemasNamedBy(self::patterns($params->tables ?? null));
+            if (array_diff($named, self::DEFAULT) === []) {
+                return self::DEFAULT;
+            }
+            $include = array_values(array_unique([...self::DEFAULT, ...$named]));
         }
 
         $present = array_values(array_unique(array_merge(self::userSchemas($source), self::userSchemas($target))));
@@ -73,6 +80,23 @@ final class SchemaSelection
               ORDER BY 1"
         );
         return array_map(fn($r) => (string) ((array) $r)['name'], $rows);
+    }
+
+    /**
+     * The schema part of each table pattern that has one: `app` of `app.plans`.
+     *
+     * @param list<string> $tables
+     * @return list<string>
+     */
+    private static function schemasNamedBy(array $tables): array
+    {
+        $schemas = [];
+        foreach ($tables as $pattern) {
+            if (str_contains($pattern, '.')) {
+                $schemas[] = substr($pattern, 0, strpos($pattern, '.'));
+            }
+        }
+        return array_values(array_unique($schemas));
     }
 
     /** @return list<string> */
