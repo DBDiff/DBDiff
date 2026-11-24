@@ -116,7 +116,9 @@ class DsnParser
             parse_str($parsed['query'], $query);
         }
 
-        $sslMode   = $query['sslmode']   ?? '';
+        // TLS: libpq's names, and for MySQL the mysql client's (TlsConfig).
+        $tls       = \DBDiff\DB\Support\TlsConfig::fromQuery($query, $driver);
+        $sslMode   = $tls['sslmode'] ?? '';
         // A Unix-domain socket (issue #44): ?socket= for either driver, MySQL's
         // ?unix_socket=, or libpq's ?host= naming a directory.
         $socket = (string) ($query['socket'] ?? $query['unix_socket'] ?? '');
@@ -137,6 +139,9 @@ class DsnParser
             'user'      => $user,
             'password'  => $password,
             'sslmode'   => $sslMode,
+            'sslrootcert' => $tls['sslrootcert'] ?? '',
+            'sslcert'   => $tls['sslcert'] ?? '',
+            'sslkey'    => $tls['sslkey'] ?? '',
             // libpq session settings, `-c name=value …` — see PostgresSessionOptions.
             'options'   => (string) ($query['options'] ?? ''),
             'pgbouncer' => $pgbouncer,
@@ -253,9 +258,12 @@ class DsnParser
                 // Each server keeps its own: the source URL's sslmode used to
                 // be applied to both connections.
                 'sslmode'  => $parsed['sslmode'] ?? '',
+                'sslrootcert' => $parsed['sslrootcert'] ?? '',
+                'sslcert'  => $parsed['sslcert'] ?? '',
+                'sslkey'   => $parsed['sslkey'] ?? '',
                 'options'  => $parsed['options'] ?? '',
                 'socket'   => $parsed['socket'] ?? '',
-            ], fn ($v, $k) => !in_array($k, ['sslmode', 'options', 'socket'], true) || $v !== '', ARRAY_FILTER_USE_BOTH),
+            ], fn ($v, $k) => !in_array($k, ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'options', 'socket'], true) || $v !== '', ARRAY_FILTER_USE_BOTH),
         ];
     }
 }

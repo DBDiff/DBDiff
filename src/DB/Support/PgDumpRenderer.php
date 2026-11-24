@@ -559,10 +559,8 @@ final class PgDumpRenderer
     {
         $env = ['PGPASSWORD' => (string) $connection->getConfig('password')];
 
-        $sslmode = $connection->getConfig('sslmode');
-        if (is_string($sslmode) && $sslmode !== '') {
-            $env['PGSSLMODE'] = $sslmode;
-        }
+        // sslmode, and the certificate files a URL names (TlsConfig).
+        $env += TlsConfig::libpqEnvironment(fn (string $key) => $connection->getConfig($key));
 
         // pg_dump honours the URL's session settings the way libpq does.
         $options = $connection->getConfig('session_options');

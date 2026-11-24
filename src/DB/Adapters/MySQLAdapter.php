@@ -6,6 +6,7 @@ use Illuminate\Support\Str;
 use DBDiff\DB\Support\QueryHelper;
 use DBDiff\DB\Support\MySqlTimestamps;
 use DBDiff\DB\Support\SocketConfig;
+use DBDiff\DB\Support\TlsConfig;
 use DBDiff\Exceptions\DBException;
 
 
@@ -27,6 +28,8 @@ class MySQLAdapter implements DBAdapterInterface {
             'collation' => 'utf8mb4_unicode_ci',
             // TIMESTAMP values read as instants, not in the server's zone.
             'timezone'  => MySqlTimestamps::UTC,
+            // TLS from the URL's ssl-mode and ssl-ca (TlsConfig).
+            'options'   => TlsConfig::mysqlOptions($server),
         ], 'mysql', $server['socket'] ?? null);
     }
 

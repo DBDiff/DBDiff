@@ -173,7 +173,7 @@ SQLite 3.x is supported (any version supported by the installed `pdo_sqlite` PHP
 
 ### Supabase
 
-`--supabase` sets `driver=pgsql` and enables SSL automatically:
+`--supabase` sets `driver=pgsql` and enables SSL automatically (`sslmode=require`; to verify the server, see [TLS](#tls)):
 
 ```bash
 ./dbdiff --supabase --server1=user:pass@db.xxx.supabase.co:5432 server1.mydb:server1.mydb
@@ -565,7 +565,7 @@ Pass `--format=native` to `migration:new` to override the auto-detected format.
   --server2-url='postgres://user:pass@db.yyyy.supabase.co:5432/postgres'
 ```
 
-Each URL's own `sslmode` and `options` apply to that server's connection, as they do for psql and pg_dump — `?sslmode=require&options=-c%20default_transaction_read_only%3Don` keeps a session on the source read-only, for example.
+Each URL's own `sslmode` (with its certificate files, see [TLS](#tls)) and `options` apply to that server's connection, as they do for psql and pg_dump — `?sslmode=require&options=-c%20default_transaction_read_only%3Don` keeps a session on the source read-only, for example.
 
 Or put the URLs in `DBDIFF_SERVER1_URL` and `DBDIFF_SERVER2_URL`. Any user on the machine can read a command's arguments while it runs, but only you can read its environment, so this keeps the passwords out of the process list. A `--server1-url` or `--server1` on the command line takes precedence over `DBDIFF_SERVER1_URL`, and likewise for server 2:
 
@@ -591,6 +591,26 @@ server2:
 ```
 
 In a URL, `?socket=` works for both drivers, and MySQL's `?unix_socket=` and libpq's `?host=<directory>` work too: `mysql://root:pw@localhost/shop?socket=/tmp/mysql.sock`, `postgres://app:secret@/orders?host=/var/run/postgresql`. A PostgreSQL socket file (`/tmp/.s.PGSQL.5433`) is read as its directory and port.
+
+### TLS
+
+A URL's TLS settings apply to that server's connection, and to `pg_dump` when it renders:
+
+| | PostgreSQL | MySQL |
+|---|---|---|
+| Mode | `sslmode=` `disable`, `prefer` (the default), `require`, `verify-ca`, `verify-full` | `ssl-mode=` `DISABLED`, `PREFERRED`, `REQUIRED`, `VERIFY_CA`, `VERIFY_IDENTITY` |
+| CA to verify the server against | `sslrootcert=<file>` | `ssl-ca=<file>` |
+| Client certificate | `sslcert=<file>`, `sslkey=<file>` | `ssl-cert=<file>`, `ssl-key=<file>` |
+
+The PostgreSQL names work in a MySQL URL too, `sslmode=verify-full` reading as `VERIFY_IDENTITY`. `require` / `REQUIRED` encrypts without checking who answered; to know the server is the one you meant, verify it against its CA:
+
+```bash
+./dbdiff diff --type=all \
+  --server1-url='postgres://user:pass@db.xxxx.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=/path/to/prod-ca-2021.crt' \
+  --server2-url='mysql://user:pass@db.example.com:3306/shop?ssl-mode=VERIFY_IDENTITY&ssl-ca=/path/to/ca.pem'
+```
+
+A server whose certificate comes from a CA of its own, such as a hosted Supabase project's, can only be verified with that CA. Supabase offers it for download in the project's database settings. For MySQL, `VERIFY_CA` also checks that the certificate names the host connected to, as `VERIFY_IDENTITY` does, and either mode needs `ssl-ca`.
 
 If your password contains special characters, use `dbdiff url:encode` (see [`url:encode`](#urlencode--password-encoder) in the Command-Line API section):
 
