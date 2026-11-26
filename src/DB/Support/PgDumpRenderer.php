@@ -67,6 +67,7 @@ final class PgDumpRenderer
         }
         self::$archives = self::$listings = self::$unavailable = [];
         self::$used = false;
+        PostgresTableFacts::clear();
     }
 
     /**
@@ -417,47 +418,61 @@ final class PgDumpRenderer
      */
     private static function relatedNames(Connection $connection, string $table): array
     {
+        return PostgresTableFacts::get($connection, 'relatedNames', $table,
+            fn() => self::relatedNamesFor($connection, [$table])[$table] ?? []);
+    }
+
+    /**
+     * relatedNames() for several tables in one query, keyed by table.
+     *
+     * @param  list<string> $tables
+     * @return array<string, array<string, true>>
+     */
+    public static function relatedNamesFor(Connection $connection, array $tables): array
+    {
+        $ph = QueryHelper::placeholders($tables);
         $rows = $connection->select(
-            "SELECT c.relname AS name
+            "SELECT c.relname AS owner, c.relname AS name
                FROM pg_class c
                JOIN pg_namespace n ON n.oid = c.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname IN ($ph)
              UNION
-             SELECT i.relname
+             SELECT t.relname, i.relname
                FROM pg_index x
                JOIN pg_class i ON i.oid = x.indexrelid
                JOIN pg_class t ON t.oid = x.indrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname IN ($ph)
              UNION
              -- Sequences owned by a column carry that column's identity clause.
-             SELECT s.relname
+             SELECT t.relname, s.relname
                FROM pg_depend d
                JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
                JOIN pg_class t ON t.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ? AND d.deptype IN ('a','i')
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname IN ($ph) AND d.deptype IN ('a','i')
              UNION
-             SELECT con.conname
+             SELECT t.relname, con.conname
                FROM pg_constraint con
                JOIN pg_class t ON t.oid = con.conrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname IN ($ph)
              UNION
-             SELECT tg.tgname
+             SELECT t.relname, tg.tgname
                FROM pg_trigger tg
                JOIN pg_class t ON t.oid = tg.tgrelid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ?
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname IN ($ph)
                 AND NOT tg.tgisinternal",
-            [$table, $table, $table, $table, $table]
+            array_merge($tables, $tables, $tables, $tables, $tables)
         );
 
         $names = [];
         foreach ($rows as $row) {
-            $name = ((array) $row)['name'] ?? null;
+            $row = (array) $row;
+            $name = $row['name'] ?? null;
             if (is_string($name) && $name !== '') {
-                $names[$name] = true;
+                $names[$row['owner']][$name] = true;
             }
         }
 

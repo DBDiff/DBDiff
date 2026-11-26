@@ -248,18 +248,37 @@ final class PostgresTableParts
      */
     public static function inheritedFrom(Connection $connection, string $table): array
     {
+        return PostgresTableFacts::get($connection, 'inheritedFrom', $table,
+            fn() => self::inheritedFromFor($connection, [$table])[$table] ?? []);
+    }
+
+    /**
+     * inheritedFrom() for several tables in one query, keyed by table; a table
+     * with no parents is left out.
+     *
+     * @param  list<string> $tables
+     * @return array<string, list<string>>
+     */
+    public static function inheritedFromFor(Connection $connection, array $tables): array
+    {
         $rows = $connection->select(
-            "SELECT CASE WHEN n.nspname = 'public' THEN quote_ident(p.relname)
+            "SELECT c.relname AS table_name,
+                    CASE WHEN n.nspname = 'public' THEN quote_ident(p.relname)
                          ELSE quote_ident(n.nspname) || '.' || quote_ident(p.relname) END AS parent
                FROM pg_inherits i
                JOIN pg_class c ON c.oid = i.inhrelid
                JOIN pg_class p ON p.oid = i.inhparent
                JOIN pg_namespace n ON n.oid = p.relnamespace
-              WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ? AND NOT c.relispartition
-              ORDER BY i.inhseqno",
-            [$table]
+              WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname IN (" . QueryHelper::placeholders($tables) . ") AND NOT c.relispartition
+              ORDER BY c.relname, i.inhseqno",
+            $tables
         );
-        return array_map(fn($row) => ((array) $row)['parent'], $rows);
+        $out = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $out[$row['table_name']][] = $row['parent'];
+        }
+        return $out;
     }
 
     /**
@@ -270,16 +289,32 @@ final class PostgresTableParts
      */
     public static function sharesNotNullName(Connection $connection, string $table): bool
     {
-        $row = $connection->selectOne(
-            "SELECT EXISTS (
-                SELECT 1 FROM pg_constraint k
-                  JOIN pg_class c ON c.oid = k.conrelid
-                 WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname = ? AND k.contype = 'n'
-                   AND EXISTS (SELECT 1 FROM pg_constraint o
-                                WHERE o.connamespace = k.connamespace AND o.conname = k.conname AND o.oid <> k.oid)
-             ) AS shared",
-            [$table]
+        return PostgresTableFacts::get($connection, 'sharesNotNullName', $table,
+            fn() => self::sharesNotNullNameFor($connection, [$table])[$table] ?? false);
+    }
+
+    /**
+     * sharesNotNullName() for several tables in one query: the tables for
+     * which it holds, each => true.
+     *
+     * @param  list<string> $tables
+     * @return array<string, bool>
+     */
+    public static function sharesNotNullNameFor(Connection $connection, array $tables): array
+    {
+        $rows = $connection->select(
+            "SELECT DISTINCT c.relname AS table_name
+               FROM pg_constraint k
+               JOIN pg_class c ON c.oid = k.conrelid
+              WHERE c.relnamespace = " . SchemaScope::oid($connection) . " AND c.relname IN (" . QueryHelper::placeholders($tables) . ") AND k.contype = 'n'
+                AND EXISTS (SELECT 1 FROM pg_constraint o
+                             WHERE o.connamespace = k.connamespace AND o.conname = k.conname AND o.oid <> k.oid)",
+            $tables
         );
-        return (bool) ((array) $row)['shared'];
+        $out = [];
+        foreach ($rows as $row) {
+            $out[((array) $row)['table_name']] = true;
+        }
+        return $out;
     }
 }

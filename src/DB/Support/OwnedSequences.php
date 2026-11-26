@@ -135,24 +135,40 @@ final class OwnedSequences
      */
     private static function standaloneColumns(Connection $connection, string $table, bool $onlyStandalone = true): array
     {
+        $read = fn() => self::standaloneColumnsFor($connection, [$table], $onlyStandalone)[$table] ?? [];
+        return $onlyStandalone ? PostgresTableFacts::get($connection, 'standaloneColumns', $table, $read) : $read();
+    }
+
+    /**
+     * standaloneColumns() for several tables in one query, keyed by table; a
+     * table with none is left out.
+     *
+     * @param  list<string> $tables
+     * @return array<string, array<string, string>> table => sequence => column
+     */
+    public static function standaloneColumnsFor(Connection $connection, array $tables, bool $onlyStandalone = true): array
+    {
         $rows = $connection->select(
-            "SELECT s.relname AS name, a.attname AS col
+            "SELECT t.relname AS table_name, s.relname AS name, a.attname AS col
                FROM pg_depend d
                JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
                JOIN pg_class s ON s.oid = d.objid AND s.relkind = 'S'
                JOIN pg_sequence sq ON sq.seqrelid = s.oid
                JOIN pg_class t ON t.oid = d.refobjid
                JOIN pg_namespace n ON n.oid = t.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname = ? AND d.deptype = 'a'
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND t.relname IN (" . QueryHelper::placeholders($tables) . ") AND d.deptype = 'a'
                 AND " . ($onlyStandalone ? "NOT (" . self::serialShaped('sq', 's.oid') . ")" : 'true'),
-            [$table]
+            $tables
         );
-        $columns = [];
+        $out = [];
         foreach ($rows as $row) {
             $row = (array) $row;
-            $columns[$row['name']] = $row['col'];
+            $out[$row['table_name']][$row['name']] = $row['col'];
         }
-        ksort($columns);
-        return $columns;
+        foreach ($out as &$columns) {
+            ksort($columns);
+        }
+        unset($columns);
+        return $out;
     }
 }
