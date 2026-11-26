@@ -137,7 +137,8 @@ class NewTableFactsPostgresTest extends TestCase
 
         $this->assertSame($perTable, $prefetched);
         // Not a comparison of two empty renders.
-        $this->assertStringContainsString('INHERITS (base_t, extra_t)', $perTable['kid']);
+        // pg_dump before 18 qualifies the parents; the built-in renderer does not.
+        $this->assertMatchesRegularExpression('/INHERITS \((public\.)?base_t, (public\.)?extra_t\)/', $perTable['kid']);
         $this->assertStringContainsString('PARTITION BY RANGE', $perTable['measurements']);
         $this->assertStringContainsString('PARTITION OF', $perTable['measurements_2025']);
         $this->assertStringContainsString('UNLOGGED', $perTable['scratch']);
