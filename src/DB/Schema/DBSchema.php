@@ -5,6 +5,8 @@ use Diff\Differ\ListDiffer;
 use Diff\DiffOp\DiffOpRemove;
 use Diff\DiffOp\DiffOpAdd;
 use DBDiff\DB\Support\PostgresTableParts;
+use DBDiff\DB\Support\PostgresTableFacts;
+use DBDiff\DB\Adapters\PostgresAdapter;
 use DBDiff\Diff\AlterTableDropConstraint;
 use DBDiff\Diff\AlterTableAddConstraint;
 
@@ -166,6 +168,13 @@ class DBSchema {
         if (!empty($deletedTables)) {
             $targetFkMap    = $this->manager->getForeignKeyMap('target');
             $deletedTables  = TableOrder::sort($deletedTables, $targetFkMap);
+        }
+
+        // A table one side lacks is written out in full, from facts read for
+        // all of them at once rather than per table (PostgresTableFacts).
+        if ($driver === 'pgsql' && $adapter instanceof PostgresAdapter) {
+            PostgresTableFacts::prefetchNewTables($adapter, $this->manager->getDB('source'), $addedTables);
+            PostgresTableFacts::prefetchNewTables($adapter, $this->manager->getDB('target'), $deletedTables);
         }
 
         $added = [];

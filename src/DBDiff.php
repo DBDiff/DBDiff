@@ -2,6 +2,7 @@
 
 use DBDiff\Params\ParamsFactory;
 use DBDiff\DB\DiffCalculator;
+use DBDiff\DB\Support\PostgresTableFacts;
 use DBDiff\SQLGen\SQLGenerator;
 use DBDiff\Logger;
 use DBDiff\Templater;
@@ -63,31 +64,36 @@ class DBDiff {
      */
     public function getDiffResult(object $params): array
     {
-        $diffCalculator = new DiffCalculator;
-        $diff           = $diffCalculator->getDiff($params);
+        // Facts read up front for the tables one side lacks hold for this run only.
+        try {
+            $diffCalculator = new DiffCalculator;
+            $diff           = $diffCalculator->getDiff($params);
 
-        if (empty($diff['schema']) && empty($diff['data'])) {
-            return ['empty' => true, 'up' => '', 'down' => ''];
+            if (empty($diff['schema']) && empty($diff['data'])) {
+                return ['empty' => true, 'up' => '', 'down' => ''];
+            }
+
+            $allowDestructive = $params->allowDestructive ?? false;
+            $linter           = new DestructiveLinter();
+            $lintResult       = $linter->lint($diff);
+
+            if ($lintResult->hasErrors() && !$allowDestructive) {
+                throw new DestructiveChangeException($lintResult);
+            }
+
+            $delimiter = $params->delimiter ?? null;
+            if ($delimiter !== null && ($params->driver ?? 'mysql') !== 'mysql') {
+                throw new \InvalidArgumentException(
+                    '--delimiter is for MySQL: psql reads $$-quoted bodies and the sqlite3 shell reads trigger bodies without it.'
+                );
+            }
+            $sqlGenerator = new SQLGenerator($diff, (bool) ($params->units ?? false), $delimiter);
+            $up   = ($params->include !== 'down') ? $sqlGenerator->getUp()   : '';
+            $down = ($params->include !== 'up')   ? $sqlGenerator->getDown() : '';
+
+            return ['empty' => false, 'up' => $up, 'down' => $down, 'lint' => $lintResult];
+        } finally {
+            PostgresTableFacts::clear();
         }
-
-        $allowDestructive = $params->allowDestructive ?? false;
-        $linter           = new DestructiveLinter();
-        $lintResult       = $linter->lint($diff);
-
-        if ($lintResult->hasErrors() && !$allowDestructive) {
-            throw new DestructiveChangeException($lintResult);
-        }
-
-        $delimiter = $params->delimiter ?? null;
-        if ($delimiter !== null && ($params->driver ?? 'mysql') !== 'mysql') {
-            throw new \InvalidArgumentException(
-                '--delimiter is for MySQL: psql reads $$-quoted bodies and the sqlite3 shell reads trigger bodies without it.'
-            );
-        }
-        $sqlGenerator = new SQLGenerator($diff, (bool) ($params->units ?? false), $delimiter);
-        $up   = ($params->include !== 'down') ? $sqlGenerator->getUp()   : '';
-        $down = ($params->include !== 'up')   ? $sqlGenerator->getDown() : '';
-
-        return ['empty' => false, 'up' => $up, 'down' => $down, 'lint' => $lintResult];
     }
 }

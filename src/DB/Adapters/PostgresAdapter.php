@@ -18,6 +18,7 @@ use DBDiff\DB\Support\SchemaScope;
 use DBDiff\DB\Support\PostgresPartman;
 use DBDiff\DB\Support\PostgresCatalogColumns;
 use DBDiff\DB\Support\PostgresPartitionIndexes;
+use DBDiff\DB\Support\PostgresTableFacts;
 
 class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface, ColumnDependencyAdapterInterface {
 
@@ -188,8 +189,8 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
             }
         }
 
-        $bulk        = $this->getBulkTableSchema($connection, [$table]);
-        $schema      = $bulk[$table] ?? ['columns' => [], 'keys' => [], 'constraints' => []];
+        $schema      = PostgresTableFacts::get($connection, 'bulkSchema', $table,
+            fn() => $this->getBulkTableSchema($connection, [$table])[$table] ?? PostgresTableFacts::NO_SCHEMA);
         $columns     = $schema['columns'];
         $keys        = $schema['keys'];
         $constraints = $schema['constraints'];
@@ -204,7 +205,7 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // parents supply the rest, and their checks.
         $parents = PostgresTableParts::inheritedFrom($connection, $table);
         if ($parents !== []) {
-            $attrs   = PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? [];
+            $attrs   = PostgresTableFacts::attributes($connection, $table);
             $columns = array_filter($columns, fn($name) => (bool) ($attrs[$name]['local'] ?? true), ARRAY_FILTER_USE_KEY);
         }
         [$inline, $notValid] = PostgresTableParts::splitConstraints($constraints, $withoutConstraints);
@@ -240,14 +241,15 @@ class PostgresAdapter implements DBAdapterInterface, BulkSchemaAdapterInterface,
         // SET STORAGE only became legal inside CREATE TABLE in PostgreSQL 16,
         // so it trails the statement instead, as do the replica identity and
         // statistics targets, which CREATE TABLE has no clause for.
-        $attrs = PostgresSchemaHelper::attributeMeta($connection, [$table])[$table] ?? [];
+        $attrs = PostgresTableFacts::attributes($connection, $table);
         $name  = SchemaScope::name($connection, $table);
         foreach (array_merge(
             OwnedSequences::ownershipStatements($connection, $table),
             PostgresSchemaHelper::storageStatements($name, $attrs),
             PostgresTableSettings::tableSettingStatements(
                 $name,
-                PostgresSchemaHelper::relationMeta($connection, [$table])[$table]['replicaIdentity'] ?? 'DEFAULT',
+                PostgresTableFacts::get($connection, 'relationMeta', $table,
+                    fn() => PostgresSchemaHelper::relationMeta($connection, [$table])[$table] ?? null)['replicaIdentity'] ?? 'DEFAULT',
                 PostgresTableSettings::columnStatistics($attrs)
             )
         ) as $stmt) {

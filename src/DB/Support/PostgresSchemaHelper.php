@@ -73,8 +73,21 @@ class PostgresSchemaHelper {
      * insert, so nothing errors, while the partitioning is silently gone.
      */
     public static function partitionMeta(Connection $connection, string $table): array {
+        return PostgresTableFacts::get($connection, 'partitionMeta', $table,
+            fn() => self::partitionMetaFor($connection, [$table])[$table] ?? self::noPartitionMeta());
+    }
+
+    /**
+     * partitionMeta() for several tables in one query, keyed by table. A table
+     * the schema does not have is left out.
+     *
+     * @param  list<string> $tables
+     * @return array<string, array<string, mixed>>
+     */
+    public static function partitionMetaFor(Connection $connection, array $tables): array {
         $rows = $connection->select(
-            "SELECT c.relispartition,
+            "SELECT c.relname AS table_name,
+                    c.relispartition,
                     CASE WHEN c.relkind = 'p'
                          THEN pg_get_partkeydef(c.oid) END AS partition_by,
                     parent.relname AS parent,
@@ -90,19 +103,32 @@ class PostgresSchemaHelper {
                LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
                LEFT JOIN pg_class parent ON parent.oid = i.inhparent
                LEFT JOIN pg_namespace pn ON pn.oid = parent.relnamespace
-              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname = ?",
-            [$table]
+              WHERE n.nspname = " . SchemaScope::literal($connection) . " AND c.relname IN (" . QueryHelper::placeholders($tables) . ")",
+            $tables
         );
-        $row = $rows[0] ?? null;
 
+        $out = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            // The first row a table has, as the single-table query took it.
+            $out[$row['table_name']] ??= [
+                'partition_by' => $row['partition_by'] ?? null,
+                'is_partition' => (bool) ($row['relispartition'] ?? false),
+                'parent'       => $row['parent'] ?? null,
+                'parent_schema' => $row['parent_schema'] ?? null,
+                'bound'        => $row['bound'] ?? null,
+                'unlogged'     => ($row['relpersistence'] ?? 'p') === 'u',
+                'reloptions'   => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+            ];
+        }
+        return $out;
+    }
+
+    /** partitionMeta() of a table the catalog has no row for. */
+    public static function noPartitionMeta(): array {
         return [
-            'partition_by' => $row['partition_by'] ?? null,
-            'is_partition' => (bool) ($row['relispartition'] ?? false),
-            'parent'       => $row['parent'] ?? null,
-            'parent_schema' => $row['parent_schema'] ?? null,
-            'bound'        => $row['bound'] ?? null,
-            'unlogged'     => ($row['relpersistence'] ?? 'p') === 'u',
-            'reloptions'   => ($row['reloptions'] ?? '') !== '' ? $row['reloptions'] : null,
+            'partition_by' => null, 'is_partition' => false, 'parent' => null, 'parent_schema' => null,
+            'bound' => null, 'unlogged' => false, 'reloptions' => null,
         ];
     }
 
